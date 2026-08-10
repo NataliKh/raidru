@@ -506,3 +506,42 @@
 .encounterTokenImage{position:absolute;inset:2px;width:calc(100% - 4px);height:calc(100% - 4px);object-fit:contain;border-radius:inherit;background:#06090d;pointer-events:none}
 .encounterTokenName{position:absolute;left:50%;top:calc(100% + 3px);transform:translateX(-50%);max-width:110px;padding:2px 5px;border-radius:5px;background:#070a0ee8;border:1px solid #25303b;color:#eef4f8;font-size:7px;line-height:1.15;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;pointer-events:none;text-shadow:0 1px 2px #000}
 @media(max-width:900px){.encounterGrid{grid-template-columns:repeat(5,minmax(0,1fr))}.searchEncounterGrid{max-height:none}}
+
+/* RaidRU 0.7.6 — RaidPlan Encounter icon pack */
+.raidPlanPackTitle{
+  margin:12px 0 7px;
+  padding-top:10px;
+  border-top:1px solid #28323d;
+  color:#8f9aaa;
+  font-size:9px;
+  font-weight:800;
+  letter-spacing:.08em;
+  text-transform:uppercase;
+}
+.raidPlanRawGrid{
+  grid-template-columns:repeat(5,minmax(0,1fr))!important;
+  gap:5px!important;
+  max-height:420px;
+  overflow:auto;
+  padding-right:2px;
+}
+.raidPlanRawGrid .encounterLibItem{
+  aspect-ratio:1;
+  min-height:0;
+  padding:2px!important;
+}
+.raidPlanRawGrid .encounterLibItem img{
+  width:100%;
+  height:100%;
+  object-fit:cover;
+}
+.raidPlanRawGrid .encounterLibItem.round img{
+  border-radius:50%;
+}
+.raidPlanRawGrid .encounterLibItem span{
+  display:none!important;
+}
+.namedEncounterGrid{margin-bottom:4px}
+@media(max-width:900px){
+  .raidPlanRawGrid{grid-template-columns:repeat(6,minmax(0,1fr))!important;max-height:none}
+}
