@@ -1,9 +1,9 @@
-const CACHE='raidru-v0710-hard-arena-masks';
+const CACHE='raidru-v0711-authored-scenes';
 const ASSETS=[
 './',
 './index.html',
-'./styles.css?v=0.7.10',
-'./app.js?v=0.7.10',
+'./styles.css?v=0.7.11',
+'./app.js?v=0.7.11',
 './manifest.webmanifest',
 './icon.svg',
 './assets/maps/nekzali.webp',
