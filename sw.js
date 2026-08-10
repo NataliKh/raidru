@@ -1,9 +1,9 @@
-const CACHE='raidru-v078-clean-icons';
+const CACHE='raidru-v079-readable-labels';
 const ASSETS=[
 './',
 './index.html',
-'./styles.css?v=0.7.8',
-'./app.js?v=0.7.8',
+'./styles.css?v=0.7.9',
+'./app.js?v=0.7.9',
 './manifest.webmanifest',
 './icon.svg',
 './assets/maps/nekzali.webp',

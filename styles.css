@@ -592,3 +592,45 @@
   width:40px!important;
   height:40px!important;
 }
+
+/* RaidRU 0.7.9 — readable mechanic callouts */
+.effect > span{
+  display:none!important;
+}
+.effectLabels{
+  position:absolute;
+  inset:0;
+  z-index:60!important;
+  pointer-events:none!important;
+  overflow:visible;
+}
+.effectCallout{
+  position:absolute;
+  transform:translate(-50%,-50%);
+  max-width:240px;
+  pointer-events:none;
+  filter:drop-shadow(0 2px 3px rgba(0,0,0,.65));
+}
+.effectCallout span{
+  display:block;
+  padding:3px 7px 4px;
+  border-radius:6px;
+  border:1px solid rgba(255,255,255,.18);
+  background:rgba(5,8,12,.92);
+  color:#f5f7fa;
+  font-size:10px;
+  line-height:1.15;
+  font-weight:800;
+  text-align:center;
+  white-space:nowrap;
+  text-shadow:0 1px 2px #000;
+  box-shadow:0 2px 8px rgba(0,0,0,.42);
+}
+.effectCallout.zone span{border-color:rgba(239,91,105,.65);box-shadow:inset 3px 0 0 #db5360,0 2px 8px rgba(0,0,0,.42)}
+.effectCallout.soak span{border-color:rgba(87,221,151,.65);box-shadow:inset 3px 0 0 #55d997,0 2px 8px rgba(0,0,0,.42)}
+.effectCallout.arrow span{border-color:rgba(88,174,232,.65);box-shadow:inset 3px 0 0 #58aee8,0 2px 8px rgba(0,0,0,.42)}
+.effectCallout.line span{border-color:rgba(223,184,95,.65);box-shadow:inset 3px 0 0 #dfb85f,0 2px 8px rgba(0,0,0,.42)}
+.effectCallout.cone span{border-color:rgba(238,157,82,.65);box-shadow:inset 3px 0 0 #ee9d52,0 2px 8px rgba(0,0,0,.42)}
+@media(max-width:760px){
+  .effectCallout span{font-size:9px;padding:3px 5px}
+}

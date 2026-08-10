@@ -559,7 +559,7 @@ function restoreFromHash(){try{if(!location.hash.startsWith('#share='))return;co
 function save(){state.current=current;state.role=role;state.diff=diff;state.view=view;state.priestMode=priestMode;state.showPaths=showPaths;state.plannerPaletteTab=plannerPaletteTab;state.plannerSpawnMode=plannerSpawnMode;state.plannerArenaSnap=plannerArenaSnap;state.plannerIconTab=plannerIconTab;localStorage.setItem('raidru-standalone',JSON.stringify(state))}
 function render(){
   save();const b=raid.find(x=>x.id===current),bs=bossState(current);
-  el('#app').innerHTML=`<div class="shell"><aside><div class="brand"><div class="mark">R</div><div><b>RaidRU</b><small>рейдовые тактики по-русски</small></div></div><div class="season"><small>Midnight · Сезон 2</small><b>Ядовитая бездна</b></div><input class="search" placeholder="Найти босса…" oninput="filterBoss(this.value)"><div class="bosses">${orderedRaid().map(x=>`<button data-name="${esc((x.name+' '+x.en).toLowerCase())}" class="${x.id===current?'on':''}" onclick="chooseBoss('${x.id}')"><i>${x.order}</i><span><b>${x.name}</b><small>${x.en}</small></span><em>${bossState(x.id).favorite?'★':''}</em></button>`).join('')}</div><div class="version">RaidRU 0.7.8 · Encounter Library</div></aside><main><header>${[['dashboard','Рейд'],['guide','Тактика'],['replay','WCL Replay'],['player','План: просмотр'],['planner','Планировщик'],['timeline','Таймлайн'],['roster','Состав'],['notes','Заметки'],['glossary','Словарь']].map(x=>`<button class="${view===x[0]?'on':''}" onclick="setView('${x[0]}')">${x[1]}</button>`).join('')}<span></span><button class="priest ${priestMode?'on':''}" onclick="togglePriest()">♥ Холи-прист</button><button onclick="sharePlan()">↗ Поделиться</button><button onclick="exportPlan()">⇩ Экспорт</button><label class="importBtn">⇧ Импорт<input type="file" accept="application/json,.json" onchange="importPlanFile(this.files[0])"></label></header>${view==='dashboard'?dashboardHero():`<section class="hero"><div><small>MIDNIGHT / ЯДОВИТАЯ БЕЗДНА / БОСС ${b.order}</small><div class="title"><h1>${b.name}</h1><button onclick="fav()">${bs.favorite?'★':'☆'}</button></div><div class="en">${b.en}</div><p>${b.summary}</p></div><div class="heroRight"><div class="diff">${[['normal','Обычный'],['heroic','Героический'],['mythic','Эпохальный']].map(x=>`<button class="${diff===x[0]?'on':''}" onclick="setDiff('${x[0]}')">${x[1]}</button>`).join('')}</div><label>Освоение <b>${bs.progress}%</b><input type="range" min="0" max="100" step="10" value="${bs.progress}" oninput="setProgress(this.value)"></label></div></section>`}${content(b,bs)}<footer class="siteCredit">Maps/raid planning resources: <a href="https://raidplan.io/" target="_blank" rel="noopener noreferrer">RaidPlan.io</a> · Planner icons: локальные ассеты RaidRU · WoW/raid icon references: Blizzard community resources</footer></main></div>`;
+  el('#app').innerHTML=`<div class="shell"><aside><div class="brand"><div class="mark">R</div><div><b>RaidRU</b><small>рейдовые тактики по-русски</small></div></div><div class="season"><small>Midnight · Сезон 2</small><b>Ядовитая бездна</b></div><input class="search" placeholder="Найти босса…" oninput="filterBoss(this.value)"><div class="bosses">${orderedRaid().map(x=>`<button data-name="${esc((x.name+' '+x.en).toLowerCase())}" class="${x.id===current?'on':''}" onclick="chooseBoss('${x.id}')"><i>${x.order}</i><span><b>${x.name}</b><small>${x.en}</small></span><em>${bossState(x.id).favorite?'★':''}</em></button>`).join('')}</div><div class="version">RaidRU 0.7.9 · Encounter Library</div></aside><main><header>${[['dashboard','Рейд'],['guide','Тактика'],['replay','WCL Replay'],['player','План: просмотр'],['planner','Планировщик'],['timeline','Таймлайн'],['roster','Состав'],['notes','Заметки'],['glossary','Словарь']].map(x=>`<button class="${view===x[0]?'on':''}" onclick="setView('${x[0]}')">${x[1]}</button>`).join('')}<span></span><button class="priest ${priestMode?'on':''}" onclick="togglePriest()">♥ Холи-прист</button><button onclick="sharePlan()">↗ Поделиться</button><button onclick="exportPlan()">⇩ Экспорт</button><label class="importBtn">⇧ Импорт<input type="file" accept="application/json,.json" onchange="importPlanFile(this.files[0])"></label></header>${view==='dashboard'?dashboardHero():`<section class="hero"><div><small>MIDNIGHT / ЯДОВИТАЯ БЕЗДНА / БОСС ${b.order}</small><div class="title"><h1>${b.name}</h1><button onclick="fav()">${bs.favorite?'★':'☆'}</button></div><div class="en">${b.en}</div><p>${b.summary}</p></div><div class="heroRight"><div class="diff">${[['normal','Обычный'],['heroic','Героический'],['mythic','Эпохальный']].map(x=>`<button class="${diff===x[0]?'on':''}" onclick="setDiff('${x[0]}')">${x[1]}</button>`).join('')}</div><label>Освоение <b>${bs.progress}%</b><input type="range" min="0" max="100" step="10" value="${bs.progress}" oninput="setProgress(this.value)"></label></div></section>`}${content(b,bs)}<footer class="siteCredit">Maps/raid planning resources: <a href="https://raidplan.io/" target="_blank" rel="noopener noreferrer">RaidPlan.io</a> · Planner icons: локальные ассеты RaidRU · WoW/raid icon references: Blizzard community resources</footer></main></div>`;
   if(view==='planner') setupPlanner();
   if(view==='player') setupPlayer();
 }
@@ -602,8 +602,62 @@ function routeWaypointsHtml(sc,editable){
   return `<div class="waypoints">${out.join('')}</div>`;
 }
 function togglePaths(){showPaths=!showPaths;save();render()}
-function effectHtml(e,editable=false){const style=`left:${e.x}%;top:${e.y}%;width:${e.w}%;height:${e.h}%;--rot:${Number(e.rot)||0}deg`;return `<div class="effect ${e.type} ${editable?'editable':''}" data-effect="${e.id}" style="${style}" title="${esc(e.label||effectLabels[e.type])}"><span>${esc(e.label||'')}</span></div>`}
-function arenaHtml(sc,{editable=false,player=false,next=null}={}){const dark=Math.max(0,Math.min(65,Number(sc?.map?.dark)||0))/100;return `<div id="${player?'playerArena':'arena'}" class="arena ${player?'playArena':''} arena-${current} ${routeEdit&&editable?'routeMode':''}">${arenaMapHtml(current,sc)}<div class="mapShade" style="background:rgba(0,0,0,${dark})"></div>${pathPreviewHtml(sc,next)}${routeWaypointsHtml(sc,editable)}<div class="arenaLabel">${esc(sc.name)}</div><div class="effects">${(sc.effects||[]).map(e=>effectHtml(e,editable)).join('')}</div><div class="tokens">${sc.tokens.map(t=>`<div class="token ${t[2]}${tokenExtraClass(t)} ${routeTokenId===t[0]&&routeEdit?'routeSelected':''}" data-id="${t[0]}" title="${esc(tokenTitle(t,editable))}" data-label="${esc(tokenTitle(t,editable))}" style="left:${t[3]}%;top:${t[4]}%">${tokenInnerHtml(t)}</div>`).join('')}</div></div>`}
+function effectHtml(e,editable=false){const style=`left:${e.x}%;top:${e.y}%;width:${e.w}%;height:${e.h}%;--rot:${Number(e.rot)||0}deg`;return `<div class="effect ${e.type} ${editable?'editable':''}" data-effect="${e.id}" style="${style}" title="${esc(e.label||effectLabels[e.type])}"></div>`}
+
+function boxOverlap(a,b,pad=0){
+  return !(a.r+pad<b.l || a.l-pad>b.r || a.b+pad<b.t || a.t-pad>b.b);
+}
+function effectLabelLayout(sc){
+  const tokens=(sc.tokens||[]).map(t=>({
+    l:+t[3]-3.1,r:+t[3]+3.1,t:+t[4]-4.2,b:+t[4]+4.2
+  }));
+  const placed=[];
+  return (sc.effects||[]).map((e,i)=>{
+    const label=String(e.label||effectLabels[e.type]||'').trim();
+    if(!label)return null;
+
+    const lw=Math.max(10,Math.min(31,label.length*.62+5));
+    const lh=5.2;
+    const ew=Math.max(4,+e.w||12),eh=Math.max(4,+e.h||12);
+    const ex=+e.x||50,ey=+e.y||50;
+
+    const candidates=[
+      {x:ex,y:ey-eh/2-3.6,pos:'top',base:0},
+      {x:ex,y:ey+eh/2+3.6,pos:'bottom',base:2},
+      {x:ex-ew/2-lw/2-2.5,y:ey,pos:'left',base:5},
+      {x:ex+ew/2+lw/2+2.5,y:ey,pos:'right',base:5},
+      {x:ex,y:ey-3,pos:'inside',base:24}
+    ];
+
+    let best=null;
+    for(const c of candidates){
+      const rawX=c.x,rawY=c.y;
+      const x=Math.max(lw/2+1.2,Math.min(100-lw/2-1.2,rawX));
+      const y=Math.max(lh/2+1.2,Math.min(100-lh/2-1.2,rawY));
+      const box={l:x-lw/2,r:x+lw/2,t:y-lh/2,b:y+lh/2};
+      let score=c.base+Math.abs(x-rawX)*9+Math.abs(y-rawY)*9;
+
+      for(const tb of tokens){
+        if(boxOverlap(box,tb,1.2))score+=190;
+      }
+      for(const pb of placed){
+        if(boxOverlap(box,pb,1.4))score+=240;
+      }
+
+      // Подпись не должна сидеть прямо поверх центра небольшого эффекта.
+      const effectBox={l:ex-ew/2,r:ex+ew/2,t:ey-eh/2,b:ey+eh/2};
+      if(c.pos!=='inside' && boxOverlap(box,effectBox,.5))score+=75;
+
+      if(!best||score<best.score)best={x,y,box,pos:c.pos,score,label,type:e.type,id:e.id};
+    }
+    placed.push(best.box);
+    return best;
+  }).filter(Boolean);
+}
+function effectLabelsHtml(sc){
+  return `<div class="effectLabels">${effectLabelLayout(sc).map(x=>`<div class="effectCallout ${x.type}" data-effect-label="${x.id}" style="left:${x.x}%;top:${x.y}%"><span>${esc(x.label)}</span></div>`).join('')}</div>`;
+}
+function arenaHtml(sc,{editable=false,player=false,next=null}={}){const dark=Math.max(0,Math.min(65,Number(sc?.map?.dark)||0))/100;return `<div id="${player?'playerArena':'arena'}" class="arena ${player?'playArena':''} arena-${current} ${routeEdit&&editable?'routeMode':''}">${arenaMapHtml(current,sc)}<div class="mapShade" style="background:rgba(0,0,0,${dark})"></div>${pathPreviewHtml(sc,next)}${routeWaypointsHtml(sc,editable)}<div class="arenaLabel">${esc(sc.name)}</div><div class="effects">${(sc.effects||[]).map(e=>effectHtml(e,editable)).join('')}</div><div class="tokens">${sc.tokens.map(t=>`<div class="token ${t[2]}${tokenExtraClass(t)} ${routeTokenId===t[0]&&routeEdit?'routeSelected':''}" data-id="${t[0]}" title="${esc(tokenTitle(t,editable))}" data-label="${esc(tokenTitle(t,editable))}" style="left:${t[3]}%;top:${t[4]}%">${tokenInnerHtml(t)}</div>`).join('')}</div>${effectLabelsHtml(sc)}</div>`}
 function replayView(b,bs){
  const r=replayState(),d=r.data,actors=d?replayActors(d):[],dur=d?replayDuration(d):1,cal=r.cal||{};const src=replayMapSource();
  return `<section class="page replayPage"><div class="replayImport card"><div><h3>Warcraft Logs Replay</h3><p>Вставь публичную ссылку на отчёт с <code>?fight=</code>. Токены двигаются по реальным координатам лога поверх нашей карты арены.</p></div><div class="replayImportGrid"><label>Ссылка Warcraft Logs<input id="wclUrl" value="${esc(r.url||'')}" placeholder="https://www.warcraftlogs.com/reports/...?...&fight=12"></label><label>RaidRU WCL Proxy<input id="wclProxy" value="${esc(state.wclProxy||'')}" placeholder="https://raidru-wcl.<account>.workers.dev"></label></div><div class="replayButtons"><button class="primary" onclick="loadWclReplay()">Загрузить WCL replay</button><button onclick="loadDemoReplay()">Демо из плана</button><label class="importBtn">Импорт replay JSON<input type="file" accept="application/json,.json" onchange="importReplayJson(this.files[0])"></label>${d?'<button onclick="exportReplayJson()">Экспорт replay JSON</button><button class="rehearse" onclick="createPlanFromReplay()">✦ Создать план из replay</button>':''}</div><small>Секрет Warcraft Logs не хранится на GitHub Pages: запрос идёт через отдельный proxy/Worker.</small></div>
@@ -649,10 +703,10 @@ function notes(b,bs){const ns=`[RaidRU] ${b.name}\n${b.rl}\n${priestMode?'Хол
 function glossary(b){const arr=[...b.spells,...priest];return `<section class="page"><div class="table"><div class="thead"><b>Русский клиент</b><b>Английское название</b><b>Источник</b></div>${arr.map((x,i)=>`<div><b>${x[0]}</b><code>${x[1]}</code><span>${i<b.spells.length?'Босс':'Холи-прист'}</span></div>`).join('')}</div></section>`}
 function chooseBoss(id){stopPlayback();stopReplay();current=id;sceneIndex=0;playerSceneIndex=0;render()} function setView(v){stopPlayback();stopReplay();view=v;render()} function setRole(v){role=v;render()} function setDiff(v){diff=v;render()} function togglePriest(){priestMode=!priestMode;render()} function fav(){const bs=bossState(current);bs.favorite=!bs.favorite;render()} function setProgress(v){bossState(current).progress=+v;save();render()} function saveNote(v){bossState(current).note=v;save()} function copyText(t){navigator.clipboard?.writeText(t);toast('Скопировано')}
 function filterBoss(q){document.querySelectorAll('.bosses button').forEach(x=>x.style.display=x.dataset.name.includes(q.toLowerCase())?'grid':'none')}
-function exportPlan(){const blob=new Blob([JSON.stringify({version:'0.7.8',boss:current,diff,role,data:bossState(current)},null,2)],{type:'application/json'}),a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=`raidru-${current}-v078.json`;a.click();URL.revokeObjectURL(a.href);toast('Стратегия экспортирована')}
+function exportPlan(){const blob=new Blob([JSON.stringify({version:'0.7.9',boss:current,diff,role,data:bossState(current)},null,2)],{type:'application/json'}),a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=`raidru-${current}-v079.json`;a.click();URL.revokeObjectURL(a.href);toast('Стратегия экспортирована')}
 function importPlanFile(file){if(!file)return;const r=new FileReader();r.onload=()=>{try{const p=JSON.parse(r.result);if(!p.boss||!p.data)throw new Error();state[p.boss]=p.data;current=p.boss;diff=p.diff||diff;role=p.role||role;bossState(current);save();toast('Стратегия импортирована');render()}catch(e){toast('Не удалось импортировать JSON')}};r.readAsText(file)}
 function sharePlan(){const u=buildShareUrl();navigator.clipboard?.writeText(u);history.replaceState(null,'',u);toast('Ссылка на стратегию скопирована')}
-function backupAll(){const blob=new Blob([JSON.stringify({version:'0.7.8',savedAt:new Date().toISOString(),state},null,2)],{type:'application/json'}),a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='raidru-backup-v05.json';a.click();URL.revokeObjectURL(a.href);toast('Резервная копия скачана')}
+function backupAll(){const blob=new Blob([JSON.stringify({version:'0.7.9',savedAt:new Date().toISOString(),state},null,2)],{type:'application/json'}),a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='raidru-backup-v05.json';a.click();URL.revokeObjectURL(a.href);toast('Резервная копия скачана')}
 function resetAllConfirm(){if(!confirm('Удалить локальные прогресс, планы, заметки и состав?'))return;localStorage.removeItem('raidru-standalone');location.hash='';location.reload()}
 function prevScene(){sceneIndex=Math.max(0,sceneIndex-1);render()} function nextScene(){sceneIndex=Math.min(bossState(current).scenes.length-1,sceneIndex+1);render()} function goScene(i){sceneIndex=i;render()}
 function loadBossPreset(){if(!confirm('Заменить текущие сцены и таймлайн готовым шаблоном босса?'))return;const bs=bossState(current);bs.scenes=bossPresetScenes(current).map((s,i)=>normalizeScene(s,current,i));bs.timelineV3=defaultTimeline(current);sceneIndex=0;save();toast('Шаблон босса и таймлайн загружены');render()}
@@ -894,6 +948,7 @@ function animatePlayerTo(target){
   });
   newMap.forEach(t=>{const n=document.createElement('div');n.className='token '+t[2]+' appear';n.style.setProperty('--moveDur','.45s');n.dataset.id=t[0];n.style.left=t[3]+'%';n.style.top=t[4]+'%';n.innerHTML=tokenInnerHtml(t);n.className='token '+t[2]+tokenExtraClass(t)+' appear';arena.querySelector('.tokens').appendChild(n);requestAnimationFrame(()=>n.classList.remove('appear'))});
   const effects=arena.querySelector('.effects');effects.innerHTML=sc.effects.map(e=>effectHtml(e,false)).join('');effects.querySelectorAll('.effect').forEach(n=>n.classList.add('fxIn'));
+  const labels=arena.querySelector('.effectLabels');if(labels)labels.outerHTML=effectLabelsHtml(sc);
   const lab=arena.querySelector('.arenaLabel');if(lab)lab.textContent=sc.name;
   playerSceneIndex=target;setTimeout(()=>{if(view==='player')render()},(longest*1000)+250);
 }
