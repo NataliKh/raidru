@@ -1,9 +1,9 @@
-const CACHE='raidru-v073-planner-palette';
+const CACHE='raidru-v074-arena-calibration';
 const ASSETS=[
 './',
 './index.html',
-'./styles.css?v=0.7.3',
-'./app.js?v=0.7.3',
+'./styles.css?v=0.7.4',
+'./app.js?v=0.7.4',
 './manifest.webmanifest',
 './icon.svg',
 './assets/maps/nekzali.webp',
