@@ -21,7 +21,7 @@ function bossPresetScenes(id){return JSON.parse(JSON.stringify(presetScenes[id]|
 }
 
 const state=JSON.parse(localStorage.getItem('raidru-standalone')||'{}');
-const RAIDRU_SCHEMA='0.7.2-class-roster';
+const RAIDRU_SCHEMA='0.7.3-planner-palette';
 // Версия 0.6 обновляет шаблоны сцен и полный таймлайн на каждого босса.
 // Один раз пересобираем сцены и таймлайн, сохраняя прогресс, заметки,
 // избранное и состав.
@@ -39,6 +39,7 @@ function orderedRaid(){return [...raid].sort((a,b)=>a.order-b.order)}
 let current=state.current||'nekzali', role=state.role||'all', diff=state.diff||'heroic', view=state.view||'dashboard', priestMode=state.priestMode!==false, sceneIndex=0;
 let rehearsalTimer=null, playbackTimer=null, playerSceneIndex=0, playerPlaying=false, playerSpeed=1, showPaths=state.showPaths!==false;
 let routeEdit=false, routeTokenId=null;
+let plannerPaletteTab=state.plannerPaletteTab||'main', plannerSpawnMode=state.plannerSpawnMode||'drag';
 let replayClock=0, replayPlaying=false, replaySpeed=1, replayRAF=null, replayLastTs=0;
 let replaySelectedActor='all';
 const replayRoleClasses={
@@ -49,30 +50,30 @@ const replayRoleClasses={
 const el=s=>document.querySelector(s); const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const effectLabels={zone:'Опасная зона',soak:'Soak',arrow:'Стрелка',cone:'Конус',line:'Линия'};
 const raidMarkerDefs=[
-  {key:'star',label:'★',name:'Звезда',color:'#ffd52a',texture:'https://warcraft.wiki.gg/wiki/Special:Redirect/file/RaidStar.png'},
-  {key:'circle',label:'●',name:'Круг',color:'#ff982b',texture:'https://warcraft.wiki.gg/wiki/Special:Redirect/file/RaidCircle.png'},
-  {key:'diamond',label:'◆',name:'Ромб',color:'#c868ff',texture:'https://warcraft.wiki.gg/wiki/Special:Redirect/file/RaidDiamond.png'},
-  {key:'triangle',label:'▲',name:'Треугольник',color:'#46d768',texture:'https://warcraft.wiki.gg/wiki/Special:Redirect/file/RaidTriangle.png'},
-  {key:'moon',label:'☾',name:'Луна',color:'#dbe7ff',texture:'https://warcraft.wiki.gg/wiki/Special:Redirect/file/RaidMoon.png'},
-  {key:'square',label:'■',name:'Квадрат',color:'#45a8ff',texture:'https://warcraft.wiki.gg/wiki/Special:Redirect/file/RaidSquare.png'},
-  {key:'cross',label:'✕',name:'Крест',color:'#ff4552',texture:'https://warcraft.wiki.gg/wiki/Special:Redirect/file/RaidCross.png'},
-  {key:'skull',label:'☠',name:'Череп',color:'#f1f4f8',texture:'https://warcraft.wiki.gg/wiki/Special:Redirect/file/RaidSkull.png'}
+  {key:'star',label:'★',name:'Звезда',color:'#ffd52a',texture:'./assets/palette/markers/star.png'},
+  {key:'circle',label:'●',name:'Круг',color:'#ff982b',texture:'./assets/palette/markers/circle.png'},
+  {key:'diamond',label:'◆',name:'Ромб',color:'#c868ff',texture:'./assets/palette/markers/diamond.png'},
+  {key:'triangle',label:'▲',name:'Треугольник',color:'#46d768',texture:'./assets/palette/markers/triangle.png'},
+  {key:'moon',label:'☾',name:'Луна',color:'#dbe7ff',texture:'./assets/palette/markers/moon.png'},
+  {key:'square',label:'■',name:'Квадрат',color:'#45a8ff',texture:'./assets/palette/markers/square.png'},
+  {key:'cross',label:'✕',name:'Крест',color:'#ff4552',texture:'./assets/palette/markers/cross.png'},
+  {key:'skull',label:'☠',name:'Череп',color:'#f1f4f8',texture:'./assets/palette/markers/skull.png'}
 ];
 
 const wowClassDefs=[
-  {key:'deathknight',name:'Рыцарь смерти',short:'ДК',icon:'https://wow.zamimg.com/images/wow/icons/large/classicon_deathknight.jpg',defaultRange:'melee'},
-  {key:'demonhunter',name:'Охотник на демонов',short:'ДХ',icon:'https://wow.zamimg.com/images/wow/icons/large/classicon_demonhunter.jpg',defaultRange:'melee'},
-  {key:'druid',name:'Друид',short:'Дру',icon:'https://wow.zamimg.com/images/wow/icons/large/classicon_druid.jpg',defaultRange:'ranged'},
-  {key:'evoker',name:'Пробудитель',short:'Эвокер',icon:'https://wow.zamimg.com/images/wow/icons/large/classicon_evoker.jpg',defaultRange:'ranged'},
-  {key:'hunter',name:'Охотник',short:'Хант',icon:'https://wow.zamimg.com/images/wow/icons/large/classicon_hunter.jpg',defaultRange:'ranged'},
-  {key:'mage',name:'Маг',short:'Маг',icon:'https://wow.zamimg.com/images/wow/icons/large/classicon_mage.jpg',defaultRange:'ranged'},
-  {key:'monk',name:'Монах',short:'Монк',icon:'https://wow.zamimg.com/images/wow/icons/large/classicon_monk.jpg',defaultRange:'melee'},
-  {key:'paladin',name:'Паладин',short:'Пал',icon:'https://wow.zamimg.com/images/wow/icons/large/classicon_paladin.jpg',defaultRange:'melee'},
-  {key:'priest',name:'Жрец',short:'Прист',icon:'https://wow.zamimg.com/images/wow/icons/large/classicon_priest.jpg',defaultRange:'ranged'},
-  {key:'rogue',name:'Разбойник',short:'Рога',icon:'https://wow.zamimg.com/images/wow/icons/large/classicon_rogue.jpg',defaultRange:'melee'},
-  {key:'shaman',name:'Шаман',short:'Шам',icon:'https://wow.zamimg.com/images/wow/icons/large/classicon_shaman.jpg',defaultRange:'ranged'},
-  {key:'warlock',name:'Чернокнижник',short:'Лок',icon:'https://wow.zamimg.com/images/wow/icons/large/classicon_warlock.jpg',defaultRange:'ranged'},
-  {key:'warrior',name:'Воин',short:'Вар',icon:'https://wow.zamimg.com/images/wow/icons/large/classicon_warrior.jpg',defaultRange:'melee'}
+  {key:'deathknight',name:'Рыцарь смерти',short:'ДК',icon:'./assets/palette/classes/deathknight.png',defaultRange:'melee'},
+  {key:'demonhunter',name:'Охотник на демонов',short:'ДХ',icon:'./assets/palette/classes/demonhunter.png',defaultRange:'melee'},
+  {key:'druid',name:'Друид',short:'Дру',icon:'./assets/palette/classes/druid.png',defaultRange:'ranged'},
+  {key:'evoker',name:'Пробудитель',short:'Эвокер',icon:'./assets/palette/classes/evoker.png',defaultRange:'ranged'},
+  {key:'hunter',name:'Охотник',short:'Хант',icon:'./assets/palette/classes/hunter.png',defaultRange:'ranged'},
+  {key:'mage',name:'Маг',short:'Маг',icon:'./assets/palette/classes/mage.png',defaultRange:'ranged'},
+  {key:'monk',name:'Монах',short:'Монк',icon:'./assets/palette/classes/monk.png',defaultRange:'melee'},
+  {key:'paladin',name:'Паладин',short:'Пал',icon:'./assets/palette/classes/paladin.png',defaultRange:'melee'},
+  {key:'priest',name:'Жрец',short:'Прист',icon:'./assets/palette/classes/priest.png',defaultRange:'ranged'},
+  {key:'rogue',name:'Разбойник',short:'Рога',icon:'./assets/palette/classes/rogue.png',defaultRange:'melee'},
+  {key:'shaman',name:'Шаман',short:'Шам',icon:'./assets/palette/classes/shaman.png',defaultRange:'ranged'},
+  {key:'warlock',name:'Чернокнижник',short:'Лок',icon:'./assets/palette/classes/warlock.png',defaultRange:'ranged'},
+  {key:'warrior',name:'Воин',short:'Вар',icon:'./assets/palette/classes/warrior.png',defaultRange:'melee'}
 ];
 
 function wowClass(key){return wowClassDefs.find(x=>x.key===String(key||'').toLowerCase())||null}
@@ -123,12 +124,13 @@ function raidMarkerKey(label){
   return aliases[s.toLowerCase()]||aliases[s]||'';
 }
 function rosterTokenMeta(t){return t?.[5]?.kind==='roster'?t[5]:null}
+function classTokenMeta(t){return t?.[5]&&['roster','class'].includes(t[5].kind)?t[5]:null}
 function tokenExtraClass(t){
   if(t?.[2]==='marker'){
     const k=raidMarkerKey(t[1]);
     return k?` wowRaidMarker marker-${k}`:'';
   }
-  const meta=rosterTokenMeta(t);
+  const meta=classTokenMeta(t);
   return meta?` rosterUnit class-${meta.classKey||'unknown'}`:'';
 }
 function markerInnerHtml(t){
@@ -137,18 +139,18 @@ function markerInnerHtml(t){
   return `<span class="markerFallback">${esc(m.label)}</span><img class="raidMarkerTexture" src="${m.texture}" alt="${esc(m.name)}" loading="eager">`;
 }
 function rosterInnerHtml(t){
-  const meta=rosterTokenMeta(t),c=wowClass(meta?.classKey);
+  const meta=classTokenMeta(t),c=wowClass(meta?.classKey);
   const icon=c?.icon;
   return `${icon?`<img class="classTokenIcon" src="${icon}" alt="${esc(c.name)}">`:`<span class="classTokenFallback">${esc(String(t?.[1]||'?').slice(0,2))}</span>`}<span class="classTokenName">${esc(t?.[1]||'Игрок')}</span>`;
 }
 function tokenInnerHtml(t){
   if(t?.[2]==='marker'&&raidMarkerKey(t[1]))return markerInnerHtml(t);
-  if(rosterTokenMeta(t))return rosterInnerHtml(t);
+  if(classTokenMeta(t))return rosterInnerHtml(t);
   return esc(t?.[1]||'');
 }
 function tokenTitle(t,editable=false){
   if(t?.[2]==='marker')return raidMarkerDefs.find(m=>m.key===raidMarkerKey(t[1]))?.name||'Рейдовая метка';
-  const meta=rosterTokenMeta(t),c=wowClass(meta?.classKey);
+  const meta=classTokenMeta(t),c=wowClass(meta?.classKey);
   if(meta)return `${t[1]}${c?' · '+c.name:''} · ${meta.role==='tank'?'танк':meta.role==='healer'?'хил':meta.range==='melee'?'мили ДД':'рэнж ДД'}`;
   return editable?'Двойной клик — переименовать':'';
 }
@@ -332,10 +334,10 @@ function createPlanFromReplay(){
 
 function buildShareUrl(){const payload={v:5,boss:current,diff,role,data:bossState(current)};return location.origin+location.pathname+'#share='+safeB64Encode(payload)}
 function restoreFromHash(){try{if(!location.hash.startsWith('#share='))return;const p=safeB64Decode(location.hash.slice(7));if(p?.boss&&p?.data){state[p.boss]=p.data;current=p.boss;diff=p.diff||diff;role=p.role||role;toast('Стратегия загружена из ссылки')}}catch(e){console.warn(e)}}
-function save(){state.current=current;state.role=role;state.diff=diff;state.view=view;state.priestMode=priestMode;state.showPaths=showPaths;localStorage.setItem('raidru-standalone',JSON.stringify(state))}
+function save(){state.current=current;state.role=role;state.diff=diff;state.view=view;state.priestMode=priestMode;state.showPaths=showPaths;state.plannerPaletteTab=plannerPaletteTab;state.plannerSpawnMode=plannerSpawnMode;localStorage.setItem('raidru-standalone',JSON.stringify(state))}
 function render(){
   save();const b=raid.find(x=>x.id===current),bs=bossState(current);
-  el('#app').innerHTML=`<div class="shell"><aside><div class="brand"><div class="mark">R</div><div><b>RaidRU</b><small>рейдовые тактики по-русски</small></div></div><div class="season"><small>Midnight · Сезон 2</small><b>Ядовитая бездна</b></div><input class="search" placeholder="Найти босса…" oninput="filterBoss(this.value)"><div class="bosses">${orderedRaid().map(x=>`<button data-name="${esc((x.name+' '+x.en).toLowerCase())}" class="${x.id===current?'on':''}" onclick="chooseBoss('${x.id}')"><i>${x.order}</i><span><b>${x.name}</b><small>${x.en}</small></span><em>${bossState(x.id).favorite?'★':''}</em></button>`).join('')}</div><div class="version">RaidRU 0.7.2 · Classes + Markers</div></aside><main><header>${[['dashboard','Рейд'],['guide','Тактика'],['replay','WCL Replay'],['player','План: просмотр'],['planner','Планировщик'],['timeline','Таймлайн'],['roster','Состав'],['notes','Заметки'],['glossary','Словарь']].map(x=>`<button class="${view===x[0]?'on':''}" onclick="setView('${x[0]}')">${x[1]}</button>`).join('')}<span></span><button class="priest ${priestMode?'on':''}" onclick="togglePriest()">♥ Холи-прист</button><button onclick="sharePlan()">↗ Поделиться</button><button onclick="exportPlan()">⇩ Экспорт</button><label class="importBtn">⇧ Импорт<input type="file" accept="application/json,.json" onchange="importPlanFile(this.files[0])"></label></header>${view==='dashboard'?dashboardHero():`<section class="hero"><div><small>MIDNIGHT / ЯДОВИТАЯ БЕЗДНА / БОСС ${b.order}</small><div class="title"><h1>${b.name}</h1><button onclick="fav()">${bs.favorite?'★':'☆'}</button></div><div class="en">${b.en}</div><p>${b.summary}</p></div><div class="heroRight"><div class="diff">${[['normal','Обычный'],['heroic','Героический'],['mythic','Эпохальный']].map(x=>`<button class="${diff===x[0]?'on':''}" onclick="setDiff('${x[0]}')">${x[1]}</button>`).join('')}</div><label>Освоение <b>${bs.progress}%</b><input type="range" min="0" max="100" step="10" value="${bs.progress}" oninput="setProgress(this.value)"></label></div></section>`}${content(b,bs)}<footer class="siteCredit">Maps/raid planning resources: <a href="https://raidplan.io/" target="_blank" rel="noopener noreferrer">RaidPlan.io</a> · Class icons: <a href="https://www.wowhead.com/icons" target="_blank" rel="noopener noreferrer">Wowhead/Zamimg</a> · Raid markers: Warcraft Wiki / Blizzard game assets</footer></main></div>`;
+  el('#app').innerHTML=`<div class="shell"><aside><div class="brand"><div class="mark">R</div><div><b>RaidRU</b><small>рейдовые тактики по-русски</small></div></div><div class="season"><small>Midnight · Сезон 2</small><b>Ядовитая бездна</b></div><input class="search" placeholder="Найти босса…" oninput="filterBoss(this.value)"><div class="bosses">${orderedRaid().map(x=>`<button data-name="${esc((x.name+' '+x.en).toLowerCase())}" class="${x.id===current?'on':''}" onclick="chooseBoss('${x.id}')"><i>${x.order}</i><span><b>${x.name}</b><small>${x.en}</small></span><em>${bossState(x.id).favorite?'★':''}</em></button>`).join('')}</div><div class="version">RaidRU 0.7.3 · Planner Palette</div></aside><main><header>${[['dashboard','Рейд'],['guide','Тактика'],['replay','WCL Replay'],['player','План: просмотр'],['planner','Планировщик'],['timeline','Таймлайн'],['roster','Состав'],['notes','Заметки'],['glossary','Словарь']].map(x=>`<button class="${view===x[0]?'on':''}" onclick="setView('${x[0]}')">${x[1]}</button>`).join('')}<span></span><button class="priest ${priestMode?'on':''}" onclick="togglePriest()">♥ Холи-прист</button><button onclick="sharePlan()">↗ Поделиться</button><button onclick="exportPlan()">⇩ Экспорт</button><label class="importBtn">⇧ Импорт<input type="file" accept="application/json,.json" onchange="importPlanFile(this.files[0])"></label></header>${view==='dashboard'?dashboardHero():`<section class="hero"><div><small>MIDNIGHT / ЯДОВИТАЯ БЕЗДНА / БОСС ${b.order}</small><div class="title"><h1>${b.name}</h1><button onclick="fav()">${bs.favorite?'★':'☆'}</button></div><div class="en">${b.en}</div><p>${b.summary}</p></div><div class="heroRight"><div class="diff">${[['normal','Обычный'],['heroic','Героический'],['mythic','Эпохальный']].map(x=>`<button class="${diff===x[0]?'on':''}" onclick="setDiff('${x[0]}')">${x[1]}</button>`).join('')}</div><label>Освоение <b>${bs.progress}%</b><input type="range" min="0" max="100" step="10" value="${bs.progress}" oninput="setProgress(this.value)"></label></div></section>`}${content(b,bs)}<footer class="siteCredit">Maps/raid planning resources: <a href="https://raidplan.io/" target="_blank" rel="noopener noreferrer">RaidPlan.io</a> · Planner icons: локальные ассеты RaidRU · WoW/raid icon references: Blizzard community resources</footer></main></div>`;
   if(view==='planner') setupPlanner();
   if(view==='player') setupPlayer();
 }
@@ -388,14 +390,7 @@ function replayView(b,bs){
 }
 function player(b,bs){const sc=bs.scenes[Math.min(playerSceneIndex,bs.scenes.length-1)],next=bs.scenes[playerSceneIndex+1]||null;const events=bs.timelineV3;return `<section class="page playerPage"><div class="playerTop"><div><button onclick="playerPrev()">‹</button><b>${esc(sc.name)}</b><span class="keyBadge">Кадр ${playerSceneIndex+1}/${bs.scenes.length} · ${sceneAttachedTime(bs,playerSceneIndex)}</span><button onclick="playerNext()">›</button></div><div><button class="${showPaths?'on':''}" onclick="togglePaths()">⇢ Траектории</button><select onchange="setPlayerSpeed(this.value)"><option value="0.5" ${playerSpeed===.5?'selected':''}>0.5×</option><option value="1" ${playerSpeed===1?'selected':''}>1×</option><option value="1.5" ${playerSpeed===1.5?'selected':''}>1.5×</option><option value="2" ${playerSpeed===2?'selected':''}>2×</option></select><button class="rehearse" onclick="togglePlayback()">${playerPlaying?'■ Стоп':'▶ Проиграть бой'}</button></div></div><div class="playerLayout"><div>${arenaHtml(sc,{player:true,next})}<div class="sceneCaption"><b>${esc(sc.name)}</b><p>${esc(sc.note)}</p><small>Следующий ключевой кадр: ${next?esc(next.name):'финал'}</small></div></div><aside class="eventRail"><h3>Таймлайн</h3>${events.map((e,i)=>`<button class="${e.scene===playerSceneIndex?'on':''}" onclick="jumpEvent(${i})"><time>${fmtTime(e.time)}</time><span><b>${esc(e.label)}</b><small>${eventTypes[e.type]||e.type} · кадр ${e.scene+1}</small></span></button>`).join('')}</aside></div><div class="playScrubber">${events.map((e,i)=>`<button class="${e.scene===playerSceneIndex?'on':''}" style="left:${timelinePct(e.time,events)}%" onclick="jumpEvent(${i})" title="${fmtTime(e.time)} · ${esc(e.label)}"></button>`).join('')}</div><div class="playerLegend"><span><i class="lg tank"></i>Танк</span><span><i class="lg healer"></i>Хил</span><span><i class="lg dps"></i>ДД</span><span><i class="lg danger"></i>Опасность</span><span><i class="lg path"></i>Траектория к следующему кадру</span></div></section>`}
 function timelinePct(t,events){const max=Math.max(1,...events.map(e=>Number(e.time)||0));return Math.min(100,(Number(t)||0)/max*100)}
-function planner(b,bs){const sc=bs.scenes[Math.min(sceneIndex,bs.scenes.length-1)];const movable=sc.tokens.filter(t=>!['marker','boss'].includes(t[2]));if(!routeTokenId||!movable.some(t=>t[0]===routeTokenId))routeTokenId=movable[0]?.[0]||null;return `<section class="page"><div class="plannerTop"><div><button onclick="prevScene()">‹</button><input id="sceneName" value="${esc(sc.name)}"><small>${sceneIndex+1}/${bs.scenes.length}</small><button onclick="nextScene()">›</button></div><div><button onclick="setView('player')">▶ Просмотр</button><button onclick="loadBossPreset()">Шаблон босса</button><button onclick="addScene()">＋ Сцена</button><button onclick="resetScene()">↻ Сброс</button><button class="red" onclick="delScene()">Удалить</button></div></div><div class="sceneStrip">${bs.scenes.map((x,i)=>`<button class="${i===sceneIndex?'on':''}" onclick="goScene(${i})"><b>${i+1}</b><span>${esc(x.name)}</span></button>`).join('')}</div><div class="planGrid"><div>${arenaHtml(sc,{editable:true,next:bs.scenes[sceneIndex+1]||null})}<div class="sceneMeta"><button class="${showPaths?'on':''}" onclick="togglePaths()">⇢ Траектории к следующему кадру</button><span class="keyBadge">Кадр тактики · ${sceneAttachedTime(bs,sceneIndex)}</span><label>Длительность сцены <input id="sceneDuration" type="number" min="1" max="120" value="${sc.duration||8}"> сек.</label></div><textarea id="sceneNote" placeholder="Описание сцены…">${esc(sc.note)}</textarea></div><div class="toolbox"><h3>Состав на арене</h3>${rosterState().length?`<small>Игроки берутся из вкладки «Состав». Иконка — класс, положение — роль + ближний/дальний бой.</small><div class="plannerRosterPalette">${rosterState().map(m=>{const c=wowClass(m.classKey);return `<button onclick="addRosterMemberToScene('${m.id}')" title="${esc(m.name)} · ${esc(c?.name||'класс не указан')}"><span class="plannerClassIcon">${c?`<img src="${c.icon}" alt="">`:'?'}</span><b>${esc(m.name)}</b></button>`}).join('')}</div><button class="primaryTool" onclick="placeRosterCurrentScene()">◎ Расставить состав на этой сцене</button><button onclick="placeRosterAllScenes()">◎ Расставить состав во всех сценах</button>`:`<small>Сначала добавь игроков, классы и роли во вкладке «Состав».</small><button onclick="setView('roster')">Открыть состав</button>`}<hr><h3>Условные юниты</h3><div class="unitToolGrid">${[['tank','Танк'],['healer','Хил'],['melee','Мили'],['ranged','РДД'],['boss','Босс']].map(x=>`<button onclick="addToken('${x[0]}')">＋ ${x[1]}</button>`).join('')}</div><hr><h3>Рейдовые метки WoW</h3><small>Используются настоящие raid-target textures. Unicode остаётся только запасным вариантом, если внешний источник недоступен.</small><div class="raidMarkerPalette">${raidMarkerDefs.map(m=>`<button class="raidMarkerBtn marker-${m.key}" onclick="addRaidMarker('${m.key}')" title="${m.name}"><i><span>${m.label}</span><img src="${m.texture}" alt="${m.name}"></i><small>${m.name}</small></button>`).join('')}</div><hr><h3>Маршрут внутри сцены</h3><small>Выбери игрока, включи редактор и кликай по карте — точки задают путь до следующего ключевого кадра.</small><select class="routeSelect" onchange="selectRouteToken(this.value)">${movable.map(t=>`<option value="${t[0]}" ${routeTokenId===t[0]?'selected':''}>${esc(t[1])}</option>`).join('')}</select><button class="${routeEdit?'on':''}" onclick="toggleRouteEdit()">${routeEdit?'✓ Редактор маршрута включён':'✦ Редактировать маршрут'}</button><button onclick="clearRoute()">Очистить маршрут игрока</button><p class="routeHelp">В режиме маршрута: клик по свободной области добавляет точку. Точки можно перетаскивать. ПКМ по точке удаляет её.</p><hr><h3>Карта арены</h3>
-<small>Подложка экспортирована через RaidPlan. В 0.6 шаблоны уже разложены по таймлайну и по кадрам; масштаб и смещение можно править вручную.</small>
-<label class="mapControl">Масштаб <b>${Math.round(sc.map?.zoom||100)}%</b><input type="range" min="100" max="180" step="1" value="${sc.map?.zoom||100}" oninput="setMapSetting('zoom',this.value)"></label>
-<label class="mapControl">Сдвиг X <b>${Math.round(sc.map?.x||0)}</b><input type="range" min="-30" max="30" step="1" value="${sc.map?.x||0}" oninput="setMapSetting('x',this.value)"></label>
-<label class="mapControl">Сдвиг Y <b>${Math.round(sc.map?.y||0)}</b><input type="range" min="-30" max="30" step="1" value="${sc.map?.y||0}" oninput="setMapSetting('y',this.value)"></label>
-<label class="mapControl">Затемнение <b>${Math.round(sc.map?.dark||0)}%</b><input type="range" min="0" max="65" step="1" value="${sc.map?.dark||0}" oninput="setMapSetting('dark',this.value)"></label>
-<button onclick="resetMapSettings()">↻ Сбросить карту</button>
-<hr><h3>Механики на карте</h3><small>Поверх реальной арены можно размещать зоны, soak, стрелки, конусы и линии.</small>${[['zone','Опасная зона'],['soak','Soak-зона'],['arrow','Стрелка'],['cone','Конус'],['line','Линия']].map(x=>`<button onclick="addEffect('${x[0]}')">＋ ${x[1]}</button>`).join('')}<p>Объекты и эффекты можно перетаскивать. Двойной клик — переименовать. ПКМ — удалить. Колесо мыши над эффектом меняет размер, Shift+колесо — поворот.</p><hr><b>Состав</b><small>${rosterState().length?`Загружено игроков: ${rosterState().length}.`:'Добавь игроков во вкладке «Состав».'}</small></div></div></section>`}
+function planner(b,bs){const sc=bs.scenes[Math.min(sceneIndex,bs.scenes.length-1)];const movable=sc.tokens.filter(t=>!['marker','boss'].includes(t[2]));if(!routeTokenId||!movable.some(t=>t[0]===routeTokenId))routeTokenId=movable[0]?.[0]||null;return `<section class="page plannerPage"><div class="plannerTop"><div><button onclick="prevScene()">‹</button><input id="sceneName" value="${esc(sc.name)}"><small>${sceneIndex+1}/${bs.scenes.length}</small><button onclick="nextScene()">›</button></div><div><button onclick="setView('player')">▶ Просмотр</button><button onclick="loadBossPreset()">Шаблон босса</button><button onclick="addScene()">＋ Сцена</button><button onclick="resetScene()">↻ Сброс</button><button class="red" onclick="delScene()">Удалить</button></div></div><div class="sceneStrip">${bs.scenes.map((x,i)=>`<button class="${i===sceneIndex?'on':''}" onclick="goScene(${i})"><b>${i+1}</b><span>${esc(x.name)}</span></button>`).join('')}</div><div class="planGrid"><div class="plannerCanvas">${arenaHtml(sc,{editable:true,next:bs.scenes[sceneIndex+1]||null})}<div class="sceneMeta"><button class="${showPaths?'on':''}" onclick="togglePaths()">⇢ Траектории</button><span class="keyBadge">Кадр · ${sceneAttachedTime(bs,sceneIndex)}</span><label>Длительность <input id="sceneDuration" type="number" min="1" max="120" value="${sc.duration||8}"> сек.</label></div><textarea id="sceneNote" placeholder="Описание сцены…">${esc(sc.note)}</textarea></div><div class="toolbox paletteToolbox">${plannerPaletteHtml()}<details class="advancedTools"><summary>Дополнительные инструменты</summary><div class="advancedBody"><h4>Маршрут игрока</h4><select class="routeSelect" onchange="selectRouteToken(this.value)">${movable.map(t=>`<option value="${t[0]}" ${routeTokenId===t[0]?'selected':''}>${esc(t[1])}</option>`).join('')}</select><button class="${routeEdit?'on':''}" onclick="toggleRouteEdit()">${routeEdit?'✓ Маршрут редактируется':'✦ Редактировать маршрут'}</button><button onclick="clearRoute()">Очистить маршрут</button><h4>Карта арены</h4><label class="mapControl">Масштаб <b>${Math.round(sc.map?.zoom||100)}%</b><input type="range" min="100" max="180" step="1" value="${sc.map?.zoom||100}" oninput="setMapSetting('zoom',this.value)"></label><label class="mapControl">Сдвиг X <b>${Math.round(sc.map?.x||0)}</b><input type="range" min="-30" max="30" step="1" value="${sc.map?.x||0}" oninput="setMapSetting('x',this.value)"></label><label class="mapControl">Сдвиг Y <b>${Math.round(sc.map?.y||0)}</b><input type="range" min="-30" max="30" step="1" value="${sc.map?.y||0}" oninput="setMapSetting('y',this.value)"></label><label class="mapControl">Затемнение <b>${Math.round(sc.map?.dark||0)}%</b><input type="range" min="0" max="65" step="1" value="${sc.map?.dark||0}" oninput="setMapSetting('dark',this.value)"></label><button onclick="resetMapSettings()">↻ Сбросить карту</button><p>Объекты на арене: перетаскивание — перемещение, двойной клик — подпись, ПКМ — удалить. Для эффекта колесо меняет размер, Shift+колесо — поворот.</p></div></details></div></div></section>`}
 function classSelectHtml(member,i){
   return `<select class="classSelect" onchange="setRosterClass(${i},this.value)"><option value="">— класс —</option>${wowClassDefs.map(c=>`<option value="${c.key}" ${member.classKey===c.key?'selected':''}>${c.name}</option>`).join('')}</select>`;
 }
@@ -432,25 +427,89 @@ function notes(b,bs){const ns=`[RaidRU] ${b.name}\n${b.rl}\n${priestMode?'Хол
 function glossary(b){const arr=[...b.spells,...priest];return `<section class="page"><div class="table"><div class="thead"><b>Русский клиент</b><b>Английское название</b><b>Источник</b></div>${arr.map((x,i)=>`<div><b>${x[0]}</b><code>${x[1]}</code><span>${i<b.spells.length?'Босс':'Холи-прист'}</span></div>`).join('')}</div></section>`}
 function chooseBoss(id){stopPlayback();stopReplay();current=id;sceneIndex=0;playerSceneIndex=0;render()} function setView(v){stopPlayback();stopReplay();view=v;render()} function setRole(v){role=v;render()} function setDiff(v){diff=v;render()} function togglePriest(){priestMode=!priestMode;render()} function fav(){const bs=bossState(current);bs.favorite=!bs.favorite;render()} function setProgress(v){bossState(current).progress=+v;save();render()} function saveNote(v){bossState(current).note=v;save()} function copyText(t){navigator.clipboard?.writeText(t);toast('Скопировано')}
 function filterBoss(q){document.querySelectorAll('.bosses button').forEach(x=>x.style.display=x.dataset.name.includes(q.toLowerCase())?'grid':'none')}
-function exportPlan(){const blob=new Blob([JSON.stringify({version:'0.7.1',boss:current,diff,role,data:bossState(current)},null,2)],{type:'application/json'}),a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=`raidru-${current}-v071.json`;a.click();URL.revokeObjectURL(a.href);toast('Стратегия экспортирована')}
+function exportPlan(){const blob=new Blob([JSON.stringify({version:'0.7.3',boss:current,diff,role,data:bossState(current)},null,2)],{type:'application/json'}),a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=`raidru-${current}-v073.json`;a.click();URL.revokeObjectURL(a.href);toast('Стратегия экспортирована')}
 function importPlanFile(file){if(!file)return;const r=new FileReader();r.onload=()=>{try{const p=JSON.parse(r.result);if(!p.boss||!p.data)throw new Error();state[p.boss]=p.data;current=p.boss;diff=p.diff||diff;role=p.role||role;bossState(current);save();toast('Стратегия импортирована');render()}catch(e){toast('Не удалось импортировать JSON')}};r.readAsText(file)}
 function sharePlan(){const u=buildShareUrl();navigator.clipboard?.writeText(u);history.replaceState(null,'',u);toast('Ссылка на стратегию скопирована')}
-function backupAll(){const blob=new Blob([JSON.stringify({version:'0.7.1',savedAt:new Date().toISOString(),state},null,2)],{type:'application/json'}),a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='raidru-backup-v05.json';a.click();URL.revokeObjectURL(a.href);toast('Резервная копия скачана')}
+function backupAll(){const blob=new Blob([JSON.stringify({version:'0.7.3',savedAt:new Date().toISOString(),state},null,2)],{type:'application/json'}),a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='raidru-backup-v05.json';a.click();URL.revokeObjectURL(a.href);toast('Резервная копия скачана')}
 function resetAllConfirm(){if(!confirm('Удалить локальные прогресс, планы, заметки и состав?'))return;localStorage.removeItem('raidru-standalone');location.hash='';location.reload()}
 function prevScene(){sceneIndex=Math.max(0,sceneIndex-1);render()} function nextScene(){sceneIndex=Math.min(bossState(current).scenes.length-1,sceneIndex+1);render()} function goScene(i){sceneIndex=i;render()}
 function loadBossPreset(){if(!confirm('Заменить текущие сцены и таймлайн готовым шаблоном босса?'))return;const bs=bossState(current);bs.scenes=bossPresetScenes(current).map((s,i)=>normalizeScene(s,current,i));bs.timelineV3=defaultTimeline(current);sceneIndex=0;save();toast('Шаблон босса и таймлайн загружены');render()}
 function addScene(){const bs=bossState(current),src=bs.scenes[sceneIndex];bs.scenes.push(normalizeScene(deep({...src,name:`Сцена ${bs.scenes.length+1}`}),current,bs.scenes.length));sceneIndex=bs.scenes.length-1;save();render()}
 function delScene(){const bs=bossState(current);if(bs.scenes.length<2)return;if(!confirm('Удалить сцену?'))return;bs.scenes.splice(sceneIndex,1);bs.timelineV3.forEach(e=>e.scene=Math.min(e.scene,bs.scenes.length-1));sceneIndex=Math.max(0,sceneIndex-1);save();render()}
 function resetScene(){bossState(current).scenes[sceneIndex]=defaultScene();save();render()}
-function addToken(type){const sc=bossState(current).scenes[sceneIndex],labels={tank:'T',healer:'H',melee:'M',ranged:'R',boss:'БОСС'};if(type==='marker'){addRaidMarker('star');return}sc.tokens.push([uid(),labels[type]||type,type,50,50]);save();render()}
-function addRaidMarker(key){
-  const sc=bossState(current).scenes[sceneIndex],m=raidMarkerDefs.find(x=>x.key===key)||raidMarkerDefs[0];
-  // В WoW одновременно используется только одна метка каждого типа. Если такая уже есть — выделяем её вместо создания дубля.
+function setPlannerPaletteTab(tab){plannerPaletteTab=tab==='roster'?'roster':'main';save();render()}
+function setPlannerSpawnMode(mode){plannerSpawnMode=mode==='click'?'click':'drag';save();render()}
+function plannerDragStart(e,kind,value){
+  if(!e?.dataTransfer)return;
+  e.dataTransfer.setData('application/x-raidru',JSON.stringify({kind,value}));
+  e.dataTransfer.effectAllowed='copy';
+}
+function paletteClick(kind,value){
+  if(plannerSpawnMode==='drag'){toast('Перетащи иконку на арену или переключи Click to Spawn');return}
+  spawnPlannerItem(kind,value,50,50);
+}
+function addClassToken(classKey,x=50,y=50){
+  const c=wowClass(classKey); if(!c)return;
+  const sc=bossState(current).scenes[sceneIndex],range=defaultRangeForClass(classKey,'dps');
+  sc.tokens.push([uid(),c.short,range,x,y,{kind:'class',classKey:c.key,role:'dps',range}]);save();render();
+}
+function addTokenAt(type,x=50,y=50){
+  const sc=bossState(current).scenes[sceneIndex],labels={tank:'T',healer:'H',melee:'M',ranged:'R',boss:'БОСС'};
+  sc.tokens.push([uid(),labels[type]||type,type,x,y]);save();render();
+}
+function addEffectAt(type,x=50,y=50){
+  const sc=bossState(current).scenes[sceneIndex];sc.effects.push({id:uid(),type,x,y,w:type==='line'||type==='arrow'?40:24,h:type==='line'||type==='arrow'?6:24,rot:0,label:effectLabels[type]});save();render();
+}
+function addRaidMarkerAt(key,x=50,y=50){
+  const sc=bossState(current).scenes[sceneIndex],m=raidMarkerDefs.find(v=>v.key===key)||raidMarkerDefs[0];
   const existing=sc.tokens.find(t=>t[2]==='marker'&&raidMarkerKey(t[1])===m.key);
   if(existing){toast(`${m.name} уже есть на этой сцене`);return}
+  sc.tokens.push([uid(),m.label,'marker',x,y]);save();render();
+}
+function addRosterMemberToSceneAt(memberId,x=50,y=50){
+  const m=rosterState().find(v=>v.id===memberId);if(!m)return;
+  const sc=bossState(current).scenes[sceneIndex];
+  if(sc.tokens.some(t=>rosterTokenMeta(t)?.rosterId===m.id)){toast(`${m.name} уже есть на сцене`);return}
+  sc.tokens.push(rosterTokenForMember(m,{x,y}));save();render();
+}
+function spawnPlannerItem(kind,value,x=50,y=50){
+  if(kind==='class')return addClassToken(value,x,y);
+  if(kind==='role')return addTokenAt(value,x,y);
+  if(kind==='marker')return addRaidMarkerAt(value,x,y);
+  if(kind==='effect')return addEffectAt(value,x,y);
+  if(kind==='roster')return addRosterMemberToSceneAt(value,x,y);
+}
+function paletteItemAttrs(kind,value){return `draggable="true" ondragstart="plannerDragStart(event,'${kind}','${value}')" onclick="paletteClick('${kind}','${value}')"`}
+function plannerMainPaletteHtml(){
+  const roles=[
+    {key:'tank',name:'Танк',icon:'./assets/palette/roles/tank.png'},
+    {key:'healer',name:'Хил',icon:'./assets/palette/roles/healer.png'},
+    {key:'ranged',name:'РДД',icon:'./assets/palette/roles/ranged.png'},
+    {key:'melee',name:'Мили',icon:'./assets/palette/roles/melee.png'}
+  ];
+  const fx=[
+    {key:'zone',name:'Опасная зона',glyph:'◉'},
+    {key:'soak',name:'Soak',glyph:'◎'},
+    {key:'arrow',name:'Стрелка',glyph:'➜'},
+    {key:'cone',name:'Конус',glyph:'◢'},
+    {key:'line',name:'Линия',glyph:'━'}
+  ];
+  return `<div class="paletteSection"><div class="paletteSectionTitle">КЛАССЫ</div><div class="paletteGrid classPalette">${wowClassDefs.map(c=>`<button ${paletteItemAttrs('class',c.key)} title="${esc(c.name)}"><img src="${c.icon}" alt=""><span>${esc(c.name)}</span></button>`).join('')}</div></div>
+  <div class="paletteSection"><div class="paletteSectionTitle">РОЛИ</div><div class="paletteGrid rolePalette">${roles.map(r=>`<button ${paletteItemAttrs('role',r.key)} title="${r.name}"><img src="${r.icon}" alt=""><span>${r.name}</span></button>`).join('')}</div></div>
+  <div class="paletteSection"><div class="paletteSectionTitle">РЕЙДОВЫЕ МЕТКИ</div><div class="paletteGrid markerPaletteNew">${raidMarkerDefs.slice().sort((a,b)=>['skull','cross','square','moon','triangle','diamond','circle','star'].indexOf(a.key)-['skull','cross','square','moon','triangle','diamond','circle','star'].indexOf(b.key)).map(m=>`<button ${paletteItemAttrs('marker',m.key)} title="${m.name}"><img src="${m.texture}" alt=""><span>${m.name}</span></button>`).join('')}</div></div>
+  <div class="paletteSection"><div class="paletteSectionTitle">МЕХАНИКИ</div><div class="paletteGrid effectPalette">${fx.map(f=>`<button ${paletteItemAttrs('effect',f.key)} title="${f.name}"><i>${f.glyph}</i><span>${f.name}</span></button>`).join('')}<button ${paletteItemAttrs('role','boss')} title="Босс"><i class="bossGlyph">B</i><span>Босс</span></button></div></div>`;
+}
+function plannerRosterPaletteHtml(){
+  const r=rosterState();
+  if(!r.length)return `<div class="paletteEmpty"><b>Состав пока пуст</b><p>Добавь игроков, классы и роли во вкладке «Состав», после чего их можно будет перетаскивать на арену поимённо.</p><button onclick="setView('roster')">Открыть состав</button></div>`;
+  return `<div class="paletteSection"><div class="paletteSectionTitle">МОЙ СОСТАВ · ${r.length}</div><div class="rosterPaletteNew">${r.map(m=>{const c=wowClass(m.classKey);return `<button ${paletteItemAttrs('roster',m.id)} title="${esc(m.name)} · ${esc(c?.name||'класс не указан')}"><span class="rosterPaletteIcon">${c?`<img src="${c.icon}" alt="">`:'?'}</span><span><b>${esc(m.name)}</b><small>${m.role==='tank'?'Танк':m.role==='healer'?'Хил':m.range==='melee'?'Мили ДД':'РДД'}${c?' · '+c.short:''}</small></span></button>`}).join('')}</div><button class="paletteRosterAction" onclick="placeRosterCurrentScene()">◎ Авторасстановка на текущей сцене</button><button class="paletteRosterAction" onclick="placeRosterAllScenes()">◎ Авторасстановка во всех сценах</button></div>`;
+}
+function plannerPaletteHtml(){return `<div class="plannerPalette"><div class="paletteTabs"><button class="${plannerPaletteTab==='main'?'on':''}" onclick="setPlannerPaletteTab('main')">ОСНОВНОЕ</button><button class="${plannerPaletteTab==='roster'?'on':''}" onclick="setPlannerPaletteTab('roster')">СОСТАВ</button></div><div class="spawnMode"><span>ДОБАВЛЕНИЕ</span><button class="${plannerSpawnMode==='drag'?'on':''}" onclick="setPlannerSpawnMode('drag')">Drag & Drop</button><button class="${plannerSpawnMode==='click'?'on':''}" onclick="setPlannerSpawnMode('click')">Click to Spawn</button></div>${plannerPaletteTab==='main'?plannerMainPaletteHtml():plannerRosterPaletteHtml()}</div>`}
+
+function addToken(type){if(type==='marker')return addRaidMarkerAt('star',50,50);return addTokenAt(type,50,50)}
+function addRaidMarker(key){
   const offsets={star:[50,18],circle:[66,26],diamond:[78,42],triangle:[74,62],moon:[62,76],square:[38,76],cross:[26,62],skull:[22,42]};
-  const [x,y]=offsets[m.key]||[50,50];
-  sc.tokens.push([uid(),m.label,'marker',x,y]);save();render();toast(`Добавлена метка: ${m.name}`)
+  const p=offsets[key]||[50,50];return addRaidMarkerAt(key,p[0],p[1]);
 }
 
 function rosterBucket(m){
@@ -533,7 +592,7 @@ function addRosterMemberToScene(memberId){
   save();render();
 }
 
-function addEffect(type){const sc=bossState(current).scenes[sceneIndex];sc.effects.push({id:uid(),type,x:50,y:50,w:type==='line'||type==='arrow'?40:24,h:type==='line'||type==='arrow'?6:24,rot:0,label:effectLabels[type]});save();render()}
+function addEffect(type){return addEffectAt(type,50,50)}
 function setMapSetting(k,v){
   const sc=bossState(current).scenes[sceneIndex];
   if(!sc.map)sc.map={zoom:100,x:0,y:0,dark:8};
@@ -554,7 +613,11 @@ function setupPlanner(){
   arena?.querySelectorAll('.token').forEach(node=>bindDrag(node,sc.tokens,'token'));
   arena?.querySelectorAll('.effect').forEach(node=>{bindDrag(node,sc.effects,'effect');node.onwheel=e=>{e.preventDefault();const fx=sc.effects.find(x=>x.id===node.dataset.effect);if(!fx)return;if(e.shiftKey)fx.rot=(Number(fx.rot)||0)+(e.deltaY>0?10:-10);else{const d=e.deltaY>0?-2:2;fx.w=Math.max(6,Math.min(90,fx.w+d));fx.h=Math.max(4,Math.min(90,fx.h+(fx.type==='line'||fx.type==='arrow'?0:d)));}save();render()}})
   arena?.querySelectorAll('.waypoint').forEach(node=>bindWaypoint(node,sc));
-  if(arena) arena.onclick=e=>{if(!routeEdit||!routeTokenId)return;if(e.target.closest('.token,.effect,.waypoint,.mapDoor'))return;const r=arena.getBoundingClientRect();const x=Math.max(2,Math.min(98,(e.clientX-r.left)/r.width*100)),y=Math.max(2,Math.min(98,(e.clientY-r.top)/r.height*100));(sc.routes[routeTokenId]||(sc.routes[routeTokenId]=[])).push({x,y});save();render()};
+  if(arena){
+    arena.ondragover=e=>{if(e.dataTransfer?.types?.includes('application/x-raidru')){e.preventDefault();e.dataTransfer.dropEffect='copy'}};
+    arena.ondrop=e=>{e.preventDefault();try{const p=JSON.parse(e.dataTransfer.getData('application/x-raidru')||'{}');const r=arena.getBoundingClientRect();const x=Math.max(2,Math.min(98,(e.clientX-r.left)/r.width*100)),y=Math.max(2,Math.min(98,(e.clientY-r.top)/r.height*100));spawnPlannerItem(p.kind,p.value,x,y)}catch(err){console.warn(err)}};
+    arena.onclick=e=>{if(!routeEdit||!routeTokenId)return;if(e.target.closest('.token,.effect,.waypoint,.mapDoor'))return;const r=arena.getBoundingClientRect();const x=Math.max(2,Math.min(98,(e.clientX-r.left)/r.width*100)),y=Math.max(2,Math.min(98,(e.clientY-r.top)/r.height*100));(sc.routes[routeTokenId]||(sc.routes[routeTokenId]=[])).push({x,y});save();render()};
+  }
 }
 function selectRouteToken(id){routeTokenId=id;render()}
 function toggleRouteEdit(){routeEdit=!routeEdit;render()}

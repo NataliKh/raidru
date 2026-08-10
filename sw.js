@@ -1,5 +1,46 @@
-const CACHE='raidru-v072-classes-markers';
-const ASSETS=['./','./index.html','./styles.css?v=0.7.2','./app.js?v=0.7.2','./manifest.webmanifest','./icon.svg','./assets/maps/nekzali.webp','./assets/maps/sentinels.webp','./assets/maps/vashnik.webp','./assets/maps/explorers.webp','./assets/maps/sszorak.webp','./assets/maps/fangs.webp','./assets/maps/altar.webp','./assets/maps/ulatek.webp','./assets/maps/ulatek_p3.webp'];
+const CACHE='raidru-v073-planner-palette';
+const ASSETS=[
+'./',
+'./index.html',
+'./styles.css?v=0.7.3',
+'./app.js?v=0.7.3',
+'./manifest.webmanifest',
+'./icon.svg',
+'./assets/maps/nekzali.webp',
+'./assets/maps/sentinels.webp',
+'./assets/maps/vashnik.webp',
+'./assets/maps/explorers.webp',
+'./assets/maps/sszorak.webp',
+'./assets/maps/fangs.webp',
+'./assets/maps/altar.webp',
+'./assets/maps/ulatek.webp',
+'./assets/maps/ulatek_p3.webp',
+'./assets/palette/classes/deathknight.png',
+'./assets/palette/classes/demonhunter.png',
+'./assets/palette/classes/druid.png',
+'./assets/palette/classes/evoker.png',
+'./assets/palette/classes/hunter.png',
+'./assets/palette/classes/mage.png',
+'./assets/palette/classes/monk.png',
+'./assets/palette/classes/paladin.png',
+'./assets/palette/classes/priest.png',
+'./assets/palette/classes/rogue.png',
+'./assets/palette/classes/shaman.png',
+'./assets/palette/classes/warlock.png',
+'./assets/palette/classes/warrior.png',
+'./assets/palette/roles/tank.png',
+'./assets/palette/roles/healer.png',
+'./assets/palette/roles/ranged.png',
+'./assets/palette/roles/melee.png',
+'./assets/palette/markers/skull.png',
+'./assets/palette/markers/cross.png',
+'./assets/palette/markers/square.png',
+'./assets/palette/markers/moon.png',
+'./assets/palette/markers/triangle.png',
+'./assets/palette/markers/diamond.png',
+'./assets/palette/markers/circle.png',
+'./assets/palette/markers/star.png'
+];
 self.addEventListener('install',e=>e.waitUntil(caches.open(CACHE).then(c=>c.addAll(ASSETS)).then(()=>self.skipWaiting())));
 self.addEventListener('activate',e=>e.waitUntil(caches.keys().then(keys=>Promise.all(keys.filter(k=>k!==CACHE).map(k=>caches.delete(k)))).then(()=>self.clients.claim())));
 self.addEventListener('fetch',e=>{if(e.request.method!=='GET')return;e.respondWith(fetch(e.request).then(r=>{const copy=r.clone();caches.open(CACHE).then(c=>c.put(e.request,copy));return r}).catch(()=>caches.match(e.request).then(r=>r||caches.match('./index.html'))))});
