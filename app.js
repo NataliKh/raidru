@@ -128,7 +128,7 @@ function classTokenMeta(t){return t?.[5]&&['roster','class'].includes(t[5].kind)
 function tokenExtraClass(t){
   if(t?.[2]==='marker'){
     const k=raidMarkerKey(t[1]);
-    return k?` wowRaidMarker marker-${k}`:'';
+    if(k)return ` wowRaidMarker marker-${k}`;
   }
   const enc=encounterTokenMeta(t);
   if(enc)return ` encounterIcon encounter-${enc.category||'ability'}`;
@@ -153,8 +153,8 @@ function tokenInnerHtml(t){
   return esc(t?.[1]||'');
 }
 function tokenTitle(t,editable=false){
-  if(t?.[2]==='marker')return raidMarkerDefs.find(m=>m.key===raidMarkerKey(t[1]))?.name||'Рейдовая метка';
-  const enc=encounterTokenMeta(t);if(enc)return `${t[1]} · ${enc.category==='boss'?'босс':enc.category==='npc'?'существо':enc.category==='object'?'объект':'механика'}`;
+  if(t?.[2]==='marker'&&raidMarkerKey(t[1]))return raidMarkerDefs.find(m=>m.key===raidMarkerKey(t[1]))?.name||'Рейдовая метка';
+  const enc=encounterTokenMeta(t);if(enc)return `${enc.name||t[1]} · ${enc.category==='boss'?'босс':enc.category==='npc'?'существо':enc.category==='object'?'объект':'механика'}`;
   const meta=classTokenMeta(t),c=wowClass(meta?.classKey);
   if(meta)return `${t[1]}${c?' · '+c.name:''} · ${meta.role==='tank'?'танк':meta.role==='healer'?'хил':meta.range==='melee'?'мили ДД':'рэнж ДД'}`;
   return editable?'Двойной клик — переименовать':'';
@@ -180,37 +180,37 @@ const encounterBossIcons={
   sszorak:'./assets/palette/encounter/bosses/sszorak.png',
   fangs:'./assets/palette/encounter/bosses/fangs.png',
   altar:'./assets/palette/encounter/bosses/altar.png',
-  ulatek:'./assets/palette/encounter/raidplan/npcs/npc-01.png'
+  ulatek:'./assets/palette/encounter/game/npcs/npc-01.png'
 };
-const raidPlanEncounterAsset=(type,n)=>`./assets/palette/encounter/raidplan/${type}/${type==='npcs'?'npc':'spell'}-${String(n).padStart(2,'0')}.png`;
+const gameEncounterAsset=(type,n)=>`./assets/palette/encounter/game/${type}/${type==='npcs'?'npc':'spell'}-${String(n).padStart(2,'0')}.png`;
 const mechanicIcons={
-  // Реальные WoW-иконки из Encounter-панели RaidPlan (из присланного скриншота).
-  well:raidPlanEncounterAsset('spells',18),
-  add:raidPlanEncounterAsset('npcs',7),
-  soul:raidPlanEncounterAsset('spells',39),
-  venom:raidPlanEncounterAsset('spells',15),
-  slime:raidPlanEncounterAsset('npcs',10),
-  droplet:raidPlanEncounterAsset('spells',21),
-  blood:raidPlanEncounterAsset('spells',27),
-  shadow:raidPlanEncounterAsset('spells',32),
-  flame:raidPlanEncounterAsset('spells',20),
-  fish:raidPlanEncounterAsset('npcs',5),
-  soak:raidPlanEncounterAsset('spells',25),
-  wind:raidPlanEncounterAsset('spells',13),
-  egg:raidPlanEncounterAsset('npcs',8),
-  wave:raidPlanEncounterAsset('spells',33),
-  burst:raidPlanEncounterAsset('spells',18),
-  horror:raidPlanEncounterAsset('spells',39),
-  shield:raidPlanEncounterAsset('spells',5),
-  debuff:raidPlanEncounterAsset('spells',22),
-  crack:raidPlanEncounterAsset('spells',11),
-  serpent:raidPlanEncounterAsset('npcs',3)
+  // Реальные WoW-иконки для визуальных элементов боя.
+  well:gameEncounterAsset('spells',18),
+  add:gameEncounterAsset('npcs',7),
+  soul:gameEncounterAsset('spells',39),
+  venom:gameEncounterAsset('spells',15),
+  slime:gameEncounterAsset('npcs',10),
+  droplet:gameEncounterAsset('spells',21),
+  blood:gameEncounterAsset('spells',27),
+  shadow:gameEncounterAsset('spells',32),
+  flame:gameEncounterAsset('spells',20),
+  fish:gameEncounterAsset('npcs',5),
+  soak:gameEncounterAsset('spells',25),
+  wind:gameEncounterAsset('spells',13),
+  egg:gameEncounterAsset('npcs',8),
+  wave:gameEncounterAsset('spells',33),
+  burst:gameEncounterAsset('spells',18),
+  horror:gameEncounterAsset('spells',39),
+  shield:gameEncounterAsset('spells',5),
+  debuff:gameEncounterAsset('spells',22),
+  crack:gameEncounterAsset('spells',11),
+  serpent:gameEncounterAsset('npcs',3)
 };
 
-const raidPlanEncounterPack=[
-  ...Array.from({length:12},(_,i)=>encounterItem(`rp-npc-${i+1}`,`Существо / объект ${i+1}`,raidPlanEncounterAsset('npcs',i+1),'npc',`raidplan encounter npc ${i+1}`)),
-  ...Array.from({length:43},(_,i)=>encounterItem(`rp-spell-${i+1}`,`Способность ${i+1}`,raidPlanEncounterAsset('spells',i+1),'ability',`raidplan encounter spell ${i+1}`))
-].map(x=>({...x,boss:'ulatek',rawRaidPlan:true}));
+const gameEncounterPack=[
+  ...Array.from({length:12},(_,i)=>encounterItem(`rp-npc-${i+1}`,`Существо / объект ${i+1}`,gameEncounterAsset('npcs',i+1),'npc',`raidplan encounter npc ${i+1}`)),
+  ...Array.from({length:43},(_,i)=>encounterItem(`rp-spell-${i+1}`,`Способность ${i+1}`,gameEncounterAsset('spells',i+1),'ability',`raidplan encounter spell ${i+1}`))
+].map(x=>({...x,boss:'ulatek',rawGamePack:true}));
 function encounterItem(key,name,icon,category='ability',aliases=''){return {key,name,icon,category,aliases}}
 const encounterLibrary={
   nekzali:[
@@ -278,17 +278,90 @@ const encounterLibrary={
   ],
   ulatek:[
     encounterItem('ulatek','Ула\'тек',encounterBossIcons.ulatek,'boss','Ulatek'),
-    encounterItem('egg','Яйцо пожирателя',raidPlanEncounterAsset('npcs',8),'object','Devourer Spawn Egg'),
-    encounterItem('egg2','Другой тип яйца',raidPlanEncounterAsset('npcs',11),'object','Egg Spawn'),
-    encounterItem('warden','Страж Роковой чешуи',raidPlanEncounterAsset('npcs',7),'npc','Doomscale Warden'),
-    encounterItem('viper','Змей Скверночешуи',raidPlanEncounterAsset('npcs',3),'npc','Blightscale Viper'),
-    encounterItem('waves','Едкие волны',raidPlanEncounterAsset('spells',13),'ability','Caustic Waves'),
-    encounterItem('coils','Спектральные кольца',raidPlanEncounterAsset('spells',35),'ability','Spectral Coils'),
-    encounterItem('heart','Ядовитое сердце',raidPlanEncounterAsset('spells',25),'ability','Venomous Heart'),
-    encounterItem('demolish','Разрушение',raidPlanEncounterAsset('spells',11),'ability','Demolish')
+    encounterItem('egg','Яйцо пожирателя',gameEncounterAsset('npcs',8),'object','Devourer Spawn Egg'),
+    encounterItem('egg2','Другой тип яйца',gameEncounterAsset('npcs',11),'object','Egg Spawn'),
+    encounterItem('warden','Страж Роковой чешуи',gameEncounterAsset('npcs',7),'npc','Doomscale Warden'),
+    encounterItem('viper','Змей Скверночешуи',gameEncounterAsset('npcs',3),'npc','Blightscale Viper'),
+    encounterItem('waves','Едкие волны',gameEncounterAsset('spells',13),'ability','Caustic Waves'),
+    encounterItem('coils','Спектральные кольца',gameEncounterAsset('spells',35),'ability','Spectral Coils'),
+    encounterItem('heart','Ядовитое сердце',gameEncounterAsset('spells',25),'ability','Venomous Heart'),
+    encounterItem('demolish','Разрушение',gameEncounterAsset('spells',11),'ability','Demolish')
   ]
 };
-function allEncounterIcons(){return [...Object.entries(encounterLibrary).flatMap(([boss,arr])=>arr.map(x=>({...x,boss}))),...raidPlanEncounterPack]}
+
+function encounterItemByKey(bossId,key){
+  return (encounterLibrary[bossId]||[]).find(x=>x.key===key)||null;
+}
+function scenarioEncounterKey(t,bossId){
+  if(!t||classTokenMeta(t)||encounterTokenMeta(t))return '';
+  if(t[2]==='marker'&&raidMarkerKey(t[1]))return '';
+  const tid=String(t[0]||'').toLowerCase();
+  const label=String(t[1]||'').toLowerCase();
+
+  // Боссы / ключевые существа.
+  if(t[2]==='boss'){
+    if(bossId==='nekzali' && (tid==='echo'||label.includes('эхо')))return 'echo';
+    if(bossId==='altar'){
+      if(label.includes('зул'))return 'zuljan';
+      if(label.includes('малак'))return 'malacrass';
+    }
+    if(bossId==='fangs'){
+      if(tid==='boss1'||label.includes('клык 1'))return 'vexhul';
+      if(tid==='boss2'||label.includes('клык 2'))return 'ithraz';
+    }
+    if(bossId==='explorers'){
+      if(tid==='boss1'||label==='б1')return 'iku';
+      if(tid==='boss2'||label==='б2')return 'gebbo';
+      if(tid==='boss3'||label==='б3')return 'nama';
+    }
+    if(bossId==='sentinels')return 'sentinels';
+    return bossId;
+  }
+
+  // Объекты / адды / механики, уже размещённые в готовых сценариях.
+  if(bossId==='nekzali'){
+    if(tid==='well'||label.includes('колодец'))return 'well';
+    if(tid.startsWith('add')||label==='адд')return 'restless';
+  }
+  if(bossId==='sentinels'){
+    if(tid==='slime'||label.includes('слиз'))return 'slime';
+    if(tid==='pair'||label.includes('токсин')||label.includes('пары'))return 'toxins';
+  }
+  if(bossId==='vashnik'){
+    if(tid==='srca')return 'bloodf';
+    if(tid==='srcb')return 'shadowf';
+    if(tid==='srcc')return 'flamef';
+    if(tid.startsWith('add')||label==='адд')return 'livingvenom';
+  }
+  if(bossId==='explorers'){
+    if(tid==='cast'||label.includes('вознес'))return 'fish';
+  }
+  if(bossId==='fangs'){
+    if(tid.startsWith('add')||label==='адд')return 'spawn';
+  }
+  if(bossId==='altar'){
+    if(tid.startsWith('orb')||label.includes('сгусток'))return 'coalesced';
+    if(tid.startsWith('horror')||label.includes('ужас'))return 'horror';
+    if(tid==='shield'||label.includes('щит'))return 'nightfall';
+  }
+  if(bossId==='ulatek'){
+    if(tid.startsWith('egg')||label.includes('яйцо'))return 'egg';
+    if(tid.startsWith('add')||label.includes('страж'))return 'warden';
+  }
+  return '';
+}
+function enrichScenarioToken(t,bossId){
+  if(!Array.isArray(t))return t;
+  if(t[5]?.kind)return t;
+  const key=scenarioEncounterKey(t,bossId);
+  if(!key)return t;
+  const item=encounterItemByKey(bossId,key);
+  if(!item)return t;
+  const copy=[...t];
+  copy[5]={kind:'encounter',key:item.key,name:item.name,icon:item.icon,category:item.category,aliases:item.aliases||'',autoScenario:true};
+  return copy;
+}
+function allEncounterIcons(){return [...Object.entries(encounterLibrary).flatMap(([boss,arr])=>arr.map(x=>({...x,boss}))),...gameEncounterPack]}
 function encounterByKey(boss,key){return (encounterLibrary[boss]||[]).find(x=>x.key===key)||allEncounterIcons().find(x=>x.key===key)||null}
 
 
@@ -320,6 +393,7 @@ function deep(v){return JSON.parse(JSON.stringify(v))}
 function normalizeScene(sc,id,i){
   if(!sc.effects) sc.effects=seedEffects(id,i,sc.name);
   sc.effects=(sc.effects||[]).map(e=>({id:e.id||uid(),...e}));
+  sc.tokens=(sc.tokens||[]).map(t=>enrichScenarioToken(t,id));
   if(!sc.duration) sc.duration=8;
   if(!sc.routes) sc.routes={};
   if(!sc.map) sc.map={zoom:100,x:0,y:0,dark:8};
@@ -485,7 +559,7 @@ function restoreFromHash(){try{if(!location.hash.startsWith('#share='))return;co
 function save(){state.current=current;state.role=role;state.diff=diff;state.view=view;state.priestMode=priestMode;state.showPaths=showPaths;state.plannerPaletteTab=plannerPaletteTab;state.plannerSpawnMode=plannerSpawnMode;state.plannerArenaSnap=plannerArenaSnap;state.plannerIconTab=plannerIconTab;localStorage.setItem('raidru-standalone',JSON.stringify(state))}
 function render(){
   save();const b=raid.find(x=>x.id===current),bs=bossState(current);
-  el('#app').innerHTML=`<div class="shell"><aside><div class="brand"><div class="mark">R</div><div><b>RaidRU</b><small>рейдовые тактики по-русски</small></div></div><div class="season"><small>Midnight · Сезон 2</small><b>Ядовитая бездна</b></div><input class="search" placeholder="Найти босса…" oninput="filterBoss(this.value)"><div class="bosses">${orderedRaid().map(x=>`<button data-name="${esc((x.name+' '+x.en).toLowerCase())}" class="${x.id===current?'on':''}" onclick="chooseBoss('${x.id}')"><i>${x.order}</i><span><b>${x.name}</b><small>${x.en}</small></span><em>${bossState(x.id).favorite?'★':''}</em></button>`).join('')}</div><div class="version">RaidRU 0.7.6 · Encounter Library</div></aside><main><header>${[['dashboard','Рейд'],['guide','Тактика'],['replay','WCL Replay'],['player','План: просмотр'],['planner','Планировщик'],['timeline','Таймлайн'],['roster','Состав'],['notes','Заметки'],['glossary','Словарь']].map(x=>`<button class="${view===x[0]?'on':''}" onclick="setView('${x[0]}')">${x[1]}</button>`).join('')}<span></span><button class="priest ${priestMode?'on':''}" onclick="togglePriest()">♥ Холи-прист</button><button onclick="sharePlan()">↗ Поделиться</button><button onclick="exportPlan()">⇩ Экспорт</button><label class="importBtn">⇧ Импорт<input type="file" accept="application/json,.json" onchange="importPlanFile(this.files[0])"></label></header>${view==='dashboard'?dashboardHero():`<section class="hero"><div><small>MIDNIGHT / ЯДОВИТАЯ БЕЗДНА / БОСС ${b.order}</small><div class="title"><h1>${b.name}</h1><button onclick="fav()">${bs.favorite?'★':'☆'}</button></div><div class="en">${b.en}</div><p>${b.summary}</p></div><div class="heroRight"><div class="diff">${[['normal','Обычный'],['heroic','Героический'],['mythic','Эпохальный']].map(x=>`<button class="${diff===x[0]?'on':''}" onclick="setDiff('${x[0]}')">${x[1]}</button>`).join('')}</div><label>Освоение <b>${bs.progress}%</b><input type="range" min="0" max="100" step="10" value="${bs.progress}" oninput="setProgress(this.value)"></label></div></section>`}${content(b,bs)}<footer class="siteCredit">Maps/raid planning resources: <a href="https://raidplan.io/" target="_blank" rel="noopener noreferrer">RaidPlan.io</a> · Planner icons: локальные ассеты RaidRU · WoW/raid icon references: Blizzard community resources</footer></main></div>`;
+  el('#app').innerHTML=`<div class="shell"><aside><div class="brand"><div class="mark">R</div><div><b>RaidRU</b><small>рейдовые тактики по-русски</small></div></div><div class="season"><small>Midnight · Сезон 2</small><b>Ядовитая бездна</b></div><input class="search" placeholder="Найти босса…" oninput="filterBoss(this.value)"><div class="bosses">${orderedRaid().map(x=>`<button data-name="${esc((x.name+' '+x.en).toLowerCase())}" class="${x.id===current?'on':''}" onclick="chooseBoss('${x.id}')"><i>${x.order}</i><span><b>${x.name}</b><small>${x.en}</small></span><em>${bossState(x.id).favorite?'★':''}</em></button>`).join('')}</div><div class="version">RaidRU 0.7.7 · Encounter Library</div></aside><main><header>${[['dashboard','Рейд'],['guide','Тактика'],['replay','WCL Replay'],['player','План: просмотр'],['planner','Планировщик'],['timeline','Таймлайн'],['roster','Состав'],['notes','Заметки'],['glossary','Словарь']].map(x=>`<button class="${view===x[0]?'on':''}" onclick="setView('${x[0]}')">${x[1]}</button>`).join('')}<span></span><button class="priest ${priestMode?'on':''}" onclick="togglePriest()">♥ Холи-прист</button><button onclick="sharePlan()">↗ Поделиться</button><button onclick="exportPlan()">⇩ Экспорт</button><label class="importBtn">⇧ Импорт<input type="file" accept="application/json,.json" onchange="importPlanFile(this.files[0])"></label></header>${view==='dashboard'?dashboardHero():`<section class="hero"><div><small>MIDNIGHT / ЯДОВИТАЯ БЕЗДНА / БОСС ${b.order}</small><div class="title"><h1>${b.name}</h1><button onclick="fav()">${bs.favorite?'★':'☆'}</button></div><div class="en">${b.en}</div><p>${b.summary}</p></div><div class="heroRight"><div class="diff">${[['normal','Обычный'],['heroic','Героический'],['mythic','Эпохальный']].map(x=>`<button class="${diff===x[0]?'on':''}" onclick="setDiff('${x[0]}')">${x[1]}</button>`).join('')}</div><label>Освоение <b>${bs.progress}%</b><input type="range" min="0" max="100" step="10" value="${bs.progress}" oninput="setProgress(this.value)"></label></div></section>`}${content(b,bs)}<footer class="siteCredit">Maps/raid planning resources: <a href="https://raidplan.io/" target="_blank" rel="noopener noreferrer">RaidPlan.io</a> · Planner icons: локальные ассеты RaidRU · WoW/raid icon references: Blizzard community resources</footer></main></div>`;
   if(view==='planner') setupPlanner();
   if(view==='player') setupPlayer();
 }
@@ -575,10 +649,10 @@ function notes(b,bs){const ns=`[RaidRU] ${b.name}\n${b.rl}\n${priestMode?'Хол
 function glossary(b){const arr=[...b.spells,...priest];return `<section class="page"><div class="table"><div class="thead"><b>Русский клиент</b><b>Английское название</b><b>Источник</b></div>${arr.map((x,i)=>`<div><b>${x[0]}</b><code>${x[1]}</code><span>${i<b.spells.length?'Босс':'Холи-прист'}</span></div>`).join('')}</div></section>`}
 function chooseBoss(id){stopPlayback();stopReplay();current=id;sceneIndex=0;playerSceneIndex=0;render()} function setView(v){stopPlayback();stopReplay();view=v;render()} function setRole(v){role=v;render()} function setDiff(v){diff=v;render()} function togglePriest(){priestMode=!priestMode;render()} function fav(){const bs=bossState(current);bs.favorite=!bs.favorite;render()} function setProgress(v){bossState(current).progress=+v;save();render()} function saveNote(v){bossState(current).note=v;save()} function copyText(t){navigator.clipboard?.writeText(t);toast('Скопировано')}
 function filterBoss(q){document.querySelectorAll('.bosses button').forEach(x=>x.style.display=x.dataset.name.includes(q.toLowerCase())?'grid':'none')}
-function exportPlan(){const blob=new Blob([JSON.stringify({version:'0.7.6',boss:current,diff,role,data:bossState(current)},null,2)],{type:'application/json'}),a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=`raidru-${current}-v076.json`;a.click();URL.revokeObjectURL(a.href);toast('Стратегия экспортирована')}
+function exportPlan(){const blob=new Blob([JSON.stringify({version:'0.7.7',boss:current,diff,role,data:bossState(current)},null,2)],{type:'application/json'}),a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=`raidru-${current}-v077.json`;a.click();URL.revokeObjectURL(a.href);toast('Стратегия экспортирована')}
 function importPlanFile(file){if(!file)return;const r=new FileReader();r.onload=()=>{try{const p=JSON.parse(r.result);if(!p.boss||!p.data)throw new Error();state[p.boss]=p.data;current=p.boss;diff=p.diff||diff;role=p.role||role;bossState(current);save();toast('Стратегия импортирована');render()}catch(e){toast('Не удалось импортировать JSON')}};r.readAsText(file)}
 function sharePlan(){const u=buildShareUrl();navigator.clipboard?.writeText(u);history.replaceState(null,'',u);toast('Ссылка на стратегию скопирована')}
-function backupAll(){const blob=new Blob([JSON.stringify({version:'0.7.6',savedAt:new Date().toISOString(),state},null,2)],{type:'application/json'}),a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='raidru-backup-v05.json';a.click();URL.revokeObjectURL(a.href);toast('Резервная копия скачана')}
+function backupAll(){const blob=new Blob([JSON.stringify({version:'0.7.7',savedAt:new Date().toISOString(),state},null,2)],{type:'application/json'}),a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='raidru-backup-v05.json';a.click();URL.revokeObjectURL(a.href);toast('Резервная копия скачана')}
 function resetAllConfirm(){if(!confirm('Удалить локальные прогресс, планы, заметки и состав?'))return;localStorage.removeItem('raidru-standalone');location.hash='';location.reload()}
 function prevScene(){sceneIndex=Math.max(0,sceneIndex-1);render()} function nextScene(){sceneIndex=Math.min(bossState(current).scenes.length-1,sceneIndex+1);render()} function goScene(i){sceneIndex=i;render()}
 function loadBossPreset(){if(!confirm('Заменить текущие сцены и таймлайн готовым шаблоном босса?'))return;const bs=bossState(current);bs.scenes=bossPresetScenes(current).map((s,i)=>normalizeScene(s,current,i));bs.timelineV3=defaultTimeline(current);sceneIndex=0;save();toast('Шаблон босса и таймлайн загружены');render()}
@@ -636,11 +710,11 @@ function paletteItemAttrs(kind,value){return `draggable="true" ondragstart="plan
 function encounterGridButton(item,boss=current){const value=item.boss&&item.boss!==current?`${item.boss}:${item.key}`:item.key;const shape=['boss','npc'].includes(item.category)?'round':'square';return `<button class="encounterLibItem ${shape}" ${paletteItemAttrs('encounter',value)} title="${esc(item.name)}"><img src="${item.icon}" alt=""><span>${esc(item.name)}</span></button>`}
 function currentEncounterGridHtml(){
   const named=(encounterLibrary[current]||[]).map(x=>encounterGridButton(x,current)).join('');
-  const raw=current==='ulatek'?`<div class="raidPlanPackTitle">Полный набор из RaidPlan</div><div class="encounterGrid raidPlanRawGrid">${raidPlanEncounterPack.map(x=>encounterGridButton(x,'ulatek')).join('')}</div>`:'';
+  const raw=current==='ulatek'?`<div class="gamePackTitle">Дополнительные игровые иконки</div><div class="encounterGrid gameRawGrid">${gameEncounterPack.map(x=>encounterGridButton(x,'ulatek')).join('')}</div>`:'';
   return `<div class="encounterGrid namedEncounterGrid">${named}</div>${raw}`;
 }
 function searchIconGridHtml(query=''){const q=String(query||'').toLowerCase().trim();const all=allEncounterIcons();const filtered=all.filter(x=>!q||`${x.name} ${x.aliases||''} ${raid.find(b=>b.id===x.boss)?.name||''}`.toLowerCase().includes(q));return filtered.length?filtered.map(x=>encounterGridButton(x,x.boss)).join(''):`<div class="iconSearchEmpty">Ничего не найдено</div>`}
-function encounterLibraryHtml(){return `<div class="paletteSection encounterLibrary"><div class="encounterTabs"><button class="${plannerIconTab==='encounter'?'on':''}" onclick="setPlannerIconTab('encounter')">БОЙ</button><button class="${plannerIconTab==='search'?'on':''}" onclick="setPlannerIconTab('search')">ПОИСК ИКОНОК</button></div><div class="encounterToolbar"><span class="encounterBossName">${esc(raid.find(x=>x.id===current)?.name||'Босс')}</span><select onchange="setDiff(this.value)"><option value="normal" ${diff==='normal'?'selected':''}>Обычный</option><option value="heroic" ${diff==='heroic'?'selected':''}>Героический</option><option value="mythic" ${diff==='mythic'?'selected':''}>Эпохальный</option></select></div>${plannerIconTab==='encounter'?`<small class="libraryHint">Босс, существа, объекты и игровые иконки механик. Для Ула’тек ниже также доступен полный набор, видимый в RaidPlan.</small>${currentEncounterGridHtml()}`:`<div class="iconSearch"><input placeholder="Поиск: яйцо, яд, босс, способность…" oninput="setPlannerIconQuery(this.value)" value="${esc(plannerIconQuery)}"><div id="iconSearchGrid" class="encounterGrid searchEncounterGrid">${searchIconGridHtml(plannerIconQuery)}</div></div>`}</div>`}
+function encounterLibraryHtml(){return `<div class="paletteSection encounterLibrary"><div class="encounterTabs"><button class="${plannerIconTab==='encounter'?'on':''}" onclick="setPlannerIconTab('encounter')">БОЙ</button><button class="${plannerIconTab==='search'?'on':''}" onclick="setPlannerIconTab('search')">ПОИСК ИКОНОК</button></div><div class="encounterToolbar"><span class="encounterBossName">${esc(raid.find(x=>x.id===current)?.name||'Босс')}</span><select onchange="setDiff(this.value)"><option value="normal" ${diff==='normal'?'selected':''}>Обычный</option><option value="heroic" ${diff==='heroic'?'selected':''}>Героический</option><option value="mythic" ${diff==='mythic'?'selected':''}>Эпохальный</option></select></div>${plannerIconTab==='encounter'?`<small class="libraryHint">Босс, существа, объекты и игровые иконки механик. Для Ула’тек ниже также доступен расширенный набор игровых иконок.</small>${currentEncounterGridHtml()}`:`<div class="iconSearch"><input placeholder="Поиск: яйцо, яд, босс, способность…" oninput="setPlannerIconQuery(this.value)" value="${esc(plannerIconQuery)}"><div id="iconSearchGrid" class="encounterGrid searchEncounterGrid">${searchIconGridHtml(plannerIconQuery)}</div></div>`}</div>`}
 
 function plannerMainPaletteHtml(){
   const roles=[
