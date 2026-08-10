@@ -1,0 +1,13 @@
+{
+  "name": "RaidRU — тактики WoW на русском",
+  "short_name": "RaidRU",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#090c11",
+  "theme_color": "#0b0e13",
+  "description": "Русские рейдовые тактики, планировщик расстановок и заметки РЛ для World of Warcraft.",
+  "icons": [
+    {"src":"icon.svg","sizes":"any","type":"image/svg+xml","purpose":"any maskable"}
+  ]
+}
