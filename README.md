@@ -1,13 +1,19 @@
-# RaidRU 0.5.3
+# RaidRU 0.5.4
 
-Исправлено соответствие карт арен по точной схеме пользователя:
-1. Nek'zali -> the-venomous-abyss.png
-2. Entombed Sentinels -> the-venomous-abyss (1).png
-3. Vashnik the Malignant -> the-venomous-abyss (2).png
-4. The Lost Explorers -> the-venomous-abyss (3).png
-5. Sszorak -> the-venomous-abyss (4).png
-6. The Twin Fangs -> the-venomous-abyss (5).png
-7. The Coiled Altar -> the-venomous-abyss (6).png
-8. Ula'tek -> the-venomous-abyss (7).png
+Добавлена отдельная карта для финальной фазы Ула'тек.
 
-Service worker и версия обновлены.
+Использование:
+- Ула'тек, сцена "Яйца и волны" — обычная карта арены
+- Ула'тек, сцена "Фаза 3 — дожим" — разрушенная карта P3
+
+Основное соответствие карт сохранено:
+1. Nek'zali -> без цифры
+2. Entombed Sentinels -> (1)
+3. Vashnik -> (2)
+4. The Lost Explorers -> (3)
+5. Sszorak -> (4)
+6. The Twin Fangs -> (5)
+7. The Coiled Altar -> (6)
+8. Ula'tek -> (7)
+
+Дополнительно: отдельная P3-карта для Ула'тек из последнего присланного изображения.
