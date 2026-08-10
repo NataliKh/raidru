@@ -226,3 +226,210 @@
 /* RaidRU 0.7 — Warcraft Logs Replay */
 .replayPage{display:grid;gap:14px}.replayImport{padding:18px}.replayImport h3{margin:0 0 6px}.replayImport p{margin:0 0 12px;color:#9aa8b5}.replayImportGrid{display:grid;grid-template-columns:1.5fr 1fr;gap:10px}.replayImportGrid label,.replaySide label{display:grid;gap:5px;color:#8e9aa6;font-size:11px}.replayImportGrid input,.replaySide input,.replaySide select{width:100%}.replayButtons{display:flex;flex-wrap:wrap;gap:8px;margin-top:12px}.replayGrid{display:grid;grid-template-columns:minmax(0,1fr) 310px;gap:14px}.replayArena{position:relative}.replayActors{position:absolute;inset:0;z-index:7}.replayActor{position:absolute;transform:translate(-50%,-50%);min-width:28px;height:24px;padding:0 5px;border-radius:9px;display:flex;align-items:center;justify-content:center;border:2px solid #fff9;background:#17212cdd;box-shadow:0 2px 10px #000a;transition:left .09s linear,top .09s linear;white-space:nowrap}.replayActor b{font-size:8px;max-width:72px;overflow:hidden;text-overflow:ellipsis}.replayActor.healer{background:#247c4ddd}.replayActor.tank{background:#315ca8dd}.replayActor.melee{background:#a53e35dd}.replayActor.ranged{background:#7b4cafdd}.replayTransport{display:flex;align-items:center;gap:7px;margin-top:10px;flex-wrap:wrap}.replayTransport b{margin-left:auto;font-variant-numeric:tabular-nums}.replaySlider{width:100%;margin:10px 0;accent-color:#48ce86}.replayNow{display:flex;justify-content:space-between;align-items:center;border:1px solid #1a252f;background:#0b1016;padding:9px 12px;border-radius:9px}.replayNow small{color:#778795}.replaySide{display:grid;align-content:start;gap:10px}.replaySide .card{padding:14px}.replaySide .card h3{margin-top:0}.replaySide label{margin:8px 0}.replayEvents{display:grid;max-height:330px;overflow:auto;gap:4px}.replayEvents button{display:grid;grid-template-columns:44px 1fr;gap:8px;text-align:left;padding:7px 8px}.replayEvents time{font-size:9px;color:#62d896}.replayEvents span{font-size:9px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.emptyReplay{padding:52px;text-align:center;border:1px dashed #28323d;border-radius:12px;color:#82909d}.emptyReplay b{display:block;color:#dce7ee;font-size:18px;margin-bottom:8px}.emptyReplay p{margin:auto;max-width:540px}.replayImport code{font-size:10px}.replaySide input[type=checkbox]{width:auto}.replaySide input[type=range]{accent-color:#48ce86}
 @media(max-width:1050px){.replayGrid{grid-template-columns:1fr}.replaySide{grid-template-columns:repeat(2,minmax(0,1fr))}.replaySide .card:last-child{grid-column:1/-1}}@media(max-width:720px){.replayImportGrid{grid-template-columns:1fr}.replaySide{grid-template-columns:1fr}.replaySide .card:last-child{grid-column:auto}.replayTransport b{width:100%;margin-left:0}.replayActor b{display:none}.replayActor{min-width:18px;width:18px;height:18px;border-radius:50%;padding:0}}
+
+
+/* RaidRU 0.7.1 — рейдовые метки WoW */
+.unitToolGrid{display:grid;grid-template-columns:1fr 1fr;gap:6px}.unitToolGrid button{margin:0!important}.unitToolGrid button:last-child{grid-column:1/-1}
+.raidMarkerPalette{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:7px;margin-top:10px}
+.toolbox .raidMarkerPalette button{margin:0;padding:8px 4px;text-align:center;display:grid;place-items:center;gap:3px;min-height:58px;background:#0b1016;border-color:#29343f}
+.raidMarkerBtn i{font-style:normal;font-size:24px;line-height:1;text-shadow:0 2px 5px #000,0 0 9px currentColor;font-family:"Segoe UI Symbol","Arial Unicode MS",sans-serif}
+.raidMarkerBtn span{font-size:8px;color:#8794a2;font-weight:600}
+.raidMarkerBtn:hover{background:#151c24!important;transform:translateY(-1px)}
+.raidMarkerBtn.marker-star i{color:#ffd52a}.raidMarkerBtn.marker-circle i{color:#ff982b}.raidMarkerBtn.marker-diamond i{color:#c868ff}.raidMarkerBtn.marker-triangle i{color:#46d768}.raidMarkerBtn.marker-moon i{color:#dbe7ff}.raidMarkerBtn.marker-square i{color:#45a8ff}.raidMarkerBtn.marker-cross i{color:#ff4552}.raidMarkerBtn.marker-skull i{color:#f1f4f8}
+.token.marker.wowRaidMarker{width:42px;height:42px;background:rgba(5,8,12,.72)!important;border:1px solid rgba(255,255,255,.2)!important;border-radius:50%;font-size:29px;line-height:1;box-shadow:0 4px 14px #000a, inset 0 0 10px #0008;text-shadow:0 2px 5px #000,0 0 9px currentColor;z-index:12;font-family:"Segoe UI Symbol","Arial Unicode MS",sans-serif}
+.token.marker.wowRaidMarker:hover{transform:translate(-50%,-50%) scale(1.12);border-color:#ffffff88!important}
+.token.marker.marker-star{color:#ffd52a}.token.marker.marker-circle{color:#ff982b}.token.marker.marker-diamond{color:#c868ff}.token.marker.marker-triangle{color:#46d768}.token.marker.marker-moon{color:#dbe7ff}.token.marker.marker-square{color:#45a8ff}.token.marker.marker-cross{color:#ff4552}.token.marker.marker-skull{color:#f1f4f8}
+.token.marker.marker-moon{font-size:31px}.token.marker.marker-cross{font-size:27px}.token.marker.marker-skull{font-size:26px}
+@media(max-width:760px){.raidMarkerPalette{grid-template-columns:repeat(4,1fr)}.raidMarkerBtn span{display:none}.toolbox .raidMarkerPalette button{min-height:48px}.raidMarkerBtn i{font-size:22px}}
+
+
+/* RaidRU 0.7.2 — real raid markers + class-aware roster */
+.raidMarkerBtn i{
+  position:relative;
+  width:34px;height:34px;
+  display:grid;place-items:center;
+  font-style:normal;
+}
+.raidMarkerBtn i>span{
+  position:absolute;inset:0;
+  display:grid;place-items:center;
+  font-size:23px;
+}
+.raidMarkerBtn i img{
+  position:absolute;inset:0;
+  width:100%;height:100%;
+  object-fit:contain;
+  filter:drop-shadow(0 2px 3px #000) drop-shadow(0 0 5px #000);
+}
+.raidMarkerBtn small{font-size:8px;color:#8794a2;font-weight:600}
+.token.marker.wowRaidMarker{
+  overflow:visible!important;
+  background:rgba(2,4,7,.48)!important;
+}
+.markerFallback{
+  position:absolute;inset:0;
+  display:grid;place-items:center;
+  z-index:0;
+}
+.raidMarkerTexture{
+  position:absolute;
+  z-index:1;
+  inset:2px;
+  width:calc(100% - 4px);
+  height:calc(100% - 4px);
+  object-fit:contain;
+  filter:drop-shadow(0 2px 3px #000) drop-shadow(0 0 5px #000);
+  pointer-events:none;
+}
+
+/* roster */
+.classRoster>div{
+  grid-template-columns:42px minmax(110px,1fr) 180px 105px 135px 38px 38px!important;
+}
+.rosterClassIcon,.plannerClassIcon{
+  width:34px;height:34px;
+  border-radius:8px;
+  overflow:hidden;
+  display:grid;place-items:center;
+  background:#0a0e13;
+  border:1px solid #303945;
+  color:#7f8b99;
+  font-weight:900;
+}
+.rosterClassIcon img,.plannerClassIcon img{
+  width:100%;height:100%;object-fit:cover;display:block;
+}
+.rosterNameInput{
+  width:100%;
+  background:#0c1117;
+  border:1px solid #29333e;
+  color:#dbe4ec;
+  border-radius:7px;
+  padding:7px 8px;
+}
+.rosterActions{
+  margin-top:12px;
+  display:flex;
+  gap:8px;
+  flex-wrap:wrap;
+}
+.rosterActions button,.arenaAddBtn{
+  border:1px solid #28313b;
+  background:#121820;
+  color:#9eabb8;
+  border-radius:8px;
+  padding:8px 10px;
+}
+.rosterActions .primary,.primaryTool{
+  border-color:#3d7555!important;
+  background:#183323!important;
+  color:#9aebbb!important;
+}
+.plannerRosterPalette{
+  display:grid;
+  grid-template-columns:repeat(3,minmax(0,1fr));
+  gap:6px;
+  margin:8px 0 10px;
+  max-height:210px;
+  overflow:auto;
+}
+.toolbox .plannerRosterPalette button{
+  margin:0;
+  display:grid;
+  grid-template-columns:32px 1fr;
+  gap:6px;
+  align-items:center;
+  min-width:0;
+  padding:5px;
+}
+.plannerRosterPalette b{
+  overflow:hidden;
+  white-space:nowrap;
+  text-overflow:ellipsis;
+  text-align:left;
+  font-size:9px;
+}
+
+/* class icon tokens on arena */
+.token.rosterUnit{
+  width:42px;height:42px;
+  padding:0;
+  border-radius:10px;
+  overflow:visible;
+  background:#090d12!important;
+  border:2px solid rgba(255,255,255,.32);
+  z-index:11;
+}
+.classTokenIcon,.classTokenFallback{
+  position:absolute;
+  inset:2px;
+  width:calc(100% - 4px);
+  height:calc(100% - 4px);
+  border-radius:7px;
+  object-fit:cover;
+  display:grid;
+  place-items:center;
+  pointer-events:none;
+}
+.classTokenFallback{background:#18202a;color:#e6edf4;font-size:11px}
+.classTokenName{
+  position:absolute;
+  left:50%;
+  top:calc(100% + 3px);
+  transform:translateX(-50%);
+  max-width:86px;
+  padding:2px 5px;
+  border-radius:5px;
+  background:#070a0ecc;
+  border:1px solid #25303b;
+  color:#eef4f8;
+  font-size:8px;
+  line-height:1.15;
+  white-space:nowrap;
+  overflow:hidden;
+  text-overflow:ellipsis;
+  pointer-events:none;
+  text-shadow:0 1px 2px #000;
+}
+.token.rosterUnit.tank{border-color:#62a5ff}
+.token.rosterUnit.healer{border-color:#4fe49b}
+.token.rosterUnit.melee{border-color:#ef7177}
+.token.rosterUnit.ranged{border-color:#b378e7}
+
+/* replay class icons */
+.replayActor.hasClassIcon{
+  width:38px!important;height:38px!important;
+  border-radius:10px!important;
+  overflow:visible!important;
+  padding:0!important;
+}
+.replayActor.hasClassIcon img{
+  position:absolute;
+  inset:2px;
+  width:calc(100% - 4px);
+  height:calc(100% - 4px);
+  object-fit:cover;
+  border-radius:7px;
+}
+.replayActor.hasClassIcon b{
+  position:absolute;
+  left:50%;
+  top:calc(100% + 2px);
+  transform:translateX(-50%);
+  background:#05080bcc;
+  padding:2px 4px;
+  border-radius:4px;
+  font-size:7px;
+  white-space:nowrap;
+  pointer-events:none;
+}
+
+@media(max-width:1180px){
+  .classRoster>div{grid-template-columns:38px minmax(100px,1fr) 150px 95px 120px 34px 34px!important}
+}
+@media(max-width:900px){
+  .classRoster>div{grid-template-columns:38px 1fr 1fr!important}
+  .classRoster>div select:nth-of-type(2),
+  .classRoster>div select:nth-of-type(3){min-width:0}
+  .plannerRosterPalette{grid-template-columns:repeat(2,minmax(0,1fr))}
+}

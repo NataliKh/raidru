@@ -21,7 +21,7 @@ function bossPresetScenes(id){return JSON.parse(JSON.stringify(presetScenes[id]|
 }
 
 const state=JSON.parse(localStorage.getItem('raidru-standalone')||'{}');
-const RAIDRU_SCHEMA='0.7-wcl-replay';
+const RAIDRU_SCHEMA='0.7.2-class-roster';
 // Версия 0.6 обновляет шаблоны сцен и полный таймлайн на каждого босса.
 // Один раз пересобираем сцены и таймлайн, сохраняя прогресс, заметки,
 // избранное и состав.
@@ -48,6 +48,111 @@ const replayRoleClasses={
 };
 const el=s=>document.querySelector(s); const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const effectLabels={zone:'Опасная зона',soak:'Soak',arrow:'Стрелка',cone:'Конус',line:'Линия'};
+const raidMarkerDefs=[
+  {key:'star',label:'★',name:'Звезда',color:'#ffd52a',texture:'https://warcraft.wiki.gg/wiki/Special:Redirect/file/RaidStar.png'},
+  {key:'circle',label:'●',name:'Круг',color:'#ff982b',texture:'https://warcraft.wiki.gg/wiki/Special:Redirect/file/RaidCircle.png'},
+  {key:'diamond',label:'◆',name:'Ромб',color:'#c868ff',texture:'https://warcraft.wiki.gg/wiki/Special:Redirect/file/RaidDiamond.png'},
+  {key:'triangle',label:'▲',name:'Треугольник',color:'#46d768',texture:'https://warcraft.wiki.gg/wiki/Special:Redirect/file/RaidTriangle.png'},
+  {key:'moon',label:'☾',name:'Луна',color:'#dbe7ff',texture:'https://warcraft.wiki.gg/wiki/Special:Redirect/file/RaidMoon.png'},
+  {key:'square',label:'■',name:'Квадрат',color:'#45a8ff',texture:'https://warcraft.wiki.gg/wiki/Special:Redirect/file/RaidSquare.png'},
+  {key:'cross',label:'✕',name:'Крест',color:'#ff4552',texture:'https://warcraft.wiki.gg/wiki/Special:Redirect/file/RaidCross.png'},
+  {key:'skull',label:'☠',name:'Череп',color:'#f1f4f8',texture:'https://warcraft.wiki.gg/wiki/Special:Redirect/file/RaidSkull.png'}
+];
+
+const wowClassDefs=[
+  {key:'deathknight',name:'Рыцарь смерти',short:'ДК',icon:'https://wow.zamimg.com/images/wow/icons/large/classicon_deathknight.jpg',defaultRange:'melee'},
+  {key:'demonhunter',name:'Охотник на демонов',short:'ДХ',icon:'https://wow.zamimg.com/images/wow/icons/large/classicon_demonhunter.jpg',defaultRange:'melee'},
+  {key:'druid',name:'Друид',short:'Дру',icon:'https://wow.zamimg.com/images/wow/icons/large/classicon_druid.jpg',defaultRange:'ranged'},
+  {key:'evoker',name:'Пробудитель',short:'Эвокер',icon:'https://wow.zamimg.com/images/wow/icons/large/classicon_evoker.jpg',defaultRange:'ranged'},
+  {key:'hunter',name:'Охотник',short:'Хант',icon:'https://wow.zamimg.com/images/wow/icons/large/classicon_hunter.jpg',defaultRange:'ranged'},
+  {key:'mage',name:'Маг',short:'Маг',icon:'https://wow.zamimg.com/images/wow/icons/large/classicon_mage.jpg',defaultRange:'ranged'},
+  {key:'monk',name:'Монах',short:'Монк',icon:'https://wow.zamimg.com/images/wow/icons/large/classicon_monk.jpg',defaultRange:'melee'},
+  {key:'paladin',name:'Паладин',short:'Пал',icon:'https://wow.zamimg.com/images/wow/icons/large/classicon_paladin.jpg',defaultRange:'melee'},
+  {key:'priest',name:'Жрец',short:'Прист',icon:'https://wow.zamimg.com/images/wow/icons/large/classicon_priest.jpg',defaultRange:'ranged'},
+  {key:'rogue',name:'Разбойник',short:'Рога',icon:'https://wow.zamimg.com/images/wow/icons/large/classicon_rogue.jpg',defaultRange:'melee'},
+  {key:'shaman',name:'Шаман',short:'Шам',icon:'https://wow.zamimg.com/images/wow/icons/large/classicon_shaman.jpg',defaultRange:'ranged'},
+  {key:'warlock',name:'Чернокнижник',short:'Лок',icon:'https://wow.zamimg.com/images/wow/icons/large/classicon_warlock.jpg',defaultRange:'ranged'},
+  {key:'warrior',name:'Воин',short:'Вар',icon:'https://wow.zamimg.com/images/wow/icons/large/classicon_warrior.jpg',defaultRange:'melee'}
+];
+
+function wowClass(key){return wowClassDefs.find(x=>x.key===String(key||'').toLowerCase())||null}
+function classIcon(key){return wowClass(key)?.icon||''}
+function defaultRangeForClass(key,role='dps'){
+  if(role==='tank')return 'melee';
+  const c=wowClass(key);
+  if(role==='healer'){
+    if(['paladin','monk'].includes(c?.key))return 'melee';
+    return 'ranged';
+  }
+  return c?.defaultRange||'ranged';
+}
+function detectClassKey(text){
+  const s=String(text||'').toLowerCase();
+  const aliases={
+    deathknight:['death knight','deathknight','dk','дк','рыцарь смерти'],
+    demonhunter:['demon hunter','demonhunter','dh','дх','охотник на демонов'],
+    druid:['druid','друид','дру'],
+    evoker:['evoker','эвокер','пробудитель'],
+    hunter:['hunter','хант','охотник'],
+    mage:['mage','маг'],
+    monk:['monk','монк','монах'],
+    paladin:['paladin','паладин','пал'],
+    priest:['priest','прист','жрец'],
+    rogue:['rogue','рога','разбойник'],
+    shaman:['shaman','шаман','шам'],
+    warlock:['warlock','лок','чернокнижник'],
+    warrior:['warrior','вар','воин']
+  };
+  for(const [key,arr] of Object.entries(aliases)){
+    if(arr.some(a=>s.includes(a)))return key;
+  }
+  return '';
+}
+function raidMarkerKey(label){
+  const s=String(label||'').trim();
+  const aliases={
+    '⭐':'star','★':'star','звезда':'star',
+    '●':'circle','○':'circle','круг':'circle',
+    '◆':'diamond','♦':'diamond','ромб':'diamond',
+    '▲':'triangle','△':'triangle','треугольник':'triangle',
+    '☾':'moon','🌙':'moon','луна':'moon',
+    '■':'square','□':'square','квадрат':'square',
+    '✕':'cross','×':'cross','❌':'cross','крест':'cross',
+    '☠':'skull','💀':'skull','череп':'skull'
+  };
+  return aliases[s.toLowerCase()]||aliases[s]||'';
+}
+function rosterTokenMeta(t){return t?.[5]?.kind==='roster'?t[5]:null}
+function tokenExtraClass(t){
+  if(t?.[2]==='marker'){
+    const k=raidMarkerKey(t[1]);
+    return k?` wowRaidMarker marker-${k}`:'';
+  }
+  const meta=rosterTokenMeta(t);
+  return meta?` rosterUnit class-${meta.classKey||'unknown'}`:'';
+}
+function markerInnerHtml(t){
+  const k=raidMarkerKey(t?.[1]),m=raidMarkerDefs.find(x=>x.key===k);
+  if(!m)return esc(t?.[1]||'');
+  return `<span class="markerFallback">${esc(m.label)}</span><img class="raidMarkerTexture" src="${m.texture}" alt="${esc(m.name)}" loading="eager">`;
+}
+function rosterInnerHtml(t){
+  const meta=rosterTokenMeta(t),c=wowClass(meta?.classKey);
+  const icon=c?.icon;
+  return `${icon?`<img class="classTokenIcon" src="${icon}" alt="${esc(c.name)}">`:`<span class="classTokenFallback">${esc(String(t?.[1]||'?').slice(0,2))}</span>`}<span class="classTokenName">${esc(t?.[1]||'Игрок')}</span>`;
+}
+function tokenInnerHtml(t){
+  if(t?.[2]==='marker'&&raidMarkerKey(t[1]))return markerInnerHtml(t);
+  if(rosterTokenMeta(t))return rosterInnerHtml(t);
+  return esc(t?.[1]||'');
+}
+function tokenTitle(t,editable=false){
+  if(t?.[2]==='marker')return raidMarkerDefs.find(m=>m.key===raidMarkerKey(t[1]))?.name||'Рейдовая метка';
+  const meta=rosterTokenMeta(t),c=wowClass(meta?.classKey);
+  if(meta)return `${t[1]}${c?' · '+c.name:''} · ${meta.role==='tank'?'танк':meta.role==='healer'?'хил':meta.range==='melee'?'мили ДД':'рэнж ДД'}`;
+  return editable?'Двойной клик — переименовать':'';
+}
+
 const arenaMaps={
   nekzali:'./assets/maps/nekzali.webp',
   sentinels:'./assets/maps/sentinels.webp',
@@ -132,7 +237,18 @@ function parseTime(v){
   return NaN;
 }
 function fmtTime(sec){sec=Math.max(0,Math.round(Number(sec)||0));return `${Math.floor(sec/60)}:${String(sec%60).padStart(2,'0')}`}
-function rosterState(){if(!state.roster)state.roster=[];return state.roster}
+function normalizeRosterMember(x,i=0){
+  x=x||{};
+  const role=['tank','healer','dps'].includes(x.role)?x.role:'dps';
+  const classKey=wowClass(x.classKey)?.key||detectClassKey(x.classKey||x.class||'')||'';
+  const range=['melee','ranged'].includes(x.range)?x.range:defaultRangeForClass(classKey,role);
+  return {...x,id:x.id||`roster-${Date.now()}-${i}-${Math.random().toString(16).slice(2)}`,name:String(x.name||`Игрок ${i+1}`),role,classKey,range};
+}
+function rosterState(){
+  if(!state.roster)state.roster=[];
+  state.roster=state.roster.map((x,i)=>normalizeRosterMember(x,i));
+  return state.roster;
+}
 function toast(msg){const t=el('#toast');if(!t)return;t.textContent=msg;t.classList.add('show');clearTimeout(t._x);t._x=setTimeout(()=>t.classList.remove('show'),1800)}
 function safeB64Encode(obj){return btoa(unescape(encodeURIComponent(JSON.stringify(obj))))}
 function safeB64Decode(str){return JSON.parse(decodeURIComponent(escape(atob(str))))}
@@ -200,7 +316,7 @@ function stopReplay(){replayPlaying=false;if(replayRAF)cancelAnimationFrame(repl
 function toggleReplay(){if(replayPlaying){stopReplay();updateReplayDom(true);return}const d=replayState().data;if(!d)return toast('Сначала загрузи replay');if(replayClock>=replayDuration(d)-50)replayClock=0;replayPlaying=true;replayLastTs=performance.now();replayRAF=requestAnimationFrame(replayTick);updateReplayPlayButton()}
 function replayTick(now){if(!replayPlaying)return;const dt=(now-replayLastTs)*replaySpeed;replayLastTs=now;replayClock+=dt;const dur=replayDuration(replayState().data);if(replayClock>=dur){replayClock=dur;stopReplay()}updateReplayDom(false);if(replayPlaying)replayRAF=requestAnimationFrame(replayTick)}
 function updateReplayPlayButton(){const b=el('#replayPlay');if(b)b.textContent=replayPlaying?'■ Пауза':'▶ Играть'}
-function replayActorHtml(a,data,t){const p=positionAt(data,a.id,t);if(!p)return '';const q=data.normalizedPercent?{x:p.x,y:p.y}:replayPoint(data,p.x,p.y);const role=replayRole(a);return `<div class="replayActor ${role}" data-actor="${a.id}" style="left:${q.x}%;top:${q.y}%" title="${esc(a.name)}"><b>${esc(shortActorName(a.name))}</b></div>`}
+function replayActorHtml(a,data,t){const p=positionAt(data,a.id,t);if(!p)return '';const q=data.normalizedPercent?{x:p.x,y:p.y}:replayPoint(data,p.x,p.y);const role=replayRole(a),ck=detectClassKey(a.subType||a.class||''),c=wowClass(ck);return `<div class="replayActor ${role}${c?' hasClassIcon':''}" data-actor="${a.id}" style="left:${q.x}%;top:${q.y}%" title="${esc(a.name)}${c?' · '+esc(c.name):''}">${c?`<img src="${c.icon}" alt="">`:''}<b>${esc(shortActorName(a.name))}</b></div>`}
 function replayMapSource(){const d=replayState().data;if(current==='ulatek'&&d){const p3=(bossState(current).timelineV3.find(e=>/фаза 3|героизм на p3/i.test(e.label))?.time||145)*1000;if(replayClock>=p3)return arenaMaps.ulatek_p3}return arenaMaps[current]||arenaMaps.nekzali}
 function updateReplayDom(force=false){
  const d=replayState().data;if(!d)return;const dur=replayDuration(d);const slider=el('#replaySlider');if(slider){slider.max=dur;slider.value=replayClock}const tm=el('#replayTime');if(tm)tm.textContent=`${fmtTime(replayClock/1000)} / ${fmtTime(dur/1000)}`;const ev=replayEventNear(d,replayClock),evn=el('#replayNow');if(evn)evn.innerHTML=ev?`<b>${esc(ev.label)}</b><small>${esc(ev.type)}</small>`:'<b>Движение рейда</b><small>между событиями</small>';
@@ -210,7 +326,7 @@ function updateReplayDom(force=false){
 function selectReplayActor(v){replaySelectedActor=v;updateReplayDom(true)}
 function createPlanFromReplay(){
  const r=replayState(),d=r.data;if(!d?.positions?.length)return toast('Сначала загрузи replay');const bs=bossState(current),base=bossPresetScenes(current),events=[...bs.timelineV3].sort((a,b)=>a.time-b.time),actors=replayActors(d);if(!actors.length)return toast('В replay нет игроков');
- const newScenes=events.map((e,i)=>{const template=deep(base[Math.min(e.scene,base.length-1)]||base[0]||defaultScene()),t=e.time*1000;const staticTokens=(template.tokens||[]).filter(x=>['marker','boss'].includes(x[2]));const playerTokens=actors.map(a=>{const p=positionAt(d,a.id,t);if(!p)return null;const q=d.normalizedPercent?{x:p.x,y:p.y}:replayPoint(d,p.x,p.y);return [`wcl-${a.id}`,shortActorName(a.name),replayRole(a),q.x,q.y]}).filter(Boolean);template.name=`${fmtTime(e.time)} · ${e.label}`;template.note=`Автоматически создано из replay: ${e.label}. Можно свободно редактировать как обычный план RaidRU.`;template.tokens=[...staticTokens,...playerTokens];template.routes={};return normalizeScene(template,current,i)});
+ const newScenes=events.map((e,i)=>{const template=deep(base[Math.min(e.scene,base.length-1)]||base[0]||defaultScene()),t=e.time*1000;const staticTokens=(template.tokens||[]).filter(x=>['marker','boss'].includes(x[2]));const playerTokens=actors.map(a=>{const p=positionAt(d,a.id,t);if(!p)return null;const q=d.normalizedPercent?{x:p.x,y:p.y}:replayPoint(d,p.x,p.y);const rt=replayRole(a),ck=detectClassKey(a.subType||a.class||'');return [`wcl-${a.id}`,shortActorName(a.name),rt,q.x,q.y,{kind:'roster',rosterId:`wcl-${a.id}`,classKey:ck,role:rt==='tank'?'tank':rt==='healer'?'healer':'dps',range:rt==='melee'?'melee':'ranged'}]}).filter(Boolean);template.name=`${fmtTime(e.time)} · ${e.label}`;template.note=`Автоматически создано из replay: ${e.label}. Можно свободно редактировать как обычный план RaidRU.`;template.tokens=[...staticTokens,...playerTokens];template.routes={};return normalizeScene(template,current,i)});
  bs.scenes=newScenes;bs.timelineV3=events.map((e,i)=>({...e,id:uid(),scene:i}));sceneIndex=0;save();toast(`Создано ${newScenes.length} редактируемых сцен из replay`);view='planner';render();
 }
 
@@ -219,7 +335,7 @@ function restoreFromHash(){try{if(!location.hash.startsWith('#share='))return;co
 function save(){state.current=current;state.role=role;state.diff=diff;state.view=view;state.priestMode=priestMode;state.showPaths=showPaths;localStorage.setItem('raidru-standalone',JSON.stringify(state))}
 function render(){
   save();const b=raid.find(x=>x.id===current),bs=bossState(current);
-  el('#app').innerHTML=`<div class="shell"><aside><div class="brand"><div class="mark">R</div><div><b>RaidRU</b><small>рейдовые тактики по-русски</small></div></div><div class="season"><small>Midnight · Сезон 2</small><b>Ядовитая бездна</b></div><input class="search" placeholder="Найти босса…" oninput="filterBoss(this.value)"><div class="bosses">${orderedRaid().map(x=>`<button data-name="${esc((x.name+' '+x.en).toLowerCase())}" class="${x.id===current?'on':''}" onclick="chooseBoss('${x.id}')"><i>${x.order}</i><span><b>${x.name}</b><small>${x.en}</small></span><em>${bossState(x.id).favorite?'★':''}</em></button>`).join('')}</div><div class="version">RaidRU 0.7 · WCL Replay + Planner</div></aside><main><header>${[['dashboard','Рейд'],['guide','Тактика'],['replay','WCL Replay'],['player','План: просмотр'],['planner','Планировщик'],['timeline','Таймлайн'],['roster','Состав'],['notes','Заметки'],['glossary','Словарь']].map(x=>`<button class="${view===x[0]?'on':''}" onclick="setView('${x[0]}')">${x[1]}</button>`).join('')}<span></span><button class="priest ${priestMode?'on':''}" onclick="togglePriest()">♥ Холи-прист</button><button onclick="sharePlan()">↗ Поделиться</button><button onclick="exportPlan()">⇩ Экспорт</button><label class="importBtn">⇧ Импорт<input type="file" accept="application/json,.json" onchange="importPlanFile(this.files[0])"></label></header>${view==='dashboard'?dashboardHero():`<section class="hero"><div><small>MIDNIGHT / ЯДОВИТАЯ БЕЗДНА / БОСС ${b.order}</small><div class="title"><h1>${b.name}</h1><button onclick="fav()">${bs.favorite?'★':'☆'}</button></div><div class="en">${b.en}</div><p>${b.summary}</p></div><div class="heroRight"><div class="diff">${[['normal','Обычный'],['heroic','Героический'],['mythic','Эпохальный']].map(x=>`<button class="${diff===x[0]?'on':''}" onclick="setDiff('${x[0]}')">${x[1]}</button>`).join('')}</div><label>Освоение <b>${bs.progress}%</b><input type="range" min="0" max="100" step="10" value="${bs.progress}" oninput="setProgress(this.value)"></label></div></section>`}${content(b,bs)}<footer class="siteCredit">Maps/raid planning resources: <a href="https://raidplan.io/" target="_blank" rel="noopener noreferrer">RaidPlan.io</a></footer></main></div>`;
+  el('#app').innerHTML=`<div class="shell"><aside><div class="brand"><div class="mark">R</div><div><b>RaidRU</b><small>рейдовые тактики по-русски</small></div></div><div class="season"><small>Midnight · Сезон 2</small><b>Ядовитая бездна</b></div><input class="search" placeholder="Найти босса…" oninput="filterBoss(this.value)"><div class="bosses">${orderedRaid().map(x=>`<button data-name="${esc((x.name+' '+x.en).toLowerCase())}" class="${x.id===current?'on':''}" onclick="chooseBoss('${x.id}')"><i>${x.order}</i><span><b>${x.name}</b><small>${x.en}</small></span><em>${bossState(x.id).favorite?'★':''}</em></button>`).join('')}</div><div class="version">RaidRU 0.7.2 · Classes + Markers</div></aside><main><header>${[['dashboard','Рейд'],['guide','Тактика'],['replay','WCL Replay'],['player','План: просмотр'],['planner','Планировщик'],['timeline','Таймлайн'],['roster','Состав'],['notes','Заметки'],['glossary','Словарь']].map(x=>`<button class="${view===x[0]?'on':''}" onclick="setView('${x[0]}')">${x[1]}</button>`).join('')}<span></span><button class="priest ${priestMode?'on':''}" onclick="togglePriest()">♥ Холи-прист</button><button onclick="sharePlan()">↗ Поделиться</button><button onclick="exportPlan()">⇩ Экспорт</button><label class="importBtn">⇧ Импорт<input type="file" accept="application/json,.json" onchange="importPlanFile(this.files[0])"></label></header>${view==='dashboard'?dashboardHero():`<section class="hero"><div><small>MIDNIGHT / ЯДОВИТАЯ БЕЗДНА / БОСС ${b.order}</small><div class="title"><h1>${b.name}</h1><button onclick="fav()">${bs.favorite?'★':'☆'}</button></div><div class="en">${b.en}</div><p>${b.summary}</p></div><div class="heroRight"><div class="diff">${[['normal','Обычный'],['heroic','Героический'],['mythic','Эпохальный']].map(x=>`<button class="${diff===x[0]?'on':''}" onclick="setDiff('${x[0]}')">${x[1]}</button>`).join('')}</div><label>Освоение <b>${bs.progress}%</b><input type="range" min="0" max="100" step="10" value="${bs.progress}" oninput="setProgress(this.value)"></label></div></section>`}${content(b,bs)}<footer class="siteCredit">Maps/raid planning resources: <a href="https://raidplan.io/" target="_blank" rel="noopener noreferrer">RaidPlan.io</a> · Class icons: <a href="https://www.wowhead.com/icons" target="_blank" rel="noopener noreferrer">Wowhead/Zamimg</a> · Raid markers: Warcraft Wiki / Blizzard game assets</footer></main></div>`;
   if(view==='planner') setupPlanner();
   if(view==='player') setupPlayer();
 }
@@ -263,7 +379,7 @@ function routeWaypointsHtml(sc,editable){
 }
 function togglePaths(){showPaths=!showPaths;save();render()}
 function effectHtml(e,editable=false){const style=`left:${e.x}%;top:${e.y}%;width:${e.w}%;height:${e.h}%;--rot:${Number(e.rot)||0}deg`;return `<div class="effect ${e.type} ${editable?'editable':''}" data-effect="${e.id}" style="${style}" title="${esc(e.label||effectLabels[e.type])}"><span>${esc(e.label||'')}</span></div>`}
-function arenaHtml(sc,{editable=false,player=false,next=null}={}){const dark=Math.max(0,Math.min(65,Number(sc?.map?.dark)||0))/100;return `<div id="${player?'playerArena':'arena'}" class="arena ${player?'playArena':''} arena-${current} ${routeEdit&&editable?'routeMode':''}">${arenaMapHtml(current,sc)}<div class="mapShade" style="background:rgba(0,0,0,${dark})"></div>${pathPreviewHtml(sc,next)}${routeWaypointsHtml(sc,editable)}<div class="arenaLabel">${esc(sc.name)}</div><div class="effects">${(sc.effects||[]).map(e=>effectHtml(e,editable)).join('')}</div><div class="tokens">${sc.tokens.map(t=>`<div class="token ${t[2]} ${routeTokenId===t[0]&&routeEdit?'routeSelected':''}" data-id="${t[0]}" title="${editable?'Двойной клик — переименовать':''}" style="left:${t[3]}%;top:${t[4]}%">${esc(t[1])}</div>`).join('')}</div></div>`}
+function arenaHtml(sc,{editable=false,player=false,next=null}={}){const dark=Math.max(0,Math.min(65,Number(sc?.map?.dark)||0))/100;return `<div id="${player?'playerArena':'arena'}" class="arena ${player?'playArena':''} arena-${current} ${routeEdit&&editable?'routeMode':''}">${arenaMapHtml(current,sc)}<div class="mapShade" style="background:rgba(0,0,0,${dark})"></div>${pathPreviewHtml(sc,next)}${routeWaypointsHtml(sc,editable)}<div class="arenaLabel">${esc(sc.name)}</div><div class="effects">${(sc.effects||[]).map(e=>effectHtml(e,editable)).join('')}</div><div class="tokens">${sc.tokens.map(t=>`<div class="token ${t[2]}${tokenExtraClass(t)} ${routeTokenId===t[0]&&routeEdit?'routeSelected':''}" data-id="${t[0]}" title="${esc(tokenTitle(t,editable))}" style="left:${t[3]}%;top:${t[4]}%">${tokenInnerHtml(t)}</div>`).join('')}</div></div>`}
 function replayView(b,bs){
  const r=replayState(),d=r.data,actors=d?replayActors(d):[],dur=d?replayDuration(d):1,cal=r.cal||{};const src=replayMapSource();
  return `<section class="page replayPage"><div class="replayImport card"><div><h3>Warcraft Logs Replay</h3><p>Вставь публичную ссылку на отчёт с <code>?fight=</code>. Токены двигаются по реальным координатам лога поверх нашей карты арены.</p></div><div class="replayImportGrid"><label>Ссылка Warcraft Logs<input id="wclUrl" value="${esc(r.url||'')}" placeholder="https://www.warcraftlogs.com/reports/...?...&fight=12"></label><label>RaidRU WCL Proxy<input id="wclProxy" value="${esc(state.wclProxy||'')}" placeholder="https://raidru-wcl.<account>.workers.dev"></label></div><div class="replayButtons"><button class="primary" onclick="loadWclReplay()">Загрузить WCL replay</button><button onclick="loadDemoReplay()">Демо из плана</button><label class="importBtn">Импорт replay JSON<input type="file" accept="application/json,.json" onchange="importReplayJson(this.files[0])"></label>${d?'<button onclick="exportReplayJson()">Экспорт replay JSON</button><button class="rehearse" onclick="createPlanFromReplay()">✦ Создать план из replay</button>':''}</div><small>Секрет Warcraft Logs не хранится на GitHub Pages: запрос идёт через отдельный proxy/Worker.</small></div>
@@ -272,7 +388,7 @@ function replayView(b,bs){
 }
 function player(b,bs){const sc=bs.scenes[Math.min(playerSceneIndex,bs.scenes.length-1)],next=bs.scenes[playerSceneIndex+1]||null;const events=bs.timelineV3;return `<section class="page playerPage"><div class="playerTop"><div><button onclick="playerPrev()">‹</button><b>${esc(sc.name)}</b><span class="keyBadge">Кадр ${playerSceneIndex+1}/${bs.scenes.length} · ${sceneAttachedTime(bs,playerSceneIndex)}</span><button onclick="playerNext()">›</button></div><div><button class="${showPaths?'on':''}" onclick="togglePaths()">⇢ Траектории</button><select onchange="setPlayerSpeed(this.value)"><option value="0.5" ${playerSpeed===.5?'selected':''}>0.5×</option><option value="1" ${playerSpeed===1?'selected':''}>1×</option><option value="1.5" ${playerSpeed===1.5?'selected':''}>1.5×</option><option value="2" ${playerSpeed===2?'selected':''}>2×</option></select><button class="rehearse" onclick="togglePlayback()">${playerPlaying?'■ Стоп':'▶ Проиграть бой'}</button></div></div><div class="playerLayout"><div>${arenaHtml(sc,{player:true,next})}<div class="sceneCaption"><b>${esc(sc.name)}</b><p>${esc(sc.note)}</p><small>Следующий ключевой кадр: ${next?esc(next.name):'финал'}</small></div></div><aside class="eventRail"><h3>Таймлайн</h3>${events.map((e,i)=>`<button class="${e.scene===playerSceneIndex?'on':''}" onclick="jumpEvent(${i})"><time>${fmtTime(e.time)}</time><span><b>${esc(e.label)}</b><small>${eventTypes[e.type]||e.type} · кадр ${e.scene+1}</small></span></button>`).join('')}</aside></div><div class="playScrubber">${events.map((e,i)=>`<button class="${e.scene===playerSceneIndex?'on':''}" style="left:${timelinePct(e.time,events)}%" onclick="jumpEvent(${i})" title="${fmtTime(e.time)} · ${esc(e.label)}"></button>`).join('')}</div><div class="playerLegend"><span><i class="lg tank"></i>Танк</span><span><i class="lg healer"></i>Хил</span><span><i class="lg dps"></i>ДД</span><span><i class="lg danger"></i>Опасность</span><span><i class="lg path"></i>Траектория к следующему кадру</span></div></section>`}
 function timelinePct(t,events){const max=Math.max(1,...events.map(e=>Number(e.time)||0));return Math.min(100,(Number(t)||0)/max*100)}
-function planner(b,bs){const sc=bs.scenes[Math.min(sceneIndex,bs.scenes.length-1)];const movable=sc.tokens.filter(t=>!['marker','boss'].includes(t[2]));if(!routeTokenId||!movable.some(t=>t[0]===routeTokenId))routeTokenId=movable[0]?.[0]||null;return `<section class="page"><div class="plannerTop"><div><button onclick="prevScene()">‹</button><input id="sceneName" value="${esc(sc.name)}"><small>${sceneIndex+1}/${bs.scenes.length}</small><button onclick="nextScene()">›</button></div><div><button onclick="setView('player')">▶ Просмотр</button><button onclick="loadBossPreset()">Шаблон босса</button><button onclick="addScene()">＋ Сцена</button><button onclick="resetScene()">↻ Сброс</button><button class="red" onclick="delScene()">Удалить</button></div></div><div class="sceneStrip">${bs.scenes.map((x,i)=>`<button class="${i===sceneIndex?'on':''}" onclick="goScene(${i})"><b>${i+1}</b><span>${esc(x.name)}</span></button>`).join('')}</div><div class="planGrid"><div>${arenaHtml(sc,{editable:true,next:bs.scenes[sceneIndex+1]||null})}<div class="sceneMeta"><button class="${showPaths?'on':''}" onclick="togglePaths()">⇢ Траектории к следующему кадру</button><span class="keyBadge">Кадр тактики · ${sceneAttachedTime(bs,sceneIndex)}</span><label>Длительность сцены <input id="sceneDuration" type="number" min="1" max="120" value="${sc.duration||8}"> сек.</label></div><textarea id="sceneNote" placeholder="Описание сцены…">${esc(sc.note)}</textarea></div><div class="toolbox"><h3>Игроки и метки</h3>${[['tank','Танк'],['healer','Хил'],['melee','Мили'],['ranged','РДД'],['marker','Метка'],['boss','Босс']].map(x=>`<button onclick="addToken('${x[0]}')">＋ ${x[1]}</button>`).join('')}<hr><h3>Маршрут внутри сцены</h3><small>Выбери игрока, включи редактор и кликай по карте — точки задают путь до следующего ключевого кадра.</small><select class="routeSelect" onchange="selectRouteToken(this.value)">${movable.map(t=>`<option value="${t[0]}" ${routeTokenId===t[0]?'selected':''}>${esc(t[1])}</option>`).join('')}</select><button class="${routeEdit?'on':''}" onclick="toggleRouteEdit()">${routeEdit?'✓ Редактор маршрута включён':'✦ Редактировать маршрут'}</button><button onclick="clearRoute()">Очистить маршрут игрока</button><p class="routeHelp">В режиме маршрута: клик по свободной области добавляет точку. Точки можно перетаскивать. ПКМ по точке удаляет её.</p><hr><h3>Карта арены</h3>
+function planner(b,bs){const sc=bs.scenes[Math.min(sceneIndex,bs.scenes.length-1)];const movable=sc.tokens.filter(t=>!['marker','boss'].includes(t[2]));if(!routeTokenId||!movable.some(t=>t[0]===routeTokenId))routeTokenId=movable[0]?.[0]||null;return `<section class="page"><div class="plannerTop"><div><button onclick="prevScene()">‹</button><input id="sceneName" value="${esc(sc.name)}"><small>${sceneIndex+1}/${bs.scenes.length}</small><button onclick="nextScene()">›</button></div><div><button onclick="setView('player')">▶ Просмотр</button><button onclick="loadBossPreset()">Шаблон босса</button><button onclick="addScene()">＋ Сцена</button><button onclick="resetScene()">↻ Сброс</button><button class="red" onclick="delScene()">Удалить</button></div></div><div class="sceneStrip">${bs.scenes.map((x,i)=>`<button class="${i===sceneIndex?'on':''}" onclick="goScene(${i})"><b>${i+1}</b><span>${esc(x.name)}</span></button>`).join('')}</div><div class="planGrid"><div>${arenaHtml(sc,{editable:true,next:bs.scenes[sceneIndex+1]||null})}<div class="sceneMeta"><button class="${showPaths?'on':''}" onclick="togglePaths()">⇢ Траектории к следующему кадру</button><span class="keyBadge">Кадр тактики · ${sceneAttachedTime(bs,sceneIndex)}</span><label>Длительность сцены <input id="sceneDuration" type="number" min="1" max="120" value="${sc.duration||8}"> сек.</label></div><textarea id="sceneNote" placeholder="Описание сцены…">${esc(sc.note)}</textarea></div><div class="toolbox"><h3>Состав на арене</h3>${rosterState().length?`<small>Игроки берутся из вкладки «Состав». Иконка — класс, положение — роль + ближний/дальний бой.</small><div class="plannerRosterPalette">${rosterState().map(m=>{const c=wowClass(m.classKey);return `<button onclick="addRosterMemberToScene('${m.id}')" title="${esc(m.name)} · ${esc(c?.name||'класс не указан')}"><span class="plannerClassIcon">${c?`<img src="${c.icon}" alt="">`:'?'}</span><b>${esc(m.name)}</b></button>`}).join('')}</div><button class="primaryTool" onclick="placeRosterCurrentScene()">◎ Расставить состав на этой сцене</button><button onclick="placeRosterAllScenes()">◎ Расставить состав во всех сценах</button>`:`<small>Сначала добавь игроков, классы и роли во вкладке «Состав».</small><button onclick="setView('roster')">Открыть состав</button>`}<hr><h3>Условные юниты</h3><div class="unitToolGrid">${[['tank','Танк'],['healer','Хил'],['melee','Мили'],['ranged','РДД'],['boss','Босс']].map(x=>`<button onclick="addToken('${x[0]}')">＋ ${x[1]}</button>`).join('')}</div><hr><h3>Рейдовые метки WoW</h3><small>Используются настоящие raid-target textures. Unicode остаётся только запасным вариантом, если внешний источник недоступен.</small><div class="raidMarkerPalette">${raidMarkerDefs.map(m=>`<button class="raidMarkerBtn marker-${m.key}" onclick="addRaidMarker('${m.key}')" title="${m.name}"><i><span>${m.label}</span><img src="${m.texture}" alt="${m.name}"></i><small>${m.name}</small></button>`).join('')}</div><hr><h3>Маршрут внутри сцены</h3><small>Выбери игрока, включи редактор и кликай по карте — точки задают путь до следующего ключевого кадра.</small><select class="routeSelect" onchange="selectRouteToken(this.value)">${movable.map(t=>`<option value="${t[0]}" ${routeTokenId===t[0]?'selected':''}>${esc(t[1])}</option>`).join('')}</select><button class="${routeEdit?'on':''}" onclick="toggleRouteEdit()">${routeEdit?'✓ Редактор маршрута включён':'✦ Редактировать маршрут'}</button><button onclick="clearRoute()">Очистить маршрут игрока</button><p class="routeHelp">В режиме маршрута: клик по свободной области добавляет точку. Точки можно перетаскивать. ПКМ по точке удаляет её.</p><hr><h3>Карта арены</h3>
 <small>Подложка экспортирована через RaidPlan. В 0.6 шаблоны уже разложены по таймлайну и по кадрам; масштаб и смещение можно править вручную.</small>
 <label class="mapControl">Масштаб <b>${Math.round(sc.map?.zoom||100)}%</b><input type="range" min="100" max="180" step="1" value="${sc.map?.zoom||100}" oninput="setMapSetting('zoom',this.value)"></label>
 <label class="mapControl">Сдвиг X <b>${Math.round(sc.map?.x||0)}</b><input type="range" min="-30" max="30" step="1" value="${sc.map?.x||0}" oninput="setMapSetting('x',this.value)"></label>
@@ -280,26 +396,143 @@ function planner(b,bs){const sc=bs.scenes[Math.min(sceneIndex,bs.scenes.length-1
 <label class="mapControl">Затемнение <b>${Math.round(sc.map?.dark||0)}%</b><input type="range" min="0" max="65" step="1" value="${sc.map?.dark||0}" oninput="setMapSetting('dark',this.value)"></label>
 <button onclick="resetMapSettings()">↻ Сбросить карту</button>
 <hr><h3>Механики на карте</h3><small>Поверх реальной арены можно размещать зоны, soak, стрелки, конусы и линии.</small>${[['zone','Опасная зона'],['soak','Soak-зона'],['arrow','Стрелка'],['cone','Конус'],['line','Линия']].map(x=>`<button onclick="addEffect('${x[0]}')">＋ ${x[1]}</button>`).join('')}<p>Объекты и эффекты можно перетаскивать. Двойной клик — переименовать. ПКМ — удалить. Колесо мыши над эффектом меняет размер, Shift+колесо — поворот.</p><hr><b>Состав</b><small>${rosterState().length?`Загружено игроков: ${rosterState().length}.`:'Добавь игроков во вкладке «Состав».'}</small></div></div></section>`}
-function rosterView(){const roster=rosterState();return `<section class="page rosterPage"><div class="rosterGrid"><div class="card"><h3>Быстрый импорт состава</h3><p>Вставь список из Discord/рейд-заметки. Поддерживается формат <code>Ник - роль</code>, <code>Ник роль</code> или просто ники по строкам.</p><textarea id="rosterInput" placeholder="TankOne - танк\nPriestka - хил\nHunter - дд"></textarea><div class="rowButtons"><button onclick="parseRoster()">Разобрать список</button><button onclick="clearRoster()">Очистить</button></div></div><div class="card"><h3>Сводка</h3><div class="roleCounts"><span>🛡 ${roster.filter(x=>x.role==='tank').length} танков</span><span>♥ ${roster.filter(x=>x.role==='healer').length} хилов</span><span>⚔ ${roster.filter(x=>x.role==='dps').length} ДД</span></div><p>Состав сохраняется локально и автоматически попадает в заметку для РЛ.</p></div></div><div class="rosterList">${roster.length?roster.map((x,i)=>`<div><b>${esc(x.name)}</b><select onchange="setRosterRole(${i},this.value)"><option value="tank" ${x.role==='tank'?'selected':''}>Танк</option><option value="healer" ${x.role==='healer'?'selected':''}>Хил</option><option value="dps" ${x.role==='dps'?'selected':''}>ДД</option></select><button onclick="removeRoster(${i})">×</button></div>`).join(''):'<div class="empty">Состав пока пуст.</div>'}</div></section>`}
-function parseRoster(){const txt=el('#rosterInput')?.value||'';const lines=txt.split(/\n+/).map(x=>x.trim()).filter(Boolean);state.roster=lines.map(line=>{const low=line.toLowerCase();let role=low.includes('танк')||/\btank\b/.test(low)?'tank':low.includes('хил')||low.includes('heal')?'healer':'dps';let name=line.replace(/[-–—|:,]?\s*(танк|tank|хил(?:ер)?|heal(?:er)?|дд|dps)\s*$/i,'').trim();return {name:name||line,role}});save();toast(`Состав: ${state.roster.length} игроков`);render()}
-function clearRoster(){state.roster=[];save();render()} function setRosterRole(i,r){rosterState()[i].role=r;save();render()} function removeRoster(i){rosterState().splice(i,1);save();render()}
-function rosterNote(){const r=rosterState();if(!r.length)return '';const f=x=>r.filter(a=>a.role===x).map(a=>a.name).join(', ');return `\nСостав:\nТанки: ${f('tank')||'—'}\nХилы: ${f('healer')||'—'}\nДД: ${f('dps')||'—'}`}
+function classSelectHtml(member,i){
+  return `<select class="classSelect" onchange="setRosterClass(${i},this.value)"><option value="">— класс —</option>${wowClassDefs.map(c=>`<option value="${c.key}" ${member.classKey===c.key?'selected':''}>${c.name}</option>`).join('')}</select>`;
+}
+function rosterView(){const roster=rosterState();return `<section class="page rosterPage"><div class="rosterGrid"><div class="card"><h3>Быстрый импорт состава</h3><p>Можно указывать класс и роль: <code>Вульпяша - Priest - хил</code>, <code>HunterOne - Hunter - дд</code>. Для гибридных классов ближний/дальний бой затем можно поправить вручную.</p><textarea id="rosterInput" placeholder="TankOne - Paladin - танк\nPriestka - Priest - хил\nHunterOne - Hunter - дд"></textarea><div class="rowButtons"><button onclick="parseRoster()">Разобрать список</button><button onclick="addRosterBlank()">＋ Игрок вручную</button><button onclick="clearRoster()">Очистить</button></div></div><div class="card"><h3>Сводка</h3><div class="roleCounts"><span>🛡 ${roster.filter(x=>x.role==='tank').length} танков</span><span>♥ ${roster.filter(x=>x.role==='healer').length} хилов</span><span>⚔ ${roster.filter(x=>x.role==='dps'&&x.range==='melee').length} мили ДД</span><span>🏹 ${roster.filter(x=>x.role==='dps'&&x.range==='ranged').length} рэнж ДД</span></div><p>Класс используется как иконка игрока. Роль и дистанция используются для автоматической расстановки в шаблонах боя.</p></div></div><div class="rosterList classRoster">${roster.length?roster.map((x,i)=>{const c=wowClass(x.classKey);return `<div><span class="rosterClassIcon">${c?`<img src="${c.icon}" alt="${esc(c.name)}">`:'?'}</span><input class="rosterNameInput" value="${esc(x.name)}" onchange="setRosterName(${i},this.value)">${classSelectHtml(x,i)}<select onchange="setRosterRole(${i},this.value)"><option value="tank" ${x.role==='tank'?'selected':''}>Танк</option><option value="healer" ${x.role==='healer'?'selected':''}>Хил</option><option value="dps" ${x.role==='dps'?'selected':''}>ДД</option></select><select onchange="setRosterRange(${i},this.value)" ${x.role==='tank'?'disabled':''}><option value="melee" ${x.range==='melee'?'selected':''}>Ближний бой</option><option value="ranged" ${x.range==='ranged'?'selected':''}>Дальний бой</option></select><button class="arenaAddBtn" onclick="addRosterMemberToScene('${x.id}')" title="Добавить в текущую сцену">◎</button><button onclick="removeRoster(${i})">×</button></div>`}).join(''):'<div class="empty">Состав пока пуст.</div>'}</div>${roster.length?`<div class="rosterActions"><button onclick="placeRosterCurrentScene();setView('planner')">Расставить в текущей сцене</button><button class="primary" onclick="placeRosterAllScenes();setView('planner')">Расставить во всех сценах босса</button></div>`:''}</section>`}
+function parseRoster(){
+  const txt=el('#rosterInput')?.value||'';
+  const lines=txt.split(/\n+/).map(x=>x.trim()).filter(Boolean);
+  state.roster=lines.map((line,i)=>{
+    const low=line.toLowerCase();
+    const role=low.includes('танк')||/\btank\b/.test(low)?'tank':low.includes('хил')||/\bheal(?:er)?\b/.test(low)?'healer':'dps';
+    const classKey=detectClassKey(line);
+    const parts=line.split(/\s*[-–—|,:]\s*/).map(x=>x.trim()).filter(Boolean);
+    let name=parts[0]||line;
+    if(parts.length===1){
+      name=line
+        .replace(/\b(death\s*knight|demon\s*hunter|druid|evoker|hunter|mage|monk|paladin|priest|rogue|shaman|warlock|warrior|tank|healer|heal|dps)\b/ig,'')
+        .replace(/\b(дк|дх|друид|эвокер|пробудитель|хант|охотник|маг|монк|монах|паладин|пал|прист|жрец|рога|разбойник|шаман|шам|лок|чернокнижник|вар|воин|танк|хил(?:ер)?|дд)\b/ig,'')
+        .replace(/\s{2,}/g,' ').trim()||line;
+    }
+    return normalizeRosterMember({id:uid(),name,role,classKey,range:defaultRangeForClass(classKey,role)},i);
+  });
+  save();toast(`Состав: ${state.roster.length} игроков`);render();
+}
+function addRosterBlank(){rosterState().push(normalizeRosterMember({id:uid(),name:`Игрок ${rosterState().length+1}`,role:'dps',classKey:'',range:'ranged'},rosterState().length));save();render()}
+function clearRoster(){state.roster=[];save();render()}
+function setRosterName(i,v){const m=rosterState()[i];if(m){m.name=String(v||'Игрок').slice(0,30);save()}}
+function setRosterClass(i,key){const m=rosterState()[i];if(!m)return;m.classKey=wowClass(key)?.key||'';m.range=defaultRangeForClass(m.classKey,m.role);save();render()}
+function setRosterRole(i,r){const m=rosterState()[i];if(!m)return;m.role=r;m.range=defaultRangeForClass(m.classKey,r);save();render()}
+function setRosterRange(i,r){const m=rosterState()[i];if(!m)return;m.range=r==='melee'?'melee':'ranged';save();render()}
+function removeRoster(i){rosterState().splice(i,1);save();render()}
+function rosterNote(){const r=rosterState();if(!r.length)return '';const f=x=>r.filter(a=>a.role===x).map(a=>`${a.name}${wowClass(a.classKey)?' ['+wowClass(a.classKey).short+']':''}`).join(', ');return `\nСостав:\nТанки: ${f('tank')||'—'}\nХилы: ${f('healer')||'—'}\nДД: ${f('dps')||'—'}`}
 function timeline(b,bs){return `<section class="page timelineEditor">${rolebar()}<div class="timelineActions"><button onclick="addTimelineEvent()">＋ Событие</button><button onclick="resetTimeline()">↻ Из шаблона</button><button onclick="setView('player')">▶ Проигрыватель</button><span>Время вводится в секундах или формате м:с. Полный шаблон уже привязан к ключевым кадрам, но его можно править вручную.</span></div><div class="timeline">${bs.timelineV3.map((e,i)=>`<article class="event editEvent ${e.type}"><input value="${fmtTime(e.time)}" onchange="editTimeline(${i},'time',this.value)" aria-label="Время"><input value="${esc(e.label)}" onchange="editTimeline(${i},'label',this.value)" aria-label="Событие"><select onchange="editTimeline(${i},'type',this.value)">${Object.keys(eventTypes).map(t=>`<option value="${t}" ${e.type===t?'selected':''}>${eventTypes[t]}</option>`).join('')}</select><select onchange="editTimeline(${i},'scene',this.value)">${bs.scenes.map((s,j)=>`<option value="${j}" ${e.scene===j?'selected':''}>${j+1}. ${esc(s.name)}</option>`).join('')}</select><button onclick="moveTimeline(${i},-1)">↑</button><button onclick="moveTimeline(${i},1)">↓</button><button class="red" onclick="removeTimeline(${i})">×</button></article>`).join('')}</div></section>`}
 function notes(b,bs){const ns=`[RaidRU] ${b.name}\n${b.rl}\n${priestMode?'Холи-прист: '+b.heal+'\n':''}BL: ${b.bl}${rosterNote()}\n\nТаймлайн:\n${bs.timelineV3.map(e=>`${fmtTime(e.time)} ${e.label}`).join('\n')}`;return `<section class="page notes"><div class="card wide"><h3>Личная / гильдейская заметка</h3><textarea id="customNote" oninput="saveNote(this.value)" placeholder="Назначения, хил-КД, метки…">${esc(bs.note)}</textarea></div><div class="card wide"><h3>Готовая заметка для NSRT / чата</h3><pre>${esc(ns)}</pre><button onclick="copyText(${JSON.stringify(ns)})">Копировать</button></div><div class="card checklist"><h3>Чеклист перед пулом</h3>${['Метки расставлены','Танки знают позиции','Хил-КД распределены','Soak/мини-группы назначены','Героизм согласован','Дебаффы видны на фреймах'].map(x=>`<label><input type="checkbox"> ${x}</label>`).join('')}</div></section>`}
 function glossary(b){const arr=[...b.spells,...priest];return `<section class="page"><div class="table"><div class="thead"><b>Русский клиент</b><b>Английское название</b><b>Источник</b></div>${arr.map((x,i)=>`<div><b>${x[0]}</b><code>${x[1]}</code><span>${i<b.spells.length?'Босс':'Холи-прист'}</span></div>`).join('')}</div></section>`}
 function chooseBoss(id){stopPlayback();stopReplay();current=id;sceneIndex=0;playerSceneIndex=0;render()} function setView(v){stopPlayback();stopReplay();view=v;render()} function setRole(v){role=v;render()} function setDiff(v){diff=v;render()} function togglePriest(){priestMode=!priestMode;render()} function fav(){const bs=bossState(current);bs.favorite=!bs.favorite;render()} function setProgress(v){bossState(current).progress=+v;save();render()} function saveNote(v){bossState(current).note=v;save()} function copyText(t){navigator.clipboard?.writeText(t);toast('Скопировано')}
 function filterBoss(q){document.querySelectorAll('.bosses button').forEach(x=>x.style.display=x.dataset.name.includes(q.toLowerCase())?'grid':'none')}
-function exportPlan(){const blob=new Blob([JSON.stringify({version:'0.7.0',boss:current,diff,role,data:bossState(current)},null,2)],{type:'application/json'}),a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=`raidru-${current}-v07.json`;a.click();URL.revokeObjectURL(a.href);toast('Стратегия экспортирована')}
+function exportPlan(){const blob=new Blob([JSON.stringify({version:'0.7.1',boss:current,diff,role,data:bossState(current)},null,2)],{type:'application/json'}),a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=`raidru-${current}-v071.json`;a.click();URL.revokeObjectURL(a.href);toast('Стратегия экспортирована')}
 function importPlanFile(file){if(!file)return;const r=new FileReader();r.onload=()=>{try{const p=JSON.parse(r.result);if(!p.boss||!p.data)throw new Error();state[p.boss]=p.data;current=p.boss;diff=p.diff||diff;role=p.role||role;bossState(current);save();toast('Стратегия импортирована');render()}catch(e){toast('Не удалось импортировать JSON')}};r.readAsText(file)}
 function sharePlan(){const u=buildShareUrl();navigator.clipboard?.writeText(u);history.replaceState(null,'',u);toast('Ссылка на стратегию скопирована')}
-function backupAll(){const blob=new Blob([JSON.stringify({version:'0.7.0',savedAt:new Date().toISOString(),state},null,2)],{type:'application/json'}),a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='raidru-backup-v05.json';a.click();URL.revokeObjectURL(a.href);toast('Резервная копия скачана')}
+function backupAll(){const blob=new Blob([JSON.stringify({version:'0.7.1',savedAt:new Date().toISOString(),state},null,2)],{type:'application/json'}),a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='raidru-backup-v05.json';a.click();URL.revokeObjectURL(a.href);toast('Резервная копия скачана')}
 function resetAllConfirm(){if(!confirm('Удалить локальные прогресс, планы, заметки и состав?'))return;localStorage.removeItem('raidru-standalone');location.hash='';location.reload()}
 function prevScene(){sceneIndex=Math.max(0,sceneIndex-1);render()} function nextScene(){sceneIndex=Math.min(bossState(current).scenes.length-1,sceneIndex+1);render()} function goScene(i){sceneIndex=i;render()}
 function loadBossPreset(){if(!confirm('Заменить текущие сцены и таймлайн готовым шаблоном босса?'))return;const bs=bossState(current);bs.scenes=bossPresetScenes(current).map((s,i)=>normalizeScene(s,current,i));bs.timelineV3=defaultTimeline(current);sceneIndex=0;save();toast('Шаблон босса и таймлайн загружены');render()}
 function addScene(){const bs=bossState(current),src=bs.scenes[sceneIndex];bs.scenes.push(normalizeScene(deep({...src,name:`Сцена ${bs.scenes.length+1}`}),current,bs.scenes.length));sceneIndex=bs.scenes.length-1;save();render()}
 function delScene(){const bs=bossState(current);if(bs.scenes.length<2)return;if(!confirm('Удалить сцену?'))return;bs.scenes.splice(sceneIndex,1);bs.timelineV3.forEach(e=>e.scene=Math.min(e.scene,bs.scenes.length-1));sceneIndex=Math.max(0,sceneIndex-1);save();render()}
 function resetScene(){bossState(current).scenes[sceneIndex]=defaultScene();save();render()}
-function addToken(type){const sc=bossState(current).scenes[sceneIndex],labels={tank:'T',healer:'H',melee:'M',ranged:'R',marker:'★',boss:'БОСС'};sc.tokens.push([uid(),labels[type],type,50,50]);save();render()}
+function addToken(type){const sc=bossState(current).scenes[sceneIndex],labels={tank:'T',healer:'H',melee:'M',ranged:'R',boss:'БОСС'};if(type==='marker'){addRaidMarker('star');return}sc.tokens.push([uid(),labels[type]||type,type,50,50]);save();render()}
+function addRaidMarker(key){
+  const sc=bossState(current).scenes[sceneIndex],m=raidMarkerDefs.find(x=>x.key===key)||raidMarkerDefs[0];
+  // В WoW одновременно используется только одна метка каждого типа. Если такая уже есть — выделяем её вместо создания дубля.
+  const existing=sc.tokens.find(t=>t[2]==='marker'&&raidMarkerKey(t[1])===m.key);
+  if(existing){toast(`${m.name} уже есть на этой сцене`);return}
+  const offsets={star:[50,18],circle:[66,26],diamond:[78,42],triangle:[74,62],moon:[62,76],square:[38,76],cross:[26,62],skull:[22,42]};
+  const [x,y]=offsets[m.key]||[50,50];
+  sc.tokens.push([uid(),m.label,'marker',x,y]);save();render();toast(`Добавлена метка: ${m.name}`)
+}
+
+function rosterBucket(m){
+  if(m.role==='tank')return 'tank';
+  if(m.role==='healer')return 'healer';
+  return m.range==='melee'?'melee':'ranged';
+}
+function genericPlayerToken(t){return ['tank','healer','melee','ranged'].includes(t?.[2])&&!rosterTokenMeta(t)}
+function sceneAnchorTokens(sc,bossId,idx){
+  const buckets={tank:[],healer:[],melee:[],ranged:[]};
+  const add=t=>{if(genericPlayerToken(t))buckets[t[2]].push({x:+t[3],y:+t[4]})};
+  (sc?.tokens||[]).forEach(add);
+  const fallback=presetScenes?.[bossId]?.[Math.min(idx,(presetScenes?.[bossId]?.length||1)-1)];
+  for(const k of Object.keys(buckets)){
+    if(!buckets[k].length)(fallback?.tokens||[]).filter(t=>t?.[2]===k).forEach(t=>buckets[k].push({x:+t[3],y:+t[4]}));
+  }
+  return buckets;
+}
+function rosterPosition(anchors,bucket,index,total){
+  let arr=anchors[bucket]||[];
+  if(!arr.length){
+    const fallback={tank:[50,56],melee:[50,51],healer:[50,69],ranged:[50,64]}[bucket]||[50,60];
+    arr=[{x:fallback[0],y:fallback[1]}];
+  }
+  const a=arr[index%arr.length];
+  const layer=Math.floor(index/arr.length);
+  if(layer===0&&index<arr.length)return {x:a.x,y:a.y};
+  const spread=bucket==='tank'?3:bucket==='melee'?4:6;
+  const n=Math.max(1,total);
+  const angle=((index*137.5)%360)*Math.PI/180;
+  const radius=spread*(1+Math.floor(layer/2));
+  return {
+    x:Math.max(5,Math.min(95,a.x+Math.cos(angle)*radius)),
+    y:Math.max(5,Math.min(95,a.y+Math.sin(angle)*radius*.62))
+  };
+}
+function rosterTokenForMember(m,pos){
+  const type=rosterBucket(m);
+  return [`roster-${m.id}`,m.name,type,pos.x,pos.y,{kind:'roster',rosterId:m.id,classKey:m.classKey,role:m.role,range:m.range}];
+}
+function placeRosterIntoScene(sc,idx,{replace=true}={}){
+  const roster=rosterState();
+  if(!roster.length)return 0;
+  const anchors=sceneAnchorTokens(sc,current,idx);
+  if(replace){
+    const removed=new Set((sc.tokens||[]).filter(t=>genericPlayerToken(t)||rosterTokenMeta(t)).map(t=>t[0]));
+    sc.tokens=(sc.tokens||[]).filter(t=>!genericPlayerToken(t)&&!rosterTokenMeta(t));
+    for(const id of removed)delete sc.routes?.[id];
+  }
+  const counts={tank:0,healer:0,melee:0,ranged:0};
+  const totals={tank:0,healer:0,melee:0,ranged:0};
+  roster.forEach(m=>totals[rosterBucket(m)]++);
+  roster.forEach(m=>{
+    const bucket=rosterBucket(m),pos=rosterPosition(anchors,bucket,counts[bucket]++,totals[bucket]);
+    sc.tokens.push(rosterTokenForMember(m,pos));
+  });
+  return roster.length;
+}
+function placeRosterCurrentScene(){
+  const sc=bossState(current).scenes[sceneIndex],n=placeRosterIntoScene(sc,sceneIndex);
+  if(!n)return toast('Сначала заполни вкладку «Состав»');
+  save();render();toast(`На сцену расставлено игроков: ${n}`);
+}
+function placeRosterAllScenes(){
+  const bs=bossState(current),r=rosterState();
+  if(!r.length)return toast('Сначала заполни вкладку «Состав»');
+  bs.scenes.forEach((sc,i)=>placeRosterIntoScene(sc,i));
+  save();render();toast(`Состав расставлен во всех ${bs.scenes.length} сценах`);
+}
+function addRosterMemberToScene(memberId){
+  const m=rosterState().find(x=>x.id===memberId);
+  if(!m)return;
+  const sc=bossState(current).scenes[sceneIndex];
+  if(sc.tokens.some(t=>rosterTokenMeta(t)?.rosterId===m.id))return toast(`${m.name} уже есть на сцене`);
+  const anchors=sceneAnchorTokens(sc,current,sceneIndex),bucket=rosterBucket(m);
+  const existing=sc.tokens.filter(t=>rosterTokenMeta(t)&&t[2]===bucket).length;
+  const total=Math.max(1,rosterState().filter(x=>rosterBucket(x)===bucket).length);
+  const pos=rosterPosition(anchors,bucket,existing,total);
+  sc.tokens.push(rosterTokenForMember(m,pos));
+  save();render();
+}
+
 function addEffect(type){const sc=bossState(current).scenes[sceneIndex];sc.effects.push({id:uid(),type,x:50,y:50,w:type==='line'||type==='arrow'?40:24,h:type==='line'||type==='arrow'?6:24,rot:0,label:effectLabels[type]});save();render()}
 function setMapSetting(k,v){
   const sc=bossState(current).scenes[sceneIndex];
@@ -356,11 +589,11 @@ function animatePlayerTo(target){
     const route=(source.routes?.[n.dataset.id]||[]).map(p=>({x:p.x,y:p.y}));
     const path=[...route,{x:t[3],y:t[4]}];
     const total=Math.max(.5,Math.min(5,(source.duration||8)/playerSpeed)),seg=Math.max(.2,total/Math.max(1,path.length));
-    n.textContent=t[1];n.className='token '+t[2]+' moving';n.style.setProperty('--moveDur',seg+'s');
+    n.innerHTML=tokenInnerHtml(t);n.className='token '+t[2]+tokenExtraClass(t)+' moving';n.style.setProperty('--moveDur',seg+'s');
     path.forEach((p,i)=>setTimeout(()=>{n.style.left=p.x+'%';n.style.top=p.y+'%'},i*seg*1000+20));
     longest=Math.max(longest,total);newMap.delete(n.dataset.id);
   });
-  newMap.forEach(t=>{const n=document.createElement('div');n.className='token '+t[2]+' appear';n.style.setProperty('--moveDur','.45s');n.dataset.id=t[0];n.style.left=t[3]+'%';n.style.top=t[4]+'%';n.textContent=t[1];arena.querySelector('.tokens').appendChild(n);requestAnimationFrame(()=>n.classList.remove('appear'))});
+  newMap.forEach(t=>{const n=document.createElement('div');n.className='token '+t[2]+' appear';n.style.setProperty('--moveDur','.45s');n.dataset.id=t[0];n.style.left=t[3]+'%';n.style.top=t[4]+'%';n.innerHTML=tokenInnerHtml(t);n.className='token '+t[2]+tokenExtraClass(t)+' appear';arena.querySelector('.tokens').appendChild(n);requestAnimationFrame(()=>n.classList.remove('appear'))});
   const effects=arena.querySelector('.effects');effects.innerHTML=sc.effects.map(e=>effectHtml(e,false)).join('');effects.querySelectorAll('.effect').forEach(n=>n.classList.add('fxIn'));
   const lab=arena.querySelector('.arenaLabel');if(lab)lab.textContent=sc.name;
   playerSceneIndex=target;setTimeout(()=>{if(view==='player')render()},(longest*1000)+250);
