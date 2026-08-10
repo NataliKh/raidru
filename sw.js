@@ -1,9 +1,9 @@
-const CACHE='raidru-v079-readable-labels';
+const CACHE='raidru-v0710-hard-arena-masks';
 const ASSETS=[
 './',
 './index.html',
-'./styles.css?v=0.7.9',
-'./app.js?v=0.7.9',
+'./styles.css?v=0.7.10',
+'./app.js?v=0.7.10',
 './manifest.webmanifest',
 './icon.svg',
 './assets/maps/nekzali.webp',
