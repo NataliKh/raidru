@@ -170,3 +170,55 @@
   .bossCards article>div:last-child{padding:14px}
   .arena{aspect-ratio:1231/692;min-height:0!important}
 }
+
+/* RaidRU 0.5.2 — clean real-map renderer */
+.arena{
+  position:relative!important;
+  width:100%!important;
+  aspect-ratio:1231/692!important;
+  min-height:0!important;
+  overflow:hidden!important;
+  background:#000!important;
+  border-radius:10px;
+}
+.arenaMap{
+  position:absolute!important;
+  inset:0!important;
+  width:100%!important;
+  height:100%!important;
+  overflow:hidden!important;
+  background:#000!important;
+  filter:none!important;
+  border:0!important;
+  box-shadow:none!important;
+}
+.arenaMapImage{
+  position:absolute!important;
+  inset:0!important;
+  width:100%!important;
+  height:100%!important;
+  max-width:none!important;
+  display:block!important;
+  object-fit:contain!important;
+  object-position:center center!important;
+  transform-origin:50% 50%!important;
+  filter:none!important;
+}
+.mapShade{pointer-events:none!important}
+.floorTexture,.mapFrame,.mapWell,.mapRune,.mapCoffin,.mapDoor,
+.mapHalf,.mapDivider,.mapPedestal,.mapIsland,.mapPool,.mapSource,.mapCavity,
+.mapPlatform,.mapVent,.mapWindLines,.mapFang,.mapAltar,.mapPillar,
+.mapSerpentRing,.mapEggSpot,.mapCrack,.rings,.center{
+  display:none!important;
+}
+.bossThumb{background:#050607!important}
+.bossThumb img{
+  object-fit:contain!important;
+  object-position:center!important;
+  background:#050607!important;
+  filter:brightness(.82) saturate(.92)!important;
+}
+.bossCards article:hover .bossThumb img{
+  transform:none!important;
+  filter:brightness(.96) saturate(1)!important;
+}
