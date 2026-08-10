@@ -566,3 +566,29 @@
   font-size:8px!important;
   max-width:125px!important;
 }
+
+/* RaidRU 0.7.8 — clean scenario icons */
+.token.encounterIcon .encounterTokenName{
+  display:none!important;
+}
+.token.encounterIcon{
+  overflow:visible!important;
+}
+.token.encounterIcon .encounterTokenImage{
+  inset:2px!important;
+  width:calc(100% - 4px)!important;
+  height:calc(100% - 4px)!important;
+}
+.token.encounterIcon.encounter-boss{
+  width:52px!important;
+  height:52px!important;
+}
+.token.encounterIcon.encounter-npc{
+  width:44px!important;
+  height:44px!important;
+}
+.token.encounterIcon.encounter-object,
+.token.encounterIcon.encounter-ability{
+  width:40px!important;
+  height:40px!important;
+}

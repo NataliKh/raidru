@@ -1,9 +1,9 @@
-const CACHE='raidru-v077-scenario-icons';
+const CACHE='raidru-v078-clean-icons';
 const ASSETS=[
 './',
 './index.html',
-'./styles.css?v=0.7.7',
-'./app.js?v=0.7.7',
+'./styles.css?v=0.7.8',
+'./app.js?v=0.7.8',
 './manifest.webmanifest',
 './icon.svg',
 './assets/maps/nekzali.webp',
