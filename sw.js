@@ -1,9 +1,9 @@
-const CACHE='raidru-v074-arena-calibration';
+const CACHE='raidru-v075-encounter-library';
 const ASSETS=[
 './',
 './index.html',
-'./styles.css?v=0.7.4',
-'./app.js?v=0.7.4',
+'./styles.css?v=0.7.5',
+'./app.js?v=0.7.5',
 './manifest.webmanifest',
 './icon.svg',
 './assets/maps/nekzali.webp',
@@ -39,7 +39,35 @@ const ASSETS=[
 './assets/palette/markers/triangle.png',
 './assets/palette/markers/diamond.png',
 './assets/palette/markers/circle.png',
-'./assets/palette/markers/star.png'
+'./assets/palette/markers/star.png',
+'./assets/palette/encounter/bosses/altar.png',
+'./assets/palette/encounter/bosses/explorers.png',
+'./assets/palette/encounter/bosses/fangs.png',
+'./assets/palette/encounter/bosses/nekzali.png',
+'./assets/palette/encounter/bosses/sentinels.png',
+'./assets/palette/encounter/bosses/sszorak.png',
+'./assets/palette/encounter/bosses/ulatek.png',
+'./assets/palette/encounter/bosses/vashnik.png',
+'./assets/palette/encounter/mechanics/add.png',
+'./assets/palette/encounter/mechanics/blood.png',
+'./assets/palette/encounter/mechanics/burst.png',
+'./assets/palette/encounter/mechanics/crack.png',
+'./assets/palette/encounter/mechanics/debuff.png',
+'./assets/palette/encounter/mechanics/droplet.png',
+'./assets/palette/encounter/mechanics/egg.png',
+'./assets/palette/encounter/mechanics/fish.png',
+'./assets/palette/encounter/mechanics/flame.png',
+'./assets/palette/encounter/mechanics/horror.png',
+'./assets/palette/encounter/mechanics/serpent.png',
+'./assets/palette/encounter/mechanics/shadow.png',
+'./assets/palette/encounter/mechanics/shield.png',
+'./assets/palette/encounter/mechanics/slime.png',
+'./assets/palette/encounter/mechanics/soak.png',
+'./assets/palette/encounter/mechanics/soul.png',
+'./assets/palette/encounter/mechanics/venom.png',
+'./assets/palette/encounter/mechanics/wave.png',
+'./assets/palette/encounter/mechanics/well.png',
+'./assets/palette/encounter/mechanics/wind.png'
 ];
 self.addEventListener('install',e=>e.waitUntil(caches.open(CACHE).then(c=>c.addAll(ASSETS)).then(()=>self.skipWaiting())));
 self.addEventListener('activate',e=>e.waitUntil(caches.keys().then(keys=>Promise.all(keys.filter(k=>k!==CACHE).map(k=>caches.delete(k)))).then(()=>self.clients.claim())));
