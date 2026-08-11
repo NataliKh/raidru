@@ -1,15 +1,17 @@
-# Arena backgrounds
+# Arena backgrounds — RaidRU 0.8.10
 
-RaidRU использует локальные изображения арен, чтобы планировщик работал на GitHub Pages без внешних зависимостей.
+RaidRU хранит карты локально, чтобы Planner работал на GitHub Pages без сетевой зависимости.
 
-## Vashnik — mapID 2608
+## Архитектура
 
-В версии 0.8 подложка Vashnik пересобрана из канонической карты Warcraft Logs / RPGLogs:
+Источник карты выбирается по `mapID` конкретного Heroic Warcraft Logs Replay, а нужная игровая площадка задаётся отдельным `viewport` босса в `bossMaps`.
 
-`https://assets.rpglogs.com/img/warcraft/maps/2608-map.png?v=2`
+- `2606-map.webp` — Nek’zali. В 0.8.10 сохранён ранее проверенный локальный crop 2606, чтобы не ломать готовую тактику.
+- `2607-map.webp` — The Twin Fangs / Pit of Fangs.
+- `2608-map.webp` — Entombed Sentinels и Vashnik.
+- `2609-map.webp` — The Lost Explorers и Sszorak, с разными viewport.
 
-В репозитории хранится только подготовленный WebP-crop арены `vashnik.webp` (1231×692), а не сетевой URL.
-Это даёт стабильную подложку планировщика.
+`The Coiled Altar` и `Ula’tek` пока продолжают использовать прежние локальные assets: новый `mapID` для них не назначается без Heroic Replay.
 
-Остальные текущие подложки были подготовлены из пользовательских raid-planning ресурсов.
-Публичная атрибуция RaidPlan сохранена в интерфейсе.
+Оригинальные карты Warcraft Logs / RPGLogs имеют вид:
+`https://assets.rpglogs.com/img/warcraft/maps/<mapID>-map.png?v=2`.

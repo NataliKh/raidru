@@ -1,12 +1,15 @@
-const CACHE='raidru-v087-shared-raid-map';
+const CACHE='raidru-v0810-map-architecture';
 const ASSETS=[
 './',
 './index.html',
-'./styles.css?v=0.8.9',
-'./app.js?v=0.8.9',
+'./styles.css?v=0.8.10',
+'./app.js?v=0.8.10',
 './manifest.webmanifest',
 './icon.svg',
+'./assets/maps/2606-map.webp',
+'./assets/maps/2607-map.webp',
 './assets/maps/2608-map.webp',
+'./assets/maps/2609-map.webp',
 './assets/maps/nekzali.webp',
 './assets/maps/sentinels.webp',
 './assets/maps/vashnik.webp',
