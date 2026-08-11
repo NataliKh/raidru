@@ -22,44 +22,55 @@ function bossPresetScenes(id){return JSON.parse(JSON.stringify(presetScenes[id]|
 
 const state=JSON.parse(localStorage.getItem('raidru-standalone')||'{}');
 const RAIDRU_SCHEMA='0.7.4-map-calibration';
-// 0.7.4 геометрически калибрует все встроенные сцены под реальные изображения арен.
-// Сцены и таймлайн пересобираются один раз; прогресс, заметки, избранное и состав сохраняются.
-if(state._schema!==RAIDRU_SCHEMA){
-  for(const b of raid){
-    if(state[b.id]){
-      state[b.id].scenes=bossPresetScenes(b.id);
-      state[b.id].timelineV3=defaultTimeline(b.id);
-    }
-  }
-  state._schema=RAIDRU_SCHEMA;
-  localStorage.setItem('raidru-standalone',JSON.stringify(state));
-}
-const VASHNIK_PLAN_VERSION='0.8.0-vashnik-heroic-wcl-v1';
-if(state._vashnikPlanVersion!==VASHNIK_PLAN_VERSION){
-  const saved=state.vashnik;
-  if(saved?.scenes?.length){
-    const oldNames=new Set(['Старт — южный источник','Поглощение 1 — источник А + Б','Живые яды — перехват аддов','Поглощение 2 — источник А + В','Сифонная инфекция — хил-КД','Поздний цикл — дожим']);
-    const oldScenes=saved.scenes||[];
-    const custom=oldScenes.filter(sc=>!oldNames.has(sc?.name));
-    const fresh=bossPresetScenes('vashnik');
-    for(let i=0;i<fresh.length;i++){
-      const keep=(oldScenes[i]?.tokens||[]).filter(t=>{
-        const m=t?.[5]||{};
-        return ['roster','class'].includes(m.kind)||(m.kind==='encounter'&&!m.autoScenario)||(t?.[2]==='marker'&&raidMarkerKey(t?.[1]));
-      });
-      if(keep.length){
-        const ids=new Set((fresh[i].tokens||[]).map(t=>t[0]));
-        const hasRoster=keep.some(t=>['roster','class'].includes(t?.[5]?.kind));
-        if(hasRoster)fresh[i].tokens=(fresh[i].tokens||[]).filter(t=>!['tank','healer','melee','ranged'].includes(t?.[2]));
-        for(const t of keep)if(!ids.has(t[0]))fresh[i].tokens.push(t);
+const VASHNIK_PLAN_VERSION='0.8.1-vashnik-heroic-wcl-v1';
+// Важно: миграции вызываются только после инициализации encounterLibrary и остальных const.
+// Иначе normalizeScene() попадает в temporal dead zone encounterLibrary на первом запуске/старом localStorage.
+function runStartupMigrations(){
+  let changed=false;
+  const needsVashnikMigration=state._vashnikPlanVersion!==VASHNIK_PLAN_VERSION;
+  // 0.7.4 геометрически калибрует все встроенные сцены под реальные изображения арен.
+  // Сцены и таймлайн пересобираются один раз; прогресс, заметки, избранное и состав сохраняются.
+  if(state._schema!==RAIDRU_SCHEMA){
+    for(const b of raid){
+      // Vashnik имеет отдельную 0.8.x-миграцию, которая сохраняет пользовательские сцены/ростер.
+      // Не сбрасываем его здесь, иначе свежий preset ошибочно станет 'custom' и продублируется.
+      if(b.id==='vashnik'&&needsVashnikMigration)continue;
+      if(state[b.id]){
+        state[b.id].scenes=bossPresetScenes(b.id);
+        // defaultTimeline() безопасно вызывать здесь: encounterLibrary уже инициализирован.
+        state[b.id].timelineV3=defaultTimeline(b.id);
       }
     }
-    saved.scenes=[...fresh,...custom];
-    saved.timelineV3=defaultTimeline('vashnik');
+    state._schema=RAIDRU_SCHEMA;
+    changed=true;
   }
-  state._vashnikPlanVersion=VASHNIK_PLAN_VERSION;
-  state._arenaMaskVersion='';
-  localStorage.setItem('raidru-standalone',JSON.stringify(state));
+  if(needsVashnikMigration){
+    const saved=state.vashnik;
+    if(saved?.scenes?.length){
+      const oldNames=new Set(['Старт — южный источник','Поглощение 1 — источник А + Б','Живые яды — перехват аддов','Поглощение 2 — источник А + В','Сифонная инфекция — хил-КД','Поздний цикл — дожим']);
+      const oldScenes=saved.scenes||[];
+      const custom=oldScenes.filter(sc=>!oldNames.has(sc?.name));
+      const fresh=bossPresetScenes('vashnik');
+      for(let i=0;i<fresh.length;i++){
+        const keep=(oldScenes[i]?.tokens||[]).filter(t=>{
+          const m=t?.[5]||{};
+          return ['roster','class'].includes(m.kind)||(m.kind==='encounter'&&!m.autoScenario)||(t?.[2]==='marker'&&raidMarkerKey(t?.[1]));
+        });
+        if(keep.length){
+          const ids=new Set((fresh[i].tokens||[]).map(t=>t[0]));
+          const hasRoster=keep.some(t=>['roster','class'].includes(t?.[5]?.kind));
+          if(hasRoster)fresh[i].tokens=(fresh[i].tokens||[]).filter(t=>!['tank','healer','melee','ranged'].includes(t?.[2]));
+          for(const t of keep)if(!ids.has(t[0]))fresh[i].tokens.push(t);
+        }
+      }
+      saved.scenes=[...fresh,...custom];
+      saved.timelineV3=defaultTimeline('vashnik');
+    }
+    state._vashnikPlanVersion=VASHNIK_PLAN_VERSION;
+    state._arenaMaskVersion='';
+    changed=true;
+  }
+  if(changed)localStorage.setItem('raidru-standalone',JSON.stringify(state));
 }
 function orderedRaid(){return [...raid].sort((a,b)=>a.order-b.order)}
 let current=state.current||'nekzali', role=state.role||'all', diff=state.diff||'heroic', view=(state.view==='replay'?'planner':(state.view||'dashboard')), priestMode=state.priestMode!==false, sceneIndex=0;
@@ -643,7 +654,7 @@ function restoreFromHash(){try{if(!location.hash.startsWith('#share='))return;co
 function save(){state.current=current;state.role=role;state.diff=diff;state.view=view;state.priestMode=priestMode;state.showPaths=showPaths;state.plannerPaletteTab=plannerPaletteTab;state.plannerSpawnMode=plannerSpawnMode;state.plannerArenaSnap=plannerArenaSnap;state.plannerIconTab=plannerIconTab;localStorage.setItem('raidru-standalone',JSON.stringify(state))}
 function render(){
   save();const b=raid.find(x=>x.id===current),bs=bossState(current);
-  el('#app').innerHTML=`<div class="shell"><aside><div class="brand"><div class="mark">R</div><div><b>RaidRU</b><small>рейдовые тактики по-русски</small></div></div><div class="season"><small>Midnight · Сезон 2</small><b>Ядовитая бездна</b></div><input class="search" placeholder="Найти босса…" oninput="filterBoss(this.value)"><div class="bosses">${orderedRaid().map(x=>`<button data-name="${esc((x.name+' '+x.en).toLowerCase())}" class="${x.id===current?'on':''}" onclick="chooseBoss('${x.id}')"><i>${x.order}</i><span><b>${x.name}</b><small>${x.en}</small></span><em>${bossState(x.id).favorite?'★':''}</em></button>`).join('')}</div><div class="version">RaidRU 0.8.0 · Planner-first</div></aside><main><header>${[['dashboard','Рейд'],['guide','Тактика'],['player','План: просмотр'],['planner','Планировщик'],['timeline','Таймлайн'],['roster','Состав'],['notes','Заметки'],['glossary','Словарь']].map(x=>`<button class="${view===x[0]?'on':''}" onclick="setView('${x[0]}')">${x[1]}</button>`).join('')}<span></span><button class="priest ${priestMode?'on':''}" onclick="togglePriest()">♥ Холи-прист</button><button onclick="sharePlan()">↗ Поделиться</button><button onclick="exportPlan()">⇩ Экспорт</button><label class="importBtn">⇧ Импорт<input type="file" accept="application/json,.json" onchange="importPlanFile(this.files[0])"></label></header>${view==='dashboard'?dashboardHero():`<section class="hero"><div><small>MIDNIGHT / ЯДОВИТАЯ БЕЗДНА / БОСС ${b.order}</small><div class="title"><h1>${b.name}</h1><button onclick="fav()">${bs.favorite?'★':'☆'}</button></div><div class="en">${b.en}</div><p>${b.summary}</p></div><div class="heroRight"><div class="diff">${[['normal','Обычный'],['heroic','Героический'],['mythic','Эпохальный']].map(x=>`<button class="${diff===x[0]?'on':''}" onclick="setDiff('${x[0]}')">${x[1]}</button>`).join('')}</div><label>Освоение <b>${bs.progress}%</b><input type="range" min="0" max="100" step="10" value="${bs.progress}" oninput="setProgress(this.value)"></label></div></section>`}${content(b,bs)}<footer class="siteCredit">Maps/raid planning resources: <a href="https://raidplan.io/" target="_blank" rel="noopener noreferrer">RaidPlan.io</a> · Vashnik map reference: Warcraft Logs/RPGLogs · Planner icons: локальные ассеты RaidRU · WoW/raid icon references: Blizzard community resources</footer></main></div>`;
+  el('#app').innerHTML=`<div class="shell"><aside><div class="brand"><div class="mark">R</div><div><b>RaidRU</b><small>рейдовые тактики по-русски</small></div></div><div class="season"><small>Midnight · Сезон 2</small><b>Ядовитая бездна</b></div><input class="search" placeholder="Найти босса…" oninput="filterBoss(this.value)"><div class="bosses">${orderedRaid().map(x=>`<button data-name="${esc((x.name+' '+x.en).toLowerCase())}" class="${x.id===current?'on':''}" onclick="chooseBoss('${x.id}')"><i>${x.order}</i><span><b>${x.name}</b><small>${x.en}</small></span><em>${bossState(x.id).favorite?'★':''}</em></button>`).join('')}</div><div class="version">RaidRU 0.8.1 · Planner-first</div></aside><main><header>${[['dashboard','Рейд'],['guide','Тактика'],['player','План: просмотр'],['planner','Планировщик'],['timeline','Таймлайн'],['roster','Состав'],['notes','Заметки'],['glossary','Словарь']].map(x=>`<button class="${view===x[0]?'on':''}" onclick="setView('${x[0]}')">${x[1]}</button>`).join('')}<span></span><button class="priest ${priestMode?'on':''}" onclick="togglePriest()">♥ Холи-прист</button><button onclick="sharePlan()">↗ Поделиться</button><button onclick="exportPlan()">⇩ Экспорт</button><label class="importBtn">⇧ Импорт<input type="file" accept="application/json,.json" onchange="importPlanFile(this.files[0])"></label></header>${view==='dashboard'?dashboardHero():`<section class="hero"><div><small>MIDNIGHT / ЯДОВИТАЯ БЕЗДНА / БОСС ${b.order}</small><div class="title"><h1>${b.name}</h1><button onclick="fav()">${bs.favorite?'★':'☆'}</button></div><div class="en">${b.en}</div><p>${b.summary}</p></div><div class="heroRight"><div class="diff">${[['normal','Обычный'],['heroic','Героический'],['mythic','Эпохальный']].map(x=>`<button class="${diff===x[0]?'on':''}" onclick="setDiff('${x[0]}')">${x[1]}</button>`).join('')}</div><label>Освоение <b>${bs.progress}%</b><input type="range" min="0" max="100" step="10" value="${bs.progress}" oninput="setProgress(this.value)"></label></div></section>`}${content(b,bs)}<footer class="siteCredit">Maps/raid planning resources: <a href="https://raidplan.io/" target="_blank" rel="noopener noreferrer">RaidPlan.io</a> · Vashnik map reference: Warcraft Logs/RPGLogs · Planner icons: локальные ассеты RaidRU · WoW/raid icon references: Blizzard community resources</footer></main></div>`;
   if(view==='planner') setupPlanner();
   if(view==='player') setupPlayer();
 }
@@ -787,10 +798,10 @@ function notes(b,bs){const ns=`[RaidRU] ${b.name}\n${b.rl}\n${priestMode?'Хол
 function glossary(b){const arr=[...b.spells,...priest];return `<section class="page"><div class="table"><div class="thead"><b>Русский клиент</b><b>Английское название</b><b>Источник</b></div>${arr.map((x,i)=>`<div><b>${x[0]}</b><code>${x[1]}</code><span>${i<b.spells.length?'Босс':'Холи-прист'}</span></div>`).join('')}</div></section>`}
 function chooseBoss(id){stopPlayback();stopReplay();current=id;sceneIndex=0;playerSceneIndex=0;render()} function setView(v){stopPlayback();stopReplay();view=v;render()} function setRole(v){role=v;render()} function setDiff(v){diff=v;render()} function togglePriest(){priestMode=!priestMode;render()} function fav(){const bs=bossState(current);bs.favorite=!bs.favorite;render()} function setProgress(v){bossState(current).progress=+v;save();render()} function saveNote(v){bossState(current).note=v;save()} function copyText(t){navigator.clipboard?.writeText(t);toast('Скопировано')}
 function filterBoss(q){document.querySelectorAll('.bosses button').forEach(x=>x.style.display=x.dataset.name.includes(q.toLowerCase())?'grid':'none')}
-function exportPlan(){const blob=new Blob([JSON.stringify({version:'0.8.0',boss:current,diff,role,data:bossState(current)},null,2)],{type:'application/json'}),a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=`raidru-${current}-v080.json`;a.click();URL.revokeObjectURL(a.href);toast('Стратегия экспортирована')}
+function exportPlan(){const blob=new Blob([JSON.stringify({version:'0.8.1',boss:current,diff,role,data:bossState(current)},null,2)],{type:'application/json'}),a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=`raidru-${current}-v081.json`;a.click();URL.revokeObjectURL(a.href);toast('Стратегия экспортирована')}
 function importPlanFile(file){if(!file)return;const r=new FileReader();r.onload=()=>{try{const p=JSON.parse(r.result);if(!p.boss||!p.data)throw new Error();state[p.boss]=p.data;current=p.boss;diff=p.diff||diff;role=p.role||role;bossState(current);save();toast('Стратегия импортирована');render()}catch(e){toast('Не удалось импортировать JSON')}};r.readAsText(file)}
 function sharePlan(){const u=buildShareUrl();navigator.clipboard?.writeText(u);history.replaceState(null,'',u);toast('Ссылка на стратегию скопирована')}
-function backupAll(){const blob=new Blob([JSON.stringify({version:'0.8.0',savedAt:new Date().toISOString(),state},null,2)],{type:'application/json'}),a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='raidru-backup-v080.json';a.click();URL.revokeObjectURL(a.href);toast('Резервная копия скачана')}
+function backupAll(){const blob=new Blob([JSON.stringify({version:'0.8.1',savedAt:new Date().toISOString(),state},null,2)],{type:'application/json'}),a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='raidru-backup-v081.json';a.click();URL.revokeObjectURL(a.href);toast('Резервная копия скачана')}
 function resetAllConfirm(){if(!confirm('Удалить локальные прогресс, планы, заметки и состав?'))return;localStorage.removeItem('raidru-standalone');location.hash='';location.reload()}
 function prevScene(){sceneIndex=Math.max(0,sceneIndex-1);render()} function nextScene(){sceneIndex=Math.min(bossState(current).scenes.length-1,sceneIndex+1);render()} function goScene(i){sceneIndex=i;render()}
 function loadBossPreset(){if(!confirm('Заменить текущие сцены и таймлайн готовым шаблоном босса?'))return;const bs=bossState(current);bs.scenes=bossPresetScenes(current).map((s,i)=>normalizeScene(s,current,i));bs.timelineV3=defaultTimeline(current);sceneIndex=0;save();toast('Шаблон босса и таймлайн загружены');render()}
@@ -1046,5 +1057,6 @@ function togglePlayback(){
   const base=events[0].time; events.forEach((e,i)=>{const delay=((e.time-base)*1000)/playerSpeed;const id=setTimeout(()=>{if(!playerPlaying)return;animatePlayerTo(e.scene);toast(`${fmtTime(e.time)} · ${e.label}`);if(i===events.length-1){playbackTimer=setTimeout(()=>{playerPlaying=false;if(view==='player')render()},Math.max(1200,(bossState(current).scenes[e.scene]?.duration||5)*600/playerSpeed))}},delay);(state._playTimers||(state._playTimers=[])).push(id)})
 }
 function stopPlayback(){playerPlaying=false;(state._playTimers||[]).forEach(clearTimeout);state._playTimers=[];if(playbackTimer)clearTimeout(playbackTimer);playbackTimer=null}
+runStartupMigrations();
 restoreFromHash();
 render();

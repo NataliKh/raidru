@@ -1,9 +1,9 @@
-const CACHE='raidru-v080-vashnik-planner';
+const CACHE='raidru-v081-startup-fix';
 const ASSETS=[
 './',
 './index.html',
-'./styles.css?v=0.8.0',
-'./app.js?v=0.8.0',
+'./styles.css?v=0.8.1',
+'./app.js?v=0.8.1',
 './manifest.webmanifest',
 './icon.svg',
 './assets/maps/nekzali.webp',

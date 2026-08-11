@@ -1,4 +1,4 @@
-# RaidRU 0.8.0 — Planner-first / Vashnik Heroic
+# RaidRU 0.8.1 — Planner-first / Vashnik Heroic
 
 Главная цель версии 0.8 — вернуть фокус на визуальный планировщик тактики.
 
@@ -35,3 +35,10 @@ Hard arena mask перекалибрована под новую подложк�
 ## Миграция
 
 При первом открытии 0.8 встроенные Vashnik-сцены и таймлайн обновляются автоматически. Пользовательские отдельные сцены и roster/class tokens стараемся сохранить; старая калибровка карты Vashnik не переносится, потому что подложка изменилась.
+
+
+## 0.8.1 hotfix
+
+- Исправлен startup crash `Cannot access 'encounterLibrary' before initialization`.
+- Миграции localStorage теперь выполняются после инициализации encounter-палитры.
+- WCL Proxy по-прежнему отсутствует в публичном интерфейсе.
