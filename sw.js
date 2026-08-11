@@ -1,9 +1,9 @@
-const CACHE='raidru-v0810-map-architecture';
+const CACHE='raidru-v0811-nsrt-voice';
 const ASSETS=[
 './',
 './index.html',
-'./styles.css?v=0.8.10',
-'./app.js?v=0.8.10',
+'./styles.css?v=0.8.11',
+'./app.js?v=0.8.11',
 './manifest.webmanifest',
 './icon.svg',
 './assets/maps/2606-map.webp',

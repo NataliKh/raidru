@@ -746,3 +746,20 @@
 }
 .bossThumbViewport{position:absolute;inset:0;overflow:hidden;background:#090b0d}
 .bossThumbViewport .raidMapFull{display:block!important}
+
+/* v0.8.11 — NSRT voice note exporter */
+.nsrtExport{border:1px solid rgba(111,190,255,.24);background:linear-gradient(180deg,rgba(25,45,66,.74),rgba(14,22,31,.78))}
+.nsrtExport.disabled{border-color:rgba(255,255,255,.1);background:rgba(20,24,29,.72)}
+.nsrtTitle{display:flex;align-items:flex-start;justify-content:space-between;gap:18px;margin-bottom:8px}
+.nsrtTitle small{display:block;color:#78bff0;font-size:11px;font-weight:800;letter-spacing:.12em;margin-bottom:4px}
+.nsrtTitle h3{margin:0}
+.nsrtBadges{display:flex;gap:7px;flex-wrap:wrap;justify-content:flex-end}
+.nsrtBadges span{border:1px solid rgba(111,190,255,.22);background:rgba(72,142,191,.11);border-radius:999px;padding:5px 9px;font-size:11px;color:#c7e8ff;white-space:nowrap}
+.nsrtBadges .healBadge{border-color:rgba(255,109,143,.26);background:rgba(194,70,101,.12);color:#ffd1dc}
+.nsrtMeta{margin:0 0 12px;color:#aebdca;line-height:1.55;font-size:13px}
+.nsrtImport{width:100%;min-height:310px;resize:vertical;background:#091019;border:1px solid rgba(111,190,255,.18);border-radius:10px;padding:12px;color:#d8e9f5;font:12px/1.5 ui-monospace,SFMono-Regular,Consolas,monospace;white-space:pre;overflow:auto}
+.nsrtActions{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-top:10px}
+.nsrtActions span{color:#8fa0af;font-size:12px;line-height:1.45;flex:1;min-width:260px}
+.nsrtActions code{color:#bfe6ff}
+.nsrtActions .primary{font-weight:800}
+@media(max-width:760px){.nsrtTitle{flex-direction:column}.nsrtBadges{justify-content:flex-start}.nsrtImport{min-height:260px}}

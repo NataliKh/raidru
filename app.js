@@ -861,7 +861,7 @@ function restoreFromHash(){try{if(!location.hash.startsWith('#share='))return;co
 function save(){state.current=current;state.role=role;state.diff=diff;state.view=view;state.priestMode=priestMode;state.showPaths=showPaths;state.plannerPaletteTab=plannerPaletteTab;state.plannerSpawnMode=plannerSpawnMode;state.plannerArenaSnap=plannerArenaSnap;state.plannerIconTab=plannerIconTab;localStorage.setItem('raidru-standalone',JSON.stringify(state))}
 function render(){
   save();const b=raid.find(x=>x.id===current),bs=bossState(current);
-  el('#app').innerHTML=`<div class="shell"><aside><div class="brand"><div class="mark">R</div><div><b>RaidRU</b><small>рейдовые тактики по-русски</small></div></div><div class="season"><small>Midnight · Сезон 2</small><b>Ядовитая бездна</b></div><input class="search" placeholder="Найти босса…" oninput="filterBoss(this.value)"><div class="bosses">${orderedRaid().map(x=>`<button data-name="${esc((x.name+' '+x.en).toLowerCase())}" class="${x.id===current?'on':''}" onclick="chooseBoss('${x.id}')"><i>${x.order}</i><span><b>${x.name}</b><small>Босс ${x.order}</small></span><em>${bossState(x.id).favorite?'★':''}</em></button>`).join('')}</div><div class="version">RaidRU 0.8.10 · Map architecture fix</div></aside><main><header>${[['dashboard','Рейд'],['guide','Тактика'],['player','План: просмотр'],['planner','Планировщик'],['timeline','Таймлайн'],['roster','Состав'],['notes','Заметки'],['glossary','Словарь']].map(x=>`<button class="${view===x[0]?'on':''}" onclick="setView('${x[0]}')">${x[1]}</button>`).join('')}<span></span><button class="priest ${priestMode?'on':''}" onclick="togglePriest()">♥ Холи-прист</button><button onclick="sharePlan()">↗ Поделиться</button><button onclick="exportPlan()">⇩ Экспорт</button><label class="importBtn">⇧ Импорт<input type="file" accept="application/json,.json" onchange="importPlanFile(this.files[0])"></label></header>${view==='dashboard'?dashboardHero():`<section class="hero"><div><small>MIDNIGHT / ЯДОВИТАЯ БЕЗДНА / БОСС ${b.order}</small><div class="title"><h1>${b.name}</h1><button onclick="fav()">${bs.favorite?'★':'☆'}</button></div><p>${b.summary}</p></div><div class="heroRight"><div class="diff">${[['normal','Обычный'],['heroic','Героический'],['mythic','Эпохальный']].map(x=>`<button class="${diff===x[0]?'on':''}" onclick="setDiff('${x[0]}')">${x[1]}</button>`).join('')}</div><label>Освоение <b>${bs.progress}%</b><input type="range" min="0" max="100" step="10" value="${bs.progress}" oninput="setProgress(this.value)"></label></div></section>`}${content(b,bs)}<footer class="siteCredit">Карты и ресурсы для планирования: <a href="https://raidplan.io/" target="_blank" rel="noopener noreferrer">RaidPlan.io</a> · Карты по mapID Heroic Replay (2606/2607/2608/2609) и тайминги: Warcraft Logs/RPGLogs · Иконки планировщика: локальные ассеты RaidRU · Рейдовые значки: игровые ресурсы сообщества</footer></main></div>`;
+  el('#app').innerHTML=`<div class="shell"><aside><div class="brand"><div class="mark">R</div><div><b>RaidRU</b><small>рейдовые тактики по-русски</small></div></div><div class="season"><small>Midnight · Сезон 2</small><b>Ядовитая бездна</b></div><input class="search" placeholder="Найти босса…" oninput="filterBoss(this.value)"><div class="bosses">${orderedRaid().map(x=>`<button data-name="${esc((x.name+' '+x.en).toLowerCase())}" class="${x.id===current?'on':''}" onclick="chooseBoss('${x.id}')"><i>${x.order}</i><span><b>${x.name}</b><small>Босс ${x.order}</small></span><em>${bossState(x.id).favorite?'★':''}</em></button>`).join('')}</div><div class="version">RaidRU 0.8.11 · NSRT voice notes</div></aside><main><header>${[['dashboard','Рейд'],['guide','Тактика'],['player','План: просмотр'],['planner','Планировщик'],['timeline','Таймлайн'],['roster','Состав'],['notes','Заметки'],['glossary','Словарь']].map(x=>`<button class="${view===x[0]?'on':''}" onclick="setView('${x[0]}')">${x[1]}</button>`).join('')}<span></span><button class="priest ${priestMode?'on':''}" onclick="togglePriest()">♥ Холи-прист</button><button onclick="sharePlan()">↗ Поделиться</button><button onclick="exportPlan()">⇩ Экспорт</button><label class="importBtn">⇧ Импорт<input type="file" accept="application/json,.json" onchange="importPlanFile(this.files[0])"></label></header>${view==='dashboard'?dashboardHero():`<section class="hero"><div><small>MIDNIGHT / ЯДОВИТАЯ БЕЗДНА / БОСС ${b.order}</small><div class="title"><h1>${b.name}</h1><button onclick="fav()">${bs.favorite?'★':'☆'}</button></div><p>${b.summary}</p></div><div class="heroRight"><div class="diff">${[['normal','Обычный'],['heroic','Героический'],['mythic','Эпохальный']].map(x=>`<button class="${diff===x[0]?'on':''}" onclick="setDiff('${x[0]}')">${x[1]}</button>`).join('')}</div><label>Освоение <b>${bs.progress}%</b><input type="range" min="0" max="100" step="10" value="${bs.progress}" oninput="setProgress(this.value)"></label></div></section>`}${content(b,bs)}<footer class="siteCredit">Карты и ресурсы для планирования: <a href="https://raidplan.io/" target="_blank" rel="noopener noreferrer">RaidPlan.io</a> · Карты по mapID Heroic Replay (2606/2607/2608/2609) и тайминги: Warcraft Logs/RPGLogs · Иконки планировщика: локальные ассеты RaidRU · Голосовые таймеры: NSRT Heroic BossTimelines · Рейдовые значки: игровые ресурсы сообщества</footer></main></div>`;
   if(view==='planner') setupPlanner();
   if(view==='player') setupPlayer();
 }
@@ -1043,7 +1043,117 @@ function setRosterRange(i,r){const m=rosterState()[i];if(!m)return;m.range=r==='
 function removeRoster(i){rosterState().splice(i,1);save();render()}
 function rosterNote(){const r=rosterState();if(!r.length)return '';const f=x=>r.filter(a=>a.role===x).map(a=>`${a.name}${wowClass(a.classKey)?' ['+wowClass(a.classKey).short+']':''}`).join(', ');return `\nСостав:\nТанки: ${f('tank')||'—'}\nХилы: ${f('healer')||'—'}\nДД: ${f('dps')||'—'}`}
 function timeline(b,bs){return `<section class="page timelineEditor">${rolebar()}<div class="timelineActions"><button onclick="addTimelineEvent()">＋ Событие</button><button onclick="resetTimeline()">↻ Из шаблона</button><button onclick="setView('player')">▶ Проигрыватель</button><span>Время вводится в секундах или формате м:с. Полный шаблон уже привязан к ключевым кадрам, но его можно править вручную.</span></div><div class="timeline">${bs.timelineV3.map((e,i)=>`<article class="event editEvent ${e.type}"><input value="${fmtTime(e.time)}" onchange="editTimeline(${i},'time',this.value)" aria-label="Время"><input value="${esc(e.label)}" onchange="editTimeline(${i},'label',this.value)" aria-label="Событие"><select onchange="editTimeline(${i},'type',this.value)">${Object.keys(eventTypes).map(t=>`<option value="${t}" ${e.type===t?'selected':''}>${eventTypes[t]}</option>`).join('')}</select><select onchange="editTimeline(${i},'scene',this.value)">${bs.scenes.map((s,j)=>`<option value="${j}" ${e.scene===j?'selected':''}>${j+1}. ${esc(s.name)}</option>`).join('')}</select><button onclick="moveTimeline(${i},-1)">↑</button><button onclick="moveTimeline(${i},1)">↓</button><button class="red" onclick="removeTimeline(${i})">×</button></article>`).join('')}</div></section>`}
-function notes(b,bs){const ns=`[RaidRU] ${b.name}\n${b.rl}\n${priestMode?'Холи-прист: '+b.heal+'\n':''}BL: ${b.bl}${rosterNote()}\n\nТаймлайн:\n${bs.timelineV3.map(e=>`${fmtTime(e.time)} ${e.label}`).join('\n')}`;return `<section class="page notes"><div class="card wide"><h3>Личная / гильдейская заметка</h3><textarea id="customNote" oninput="saveNote(this.value)" placeholder="Назначения, хил-КД, метки…">${esc(bs.note)}</textarea></div><div class="card wide"><h3>Готовая заметка для NSRT / чата</h3><pre>${esc(ns)}</pre><button onclick="copyText(${JSON.stringify(ns)})">Копировать</button></div><div class="card checklist"><h3>Чеклист перед пулом</h3>${['Метки расставлены','Танки знают позиции','Хил-КД распределены','Soak/мини-группы назначены','Героизм согласован','Дебаффы видны на фреймах'].map(x=>`<label><input type="checkbox"> ${x}</label>`).join('')}</div></section>`}
+// v0.8.11: готовые голосовые импорты NSRT для проверенных Heroic PTR BossTimelines.
+// В NSRT `times` у многофазных боссов заданы от старта фазы. Здесь они переводятся
+// в абсолютные секунды от пула и отсекаются на границе следующей фазы, как в BossTimeline NSRT.
+const NSRT_VOICE_PROFILES={
+  nekzali:{encounterId:3470,source:'NSRT Heroic BossTimeline / Midnight S2',duration:640,phases:{1:0,2:248,3:437},events:[
+    {spellId:1293664,phase:1,times:[3.03,84.83,166.68],text:'Воспламенение Колодца',tts:'Воспламенение. Общий урон',heal:'Воспламенение через пять. Готовь хил'},
+    {spellId:1284103,phase:1,times:[35.12,64.2,116.94,146.03,198.78,227.86],text:'Обстрел одержимости',tts:'Обстрел. Освободить длинную линию'},
+    {spellId:1287533,phase:1,times:[56.38,87.47,135.7,169.26,217.54],text:'Восставшие амани',tts:'Амани. Быстрый свитч'},
+    {spellId:1295124,phase:2,times:[0],text:'Переход — Ритуал пробуждения',tts:'Переход. Эхо по очереди'},
+    {spellId:1305993,phase:2,times:[33.09,55.13,90.11,100.05,122.95,144.85],text:'Остаточный звон — рейдовый урон',heal:'Рейдовый урон через пять. Готовь хил',only:'healer'},
+    {spellId:1305421,phase:2,times:[52.1,74.09,96.03,141.88,163.85],text:'Голодный костёр',tts:'Голодный костёр. Собраться',heal:'Костёр через пять. Готовь хил'},
+    {spellId:1299673,phase:3,times:[0,50.01,100.04,151.55],text:'Призыв',tts:'Призыв. Амани в приоритет'},
+    {spellId:1284103,phase:3,times:[34.05,84.06,134.05,184.01],text:'Обстрел одержимости',tts:'Обстрел. Освободить длинную линию'}
+  ]},
+  sentinels:{encounterId:3445,source:'NSRT Heroic BossTimeline / Midnight S2',duration:545,phases:{1:0,2:64,3:170,4:277,5:379,6:480},events:[
+    {spellId:1284251,phase:1,times:[9.76],text:'Сгущение яда',tts:'Слизень. Быстрый свитч'},
+    {spellId:1288232,phase:1,times:[17.89],text:'Нестабильная миазма',tts:'Миазма. В назначенные группы'},
+    {spellId:1284483,phase:1,times:[43],text:'Проклятая кровь',heal:'Проклятая кровь через пять. Поднять рейд',only:'healer'},
+    {spellId:1284588,phase:1,times:[46.29],text:'Ядовитый стазис',tts:'Ядовитый стазис. Собраться и выровнять здоровье',heal:'Стазис через пять. Готовь рейд'},
+    ...[2,3,4,5].flatMap(phase=>[
+      {spellId:1284251,phase,times:[10.01,62.3],text:'Сгущение яда',tts:'Слизень. Быстрый свитч'},
+      {spellId:1288232,phase,times:[17.74,59.14],text:'Нестабильная миазма',tts:'Миазма. В назначенные группы'},
+      {spellId:1284483,phase,times:[42.45],text:'Проклятая кровь',heal:'Проклятая кровь через пять. Поднять рейд',only:'healer'},
+      {spellId:1284588,phase,times:[90.99],text:'Ядовитый стазис',tts:'Ядовитый стазис. Собраться и выровнять здоровье',heal:'Стазис через пять. Готовь рейд'}
+    ]),
+    {spellId:1284251,phase:6,times:[10.01,62.3],text:'Сгущение яда',tts:'Слизень. Быстрый свитч'},
+    {spellId:1288232,phase:6,times:[17.74,59.14],text:'Нестабильная миазма',tts:'Миазма. В назначенные группы'},
+    {spellId:1284483,phase:6,times:[42.45],text:'Проклятая кровь',heal:'Проклятая кровь через пять. Поднять рейд',only:'healer'}
+  ]},
+  vashnik:{encounterId:3455,source:'NSRT Heroic BossTimeline / Midnight S2',duration:650,phases:{1:0,2:650},events:[
+    {spellId:1281907,phase:1,times:[10.07,92.05,176.1,260.1,344.12,428.15,512.16,596.16],text:'Чумная пена',tts:'Чумная пена. Разнести по краям'},
+    {spellId:1284663,phase:1,times:[24.03,108.04,192.08,276.07,360.1,444.12,528.11,612.16],text:'Поглощение',tts:'Поглощение. Общий урон',heal:'Поглощение через пять. Готовь хил'},
+    {spellId:1282516,phase:1,times:[35.03,79.03,119.03,163.03,203.07,247.04,287.09,331.06,371.12,415.1,455.11,499.12,539.15,583.15,623.21],text:'Злокачественный катализатор',tts:'Катализатор. Общий урон',heal:'Катализатор через пять. Готовь хил'},
+    {spellId:1295173,phase:1,times:[48.52,132.53,216.58,300.57,384.6,468.62,552.62,636.71],text:'Адаптивные инфекции',tts:'Инфекции. Разнести по типу'},
+    {spellId:1293316,phase:1,times:[46.03,130.04,214.08,298.07,382.1,466.12,550.11,634.16],text:'Усиленный яд',heal:'Усиленный яд через пять. Большой хил',only:'healer'}
+  ]},
+  explorers:{encounterId:3497,source:'NSRT Heroic BossTimeline / Midnight S2',duration:442,phases:{1:0,2:54,3:177,4:301},events:[
+    {spellId:1296021,phase:1,times:[19.08,50.02],text:'Мерцающая нова',tts:'Мерцающая нова. Общий урон',heal:'Нова через пять. Готовь хил'},
+    {spellId:1292490,phase:1,times:[38.85],text:'Отвратительная рыба',tts:'Рыба. Носитель готов'},
+    ...[2,3,4].flatMap(phase=>[
+      {spellId:1296535,phase,times:[0],text:'Отвратительная рыба',tts:'Рыба. Носитель готов'},
+      {spellId:1292758,phase,times:[0.52],text:'Злые глаза',tts:'Злые глаза. Общий урон',heal:'Злые глаза через пять. Готовь хил'},
+      {spellId:1296095,phase,times:[19.79,39.8,58.79],text:'Могучий удар',tts:'Могучий удар. Все в сбор',heal:'Могучий удар через пять. Поднять рейд'},
+      {spellId:1286922,phase,times:[23.43,55.37,106.6],text:'Огонь и лёд',tts:'Огонь и лёд. Разнести'},
+      {spellId:1296021,phase,times:[84.53,115.47],text:'Мерцающая нова',tts:'Мерцающая нова. Общий урон',heal:'Нова через пять. Готовь хил'},
+      {spellId:1292490,phase,times:[104.3],text:'Отвратительная рыба',tts:'Рыба. Следующий носитель готов'}
+    ]),
+    {spellId:1292779,phase:4,times:[129.65],text:'Последнее вознесение',tts:'Последнее вознесение. Рыба готова'}
+  ]},
+  sszorak:{encounterId:3420,source:'NSRT Heroic BossTimeline / Midnight S2',duration:450,phases:{1:0,2:450},events:[
+    {spellId:1277027,phase:1,times:[8.59,60.8,146.72,198.95,284.85,337.1,423],text:'Увечье',tts:'Увечье. Группа в сбор'},
+    {spellId:1287072,phase:1,times:[13.09,65.3,151.22,203.45,289.35,341.6,427.5],text:'Буря',tts:'Буря. Двигайся',heal:'Буря через пять. Готовь хил'},
+    {spellId:1305959,phase:1,times:[32.22,84.44,170.39,222.64,308.53,360.72,446.65],text:'Ядовитый выброс',tts:'Ядовитый выброс. Разнести к краю'},
+    {spellId:1285453,phase:1,times:[44.12,96.3,182.26,234.49,320.39,372.62],text:'Бушующие перекрёстные ветра',tts:'Перекрёстные ветра. Смотри отбрасывание',heal:'Ветра через пять. Поднять рейд'},
+    {spellId:1286033,phase:1,times:[111.17,249.27,387.42],text:'Зарыться',tts:'Зарыться. Окно урона'}
+  ]},
+  fangs:{encounterId:3421,source:'NSRT Heroic BossTimeline / Midnight S2',duration:514,phases:{1:0,2:514},events:[
+    {spellId:1289192,phase:1,times:[9.9,77.7,179.41,247.2,348.88,416.65],text:'Едкий ливень',tts:'Едкий ливень. Назначенные игроки готовы'},
+    {spellId:1288538,phase:1,times:[26.52,94.32,195.99,263.78,365.49,433.26],text:'Камнелом — три удара',tts:'Камнелом. Три удара',heal:'Камнелом через пять. Готовь хил'},
+    {spellId:1291404,phase:1,times:[39.69,107.48,209.17,276.95,378.67,446.41],text:'Ядовитое появление',tts:'Отродья. Быстрый свитч'},
+    {spellId:1290809,phase:1,times:[47.48,115.25,216.95,284.72,386.4,454.18],text:'Спиральный ихор',tts:'Спиральный ихор. На край'},
+    {spellId:1290956,phase:1,times:[52.24,120.04,221.76,289.54,391.21,458.97],text:'Взбаламутить глубины',heal:'Глубины через пять. Готовь хил',only:'healer'},
+    {spellId:1290516,phase:1,times:[67.86,135.63,237.36,305.15,406.81,474.58],text:'Ненасытная трапеза',tts:'Трапеза. Группы А, Б, В',heal:'Трапеза через пять. Готовь хил'},
+    {spellId:1306872,phase:1,times:[150.47,319.95],text:'Кровавый шторм + Гнусный поток',tts:'Шторм и поток. В безопасный сектор',heal:'Шторм и поток через пять. Большой хил'}
+  ]},
+  altar:{encounterId:3429,source:'NSRT Heroic BossTimeline / Midnight S2',duration:490,phases:{1:0,2:164,3:392,4:427,5:490},events:[
+    {spellId:1283832,phase:1,times:[14.03,94.02,174.06],text:'Дробитель топоров',tts:'Топор. Готовься к отбрасыванию',heal:'Отбрасывание через пять. Поднять рейд'},
+    {spellId:1283489,phase:1,times:[46.48,126.54],text:'Гильотина',tts:'Гильотина. Группа в сбор'},
+    {spellId:1288624,phase:2,times:[0],text:'Фаза Малакрасса',tts:'Переход. Адды в приоритет'},
+    {spellId:1285643,phase:2,times:[7.55,43.62,92.55,128.58,177.6,213.63],text:'Марш ужаса',tts:'Марш ужаса. Контроль аддов'},
+    {spellId:1286895,phase:2,times:[24.04,62.01,109.07,147.08,194.1,232.09],text:'Мрачная бомба',tts:'Мрачная бомба. Разнести'},
+    {spellId:1308311,phase:2,times:[17.57,50.55,102.57,135.57,187.6,220.6],text:'Ответная злоба',tts:'Ответная злоба. Общий урон',heal:'Ответная злоба через пять. Готовь хил'},
+    {spellId:1304032,phase:3,times:[0],text:'Связывание душ',tts:'Связывание душ. Переход'},
+    {spellId:1304033,phase:3,times:[0.17],text:'Жуткая регенерация',tts:'Регенерация. Окно урона'},
+    {spellId:1298381,phase:4,times:[2.62],text:'Осквернение Горнила',tts:'Осквернение. Общий урон',heal:'Осквернение через пять. Большой хил'},
+    {spellId:1299266,phase:4,times:[18],text:'Мрачная гильотина',tts:'Мрачная гильотина. Группа в сбор'},
+    {spellId:1286918,phase:4,times:[53],text:'Вечный сумрак',tts:'Вечный сумрак. Общий урон',heal:'Вечный сумрак через пять. Финальный хил'}
+  ]}
+};
+function nsrtClean(v){return String(v??'').replace(/[;\n\r]/g,' ').replace(/\s+/g,' ').trim()}
+function nsrtAbsoluteTimes(profile,event){
+  const start=profile.phases[event.phase]??0,next=profile.phases[event.phase+1];
+  return (event.times||[]).map(t=>+(start+t).toFixed(2)).filter(t=>(next==null||t<next)&&t<=profile.duration);
+}
+function nsrtReminderLine(time,tag,spellId,text,tts,lead){
+  const safeLead=Math.max(0,Math.floor(lead));
+  return `time:${time};ph:1;tag:${tag};DisplayType:Text;spellid:${spellId};text:${nsrtClean(text)};TTS:${nsrtClean(tts)};TTSTimer:${safeLead};dur:${Math.max(4,safeLead)};countdown:0;`;
+}
+function buildNsrtVoiceNote(bossId){
+  const p=NSRT_VOICE_PROFILES[bossId];if(!p)return '';
+  const lines=[];
+  for(const e of p.events){
+    for(const t of nsrtAbsoluteTimes(p,e)){
+      if(e.only!=='healer'&&e.tts)lines.push({t,lead:e.lead??3,line:nsrtReminderLine(t,'everyone',e.spellId,e.text,e.tts,e.lead??3)});
+      if(e.heal&&t>=5)lines.push({t,lead:5,line:nsrtReminderLine(t,'healer',e.spellId,`ХИЛ: ${e.text}`,e.heal,5)});
+    }
+  }
+  lines.sort((a,b)=>a.t-b.t||b.lead-a.lead);
+  return [`EncounterID:${p.encounterId}`,...lines.map(x=>x.line)].join('\n');
+}
+function nsrtVoiceStats(bossId){
+  const txt=buildNsrtVoiceNote(bossId);if(!txt)return null;
+  const lines=txt.split('\n').slice(1);return {all:lines.filter(x=>x.includes('tag:everyone')).length,heal:lines.filter(x=>x.includes('tag:healer')).length,total:lines.length};
+}
+function copyElementText(id){const node=document.getElementById(id);if(node)copyText(node.value??node.textContent??'')}
+function notes(b,bs){
+  const ns=`[RaidRU] ${b.name}\n${b.rl}\n${priestMode?'Холи-прист: '+b.heal+'\n':''}BL: ${b.bl}${rosterNote()}\n\nТаймлайн:\n${bs.timelineV3.map(e=>`${fmtTime(e.time)} ${e.label}`).join('\n')}`;
+  const voice=buildNsrtVoiceNote(b.id),stats=nsrtVoiceStats(b.id),profile=NSRT_VOICE_PROFILES[b.id];
+  const voiceBlock=voice?`<div class="card wide nsrtExport"><div class="nsrtTitle"><div><small>NSRT · HEROIC · PTR TIMELINE</small><h3>Русская голосовая заметка</h3></div><div class="nsrtBadges"><span>${stats.all} общих TTS</span><span class="healBadge">♥ ${stats.heal} хил-предупреждений</span></div></div><p class="nsrtMeta">Таймеры: <b>${esc(profile.source)}</b>. Ключевые механики звучат примерно за 3 сек. Перед выбранными пиками рейдового урона хилеры получают отдельную русскую команду за <b>5 секунд</b>. Импорт специально работает по абсолютному времени от пула.</p><textarea id="nsrtVoiceImport" class="nsrtImport" readonly>${esc(voice)}</textarea><div class="nsrtActions"><button class="primary" onclick="copyElementText('nsrtVoiceImport')">Копировать импорт NSRT</button><span>В NSRT вставь этот блок в импорт Reminders. Роль <code>tag:healer</code> слышат только хилеры.</span></div></div>`:`<div class="card wide nsrtExport disabled"><div class="nsrtTitle"><div><small>NSRT · HEROIC</small><h3>Русская голосовая заметка</h3></div><div class="nsrtBadges"><span>ещё не готово</span></div></div><p class="nsrtMeta">Для этого босса RaidRU пока не выпускает голосовой импорт: сначала нужен проверенный Heroic таймлайн/Replay. Тайминги наугад не добавляем.</p></div>`;
+  return `<section class="page notes"><div class="card wide"><h3>Личная / гильдейская заметка</h3><textarea id="customNote" oninput="saveNote(this.value)" placeholder="Назначения, хил-КД, метки…">${esc(bs.note)}</textarea></div>${voiceBlock}<div class="card wide"><h3>Обычная заметка для рейда / чата</h3><pre>${esc(ns)}</pre><button onclick="copyText(${JSON.stringify(ns)})">Копировать</button></div><div class="card checklist"><h3>Чеклист перед пулом</h3>${['Метки расставлены','Танки знают позиции','Хил-КД распределены','Soak/мини-группы назначены','Героизм согласован','Дебаффы видны на фреймах'].map(x=>`<label><input type="checkbox"> ${x}</label>`).join('')}</div></section>`;
+}
 function glossary(b){const arr=[...b.spells,...priest];return `<section class="page"><div class="table"><div class="thead"><b>Русский клиент</b><b>Английское название</b><b>Источник</b></div>${arr.map((x,i)=>`<div><b>${x[0]}</b><code>${x[1]}</code><span>${i<b.spells.length?'Босс':'Холи-прист'}</span></div>`).join('')}</div></section>`}
 function chooseBoss(id){stopPlayback();stopReplay();current=id;sceneIndex=0;playerSceneIndex=0;render()} function setView(v){stopPlayback();stopReplay();view=v;render()} function setRole(v){role=v;render()} function setDiff(v){diff=v;render()} function togglePriest(){priestMode=!priestMode;render()} function fav(){const bs=bossState(current);bs.favorite=!bs.favorite;render()} function setProgress(v){bossState(current).progress=+v;save();render()} function saveNote(v){bossState(current).note=v;save()} function copyText(t){navigator.clipboard?.writeText(t);toast('Скопировано')}
 function filterBoss(q){document.querySelectorAll('.bosses button').forEach(x=>x.style.display=x.dataset.name.includes(q.toLowerCase())?'grid':'none')}
