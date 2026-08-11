@@ -1,9 +1,9 @@
-const CACHE='raidru-v0711-authored-scenes';
+const CACHE='raidru-v080-vashnik-planner';
 const ASSETS=[
 './',
 './index.html',
-'./styles.css?v=0.7.11',
-'./app.js?v=0.7.11',
+'./styles.css?v=0.8.0',
+'./app.js?v=0.8.0',
 './manifest.webmanifest',
 './icon.svg',
 './assets/maps/nekzali.webp',

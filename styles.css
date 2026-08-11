@@ -643,7 +643,7 @@
   box-shadow:inset 0 0 0 1px rgba(85,217,151,.12);
 }
 
-/* RaidRU 0.7.11 — clean encounter tooltips */
+/* RaidRU 0.8.0 — encounter tooltips */
 .token.encounterIcon::after{
   content:attr(data-label);
   position:absolute;
