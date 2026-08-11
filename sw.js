@@ -1,9 +1,9 @@
-const CACHE='raidru-v084-nekzali-heroic';
+const CACHE='raidru-v085-sentinels-heroic';
 const ASSETS=[
 './',
 './index.html',
-'./styles.css?v=0.8.4',
-'./app.js?v=0.8.4',
+'./styles.css?v=0.8.5',
+'./app.js?v=0.8.5',
 './manifest.webmanifest',
 './icon.svg',
 './assets/maps/nekzali.webp',
