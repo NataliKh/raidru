@@ -1,9 +1,9 @@
-const CACHE='raidru-v083-draggable-labels';
+const CACHE='raidru-v084-nekzali-heroic';
 const ASSETS=[
 './',
 './index.html',
-'./styles.css?v=0.8.3',
-'./app.js?v=0.8.3',
+'./styles.css?v=0.8.4',
+'./app.js?v=0.8.4',
 './manifest.webmanifest',
 './icon.svg',
 './assets/maps/nekzali.webp',
