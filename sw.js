@@ -1,9 +1,9 @@
-const CACHE='raidru-v082-russian-ui';
+const CACHE='raidru-v083-draggable-labels';
 const ASSETS=[
 './',
 './index.html',
-'./styles.css?v=0.8.2',
-'./app.js?v=0.8.2',
+'./styles.css?v=0.8.3',
+'./app.js?v=0.8.3',
 './manifest.webmanifest',
 './icon.svg',
 './assets/maps/nekzali.webp',

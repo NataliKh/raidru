@@ -654,7 +654,7 @@ function restoreFromHash(){try{if(!location.hash.startsWith('#share='))return;co
 function save(){state.current=current;state.role=role;state.diff=diff;state.view=view;state.priestMode=priestMode;state.showPaths=showPaths;state.plannerPaletteTab=plannerPaletteTab;state.plannerSpawnMode=plannerSpawnMode;state.plannerArenaSnap=plannerArenaSnap;state.plannerIconTab=plannerIconTab;localStorage.setItem('raidru-standalone',JSON.stringify(state))}
 function render(){
   save();const b=raid.find(x=>x.id===current),bs=bossState(current);
-  el('#app').innerHTML=`<div class="shell"><aside><div class="brand"><div class="mark">R</div><div><b>RaidRU</b><small>рейдовые тактики по-русски</small></div></div><div class="season"><small>Midnight · Сезон 2</small><b>Ядовитая бездна</b></div><input class="search" placeholder="Найти босса…" oninput="filterBoss(this.value)"><div class="bosses">${orderedRaid().map(x=>`<button data-name="${esc((x.name+' '+x.en).toLowerCase())}" class="${x.id===current?'on':''}" onclick="chooseBoss('${x.id}')"><i>${x.order}</i><span><b>${x.name}</b><small>Босс ${x.order}</small></span><em>${bossState(x.id).favorite?'★':''}</em></button>`).join('')}</div><div class="version">RaidRU 0.8.2 · фокус на планировщик</div></aside><main><header>${[['dashboard','Рейд'],['guide','Тактика'],['player','План: просмотр'],['planner','Планировщик'],['timeline','Таймлайн'],['roster','Состав'],['notes','Заметки'],['glossary','Словарь']].map(x=>`<button class="${view===x[0]?'on':''}" onclick="setView('${x[0]}')">${x[1]}</button>`).join('')}<span></span><button class="priest ${priestMode?'on':''}" onclick="togglePriest()">♥ Холи-прист</button><button onclick="sharePlan()">↗ Поделиться</button><button onclick="exportPlan()">⇩ Экспорт</button><label class="importBtn">⇧ Импорт<input type="file" accept="application/json,.json" onchange="importPlanFile(this.files[0])"></label></header>${view==='dashboard'?dashboardHero():`<section class="hero"><div><small>MIDNIGHT / ЯДОВИТАЯ БЕЗДНА / БОСС ${b.order}</small><div class="title"><h1>${b.name}</h1><button onclick="fav()">${bs.favorite?'★':'☆'}</button></div><p>${b.summary}</p></div><div class="heroRight"><div class="diff">${[['normal','Обычный'],['heroic','Героический'],['mythic','Эпохальный']].map(x=>`<button class="${diff===x[0]?'on':''}" onclick="setDiff('${x[0]}')">${x[1]}</button>`).join('')}</div><label>Освоение <b>${bs.progress}%</b><input type="range" min="0" max="100" step="10" value="${bs.progress}" oninput="setProgress(this.value)"></label></div></section>`}${content(b,bs)}<footer class="siteCredit">Карты и ресурсы для планирования: <a href="https://raidplan.io/" target="_blank" rel="noopener noreferrer">RaidPlan.io</a> · Референс карты Вашника: Warcraft Logs/RPGLogs · Иконки планировщика: локальные ассеты RaidRU · Рейдовые значки: игровые ресурсы сообщества</footer></main></div>`;
+  el('#app').innerHTML=`<div class="shell"><aside><div class="brand"><div class="mark">R</div><div><b>RaidRU</b><small>рейдовые тактики по-русски</small></div></div><div class="season"><small>Midnight · Сезон 2</small><b>Ядовитая бездна</b></div><input class="search" placeholder="Найти босса…" oninput="filterBoss(this.value)"><div class="bosses">${orderedRaid().map(x=>`<button data-name="${esc((x.name+' '+x.en).toLowerCase())}" class="${x.id===current?'on':''}" onclick="chooseBoss('${x.id}')"><i>${x.order}</i><span><b>${x.name}</b><small>Босс ${x.order}</small></span><em>${bossState(x.id).favorite?'★':''}</em></button>`).join('')}</div><div class="version">RaidRU 0.8.3 · свободные подписи</div></aside><main><header>${[['dashboard','Рейд'],['guide','Тактика'],['player','План: просмотр'],['planner','Планировщик'],['timeline','Таймлайн'],['roster','Состав'],['notes','Заметки'],['glossary','Словарь']].map(x=>`<button class="${view===x[0]?'on':''}" onclick="setView('${x[0]}')">${x[1]}</button>`).join('')}<span></span><button class="priest ${priestMode?'on':''}" onclick="togglePriest()">♥ Холи-прист</button><button onclick="sharePlan()">↗ Поделиться</button><button onclick="exportPlan()">⇩ Экспорт</button><label class="importBtn">⇧ Импорт<input type="file" accept="application/json,.json" onchange="importPlanFile(this.files[0])"></label></header>${view==='dashboard'?dashboardHero():`<section class="hero"><div><small>MIDNIGHT / ЯДОВИТАЯ БЕЗДНА / БОСС ${b.order}</small><div class="title"><h1>${b.name}</h1><button onclick="fav()">${bs.favorite?'★':'☆'}</button></div><p>${b.summary}</p></div><div class="heroRight"><div class="diff">${[['normal','Обычный'],['heroic','Героический'],['mythic','Эпохальный']].map(x=>`<button class="${diff===x[0]?'on':''}" onclick="setDiff('${x[0]}')">${x[1]}</button>`).join('')}</div><label>Освоение <b>${bs.progress}%</b><input type="range" min="0" max="100" step="10" value="${bs.progress}" oninput="setProgress(this.value)"></label></div></section>`}${content(b,bs)}<footer class="siteCredit">Карты и ресурсы для планирования: <a href="https://raidplan.io/" target="_blank" rel="noopener noreferrer">RaidPlan.io</a> · Референс карты Вашника: Warcraft Logs/RPGLogs · Иконки планировщика: локальные ассеты RaidRU · Рейдовые значки: игровые ресурсы сообщества</footer></main></div>`;
   if(view==='planner') setupPlanner();
   if(view==='player') setupPlayer();
 }
@@ -702,7 +702,7 @@ function effectHtml(e,editable=false){const style=`left:${e.x}%;top:${e.y}%;widt
 function boxOverlap(a,b,pad=0){
   return !(a.r+pad<b.l || a.l-pad>b.r || a.b+pad<b.t || a.t-pad>b.b);
 }
-function effectLabelLayout(sc){
+function effectLabelLayout(sc,{ignoreManual=false}={}){
   const tokens=(sc.tokens||[]).map(t=>({
     l:+t[3]-3.1,r:+t[3]+3.1,t:+t[4]-4.2,b:+t[4]+4.2
   }));
@@ -711,17 +711,33 @@ function effectLabelLayout(sc){
     const label=String(e.label||effectLabels[e.type]||'').trim();
     if(!label)return null;
 
-    const lw=Math.max(10,Math.min(31,label.length*.62+5));
+    const lw=Math.max(9,Math.min(30,label.length*.58+4.5));
     const lh=5.2;
     const ew=Math.max(4,+e.w||12),eh=Math.max(4,+e.h||12);
-    const ex=+e.x||50,ey=+e.y||50;
+    const ex=Number.isFinite(+e.x)?+e.x:50,ey=Number.isFinite(+e.y)?+e.y:50;
+    const manual=!ignoreManual&&Number.isFinite(+e.labelDx)&&Number.isFinite(+e.labelDy);
 
+    // Ручная позиция хранится как смещение от эффекта: если сам эффект двигают,
+    // подпись следует за ним и сохраняет выбранное пользователем расположение.
+    if(manual){
+      const x=Math.max(lw/2+1.2,Math.min(100-lw/2-1.2,ex+(+e.labelDx||0)));
+      const y=Math.max(lh/2+1.2,Math.min(100-lh/2-1.2,ey+(+e.labelDy||0)));
+      const box={l:x-lw/2,r:x+lw/2,t:y-lh/2,b:y+lh/2};
+      placed.push(box);
+      return {x,y,box,pos:'manual',score:0,label,type:e.type,id:e.id,manual:true,anchorX:ex,anchorY:ey};
+    }
+
+    const dx=ew/2+lw/2+2.7,dy=eh/2+lh/2+2.8;
     const candidates=[
       {x:ex,y:ey-eh/2-3.6,pos:'top',base:0},
-      {x:ex,y:ey+eh/2+3.6,pos:'bottom',base:2},
-      {x:ex-ew/2-lw/2-2.5,y:ey,pos:'left',base:5},
-      {x:ex+ew/2+lw/2+2.5,y:ey,pos:'right',base:5},
-      {x:ex,y:ey-3,pos:'inside',base:24}
+      {x:ex,y:ey+eh/2+3.6,pos:'bottom',base:1.5},
+      {x:ex-ew/2-lw/2-2.5,y:ey,pos:'left',base:4},
+      {x:ex+ew/2+lw/2+2.5,y:ey,pos:'right',base:4},
+      {x:ex-dx*.72,y:ey-dy*.72,pos:'top-left',base:2.7},
+      {x:ex+dx*.72,y:ey-dy*.72,pos:'top-right',base:2.7},
+      {x:ex-dx*.72,y:ey+dy*.72,pos:'bottom-left',base:3.2},
+      {x:ex+dx*.72,y:ey+dy*.72,pos:'bottom-right',base:3.2},
+      {x:ex,y:ey-3,pos:'inside',base:28}
     ];
 
     let best=null;
@@ -733,26 +749,27 @@ function effectLabelLayout(sc){
       let score=c.base+Math.abs(x-rawX)*9+Math.abs(y-rawY)*9;
 
       for(const tb of tokens){
-        if(boxOverlap(box,tb,1.2))score+=190;
+        if(boxOverlap(box,tb,1.35))score+=210;
       }
       for(const pb of placed){
-        if(boxOverlap(box,pb,1.4))score+=240;
+        if(boxOverlap(box,pb,1.75))score+=290;
       }
 
-      // Подпись не должна сидеть прямо поверх центра небольшого эффекта.
       const effectBox={l:ex-ew/2,r:ex+ew/2,t:ey-eh/2,b:ey+eh/2};
-      if(c.pos!=='inside' && boxOverlap(box,effectBox,.5))score+=75;
+      if(c.pos!=='inside' && boxOverlap(box,effectBox,.65))score+=90;
 
-      if(!best||score<best.score)best={x,y,box,pos:c.pos,score,label,type:e.type,id:e.id};
+      if(!best||score<best.score)best={x,y,box,pos:c.pos,score,label,type:e.type,id:e.id,manual:false,anchorX:ex,anchorY:ey};
     }
     placed.push(best.box);
     return best;
   }).filter(Boolean);
 }
-function effectLabelsHtml(sc){
-  return `<div class="effectLabels">${effectLabelLayout(sc).map(x=>`<div class="effectCallout ${x.type}" data-effect-label="${x.id}" style="left:${x.x}%;top:${x.y}%"><span>${esc(x.label)}</span></div>`).join('')}</div>`;
+function effectLabelsHtml(sc,{editable=false}={}){
+  const layout=effectLabelLayout(sc);
+  const leaders=layout.filter(x=>x.manual&&Math.hypot(x.x-x.anchorX,x.y-x.anchorY)>3.5).map(x=>`<line class="effectLabelLeader" data-effect-label-line="${x.id}" x1="${x.anchorX}" y1="${x.anchorY}" x2="${x.x}" y2="${x.y}" vector-effect="non-scaling-stroke"></line>`).join('');
+  return `<div class="effectLabels ${editable?'editable':''}"><svg class="effectLabelLeaders" viewBox="0 0 100 100" preserveAspectRatio="none">${leaders}</svg>${layout.map(x=>`<div class="effectCallout ${x.type} ${editable?'editable':''} ${x.manual?'manual':''}" data-effect-label="${x.id}" style="left:${x.x}%;top:${x.y}%" title="${editable?'Перетащи подпись. Shift — только по одной оси. Двойной клик или ПКМ — вернуть авто-позицию.':''}"><span>${esc(x.label)}</span></div>`).join('')}</div>`;
 }
-function arenaHtml(sc,{editable=false,player=false,next=null}={}){const dark=Math.max(0,Math.min(65,Number(sc?.map?.dark)||0))/100;return `<div id="${player?'playerArena':'arena'}" class="arena ${player?'playArena':''} arena-${current} ${routeEdit&&editable?'routeMode':''}">${arenaMapHtml(current,sc)}<div class="mapShade" style="background:rgba(0,0,0,${dark})"></div>${pathPreviewHtml(sc,next)}${routeWaypointsHtml(sc,editable)}<div class="arenaLabel">${esc(sc.name)}</div><div class="effects">${(sc.effects||[]).map(e=>effectHtml(e,editable)).join('')}</div><div class="tokens">${sc.tokens.map(t=>`<div class="token ${t[2]}${tokenExtraClass(t)} ${routeTokenId===t[0]&&routeEdit?'routeSelected':''}" data-id="${t[0]}" title="${esc(tokenNativeTitle(t,editable))}" data-label="${esc(tokenHoverLabel(t,editable))}" style="left:${t[3]}%;top:${t[4]}%">${tokenInnerHtml(t)}</div>`).join('')}</div>${effectLabelsHtml(sc)}</div>`}
+function arenaHtml(sc,{editable=false,player=false,next=null}={}){const dark=Math.max(0,Math.min(65,Number(sc?.map?.dark)||0))/100;return `<div id="${player?'playerArena':'arena'}" class="arena ${player?'playArena':''} arena-${current} ${routeEdit&&editable?'routeMode':''}">${arenaMapHtml(current,sc)}<div class="mapShade" style="background:rgba(0,0,0,${dark})"></div>${pathPreviewHtml(sc,next)}${routeWaypointsHtml(sc,editable)}<div class="arenaLabel">${esc(sc.name)}</div><div class="effects">${(sc.effects||[]).map(e=>effectHtml(e,editable)).join('')}</div><div class="tokens">${sc.tokens.map(t=>`<div class="token ${t[2]}${tokenExtraClass(t)} ${routeTokenId===t[0]&&routeEdit?'routeSelected':''}" data-id="${t[0]}" title="${esc(tokenNativeTitle(t,editable))}" data-label="${esc(tokenHoverLabel(t,editable))}" style="left:${t[3]}%;top:${t[4]}%">${tokenInnerHtml(t)}</div>`).join('')}</div>${effectLabelsHtml(sc,{editable})}</div>`}
 function replayView(b,bs){
  const r=replayState(),d=r.data,actors=d?replayActors(d):[],dur=d?replayDuration(d):1,cal=r.cal||{};const src=replayMapSource();
  return `<section class="page replayPage"><div class="replayImport card"><div><h3>Replay — экспериментальный локальный инструмент</h3><p>Replay оставлен только как внутренний локальный инструмент. Для проверки можно импортировать ранее сохранённый replay JSON; основной продукт — планировщик.</p></div><div class="replayButtons"><button onclick="loadDemoReplay()">Демо из плана</button><label class="importBtn">Импорт replay JSON<input type="file" accept="application/json,.json" onchange="importReplayJson(this.files[0])"></label>${d?'<button onclick="exportReplayJson()">Экспорт replay JSON</button><button class="rehearse" onclick="createPlanFromReplay()">✦ Создать план из replay</button>':''}</div><small>Сетевой импорт WCL в этой сборке отключён.</small></div>
@@ -761,7 +778,7 @@ function replayView(b,bs){
 }
 function player(b,bs){const sc=bs.scenes[Math.min(playerSceneIndex,bs.scenes.length-1)],next=bs.scenes[playerSceneIndex+1]||null;const events=bs.timelineV3;return `<section class="page playerPage"><div class="playerTop"><div><button onclick="playerPrev()">‹</button><b>${esc(sc.name)}</b><span class="keyBadge">Кадр ${playerSceneIndex+1}/${bs.scenes.length} · ${sceneAttachedTime(bs,playerSceneIndex)}</span><button onclick="playerNext()">›</button></div><div><button class="${showPaths?'on':''}" onclick="togglePaths()">⇢ Траектории</button><select onchange="setPlayerSpeed(this.value)"><option value="0.5" ${playerSpeed===.5?'selected':''}>0.5×</option><option value="1" ${playerSpeed===1?'selected':''}>1×</option><option value="1.5" ${playerSpeed===1.5?'selected':''}>1.5×</option><option value="2" ${playerSpeed===2?'selected':''}>2×</option></select><button class="rehearse" onclick="togglePlayback()">${playerPlaying?'■ Стоп':'▶ Проиграть бой'}</button></div></div><div class="playerLayout"><div>${arenaHtml(sc,{player:true,next})}<div class="sceneCaption"><b>${esc(sc.name)}</b><p>${esc(sc.note)}</p><small>Следующий ключевой кадр: ${next?esc(next.name):'финал'}</small></div></div><aside class="eventRail"><h3>Таймлайн</h3>${events.map((e,i)=>`<button class="${e.scene===playerSceneIndex?'on':''}" onclick="jumpEvent(${i})"><time>${fmtTime(e.time)}</time><span><b>${esc(e.label)}</b><small>${eventTypes[e.type]||e.type} · кадр ${e.scene+1}</small></span></button>`).join('')}</aside></div><div class="playScrubber">${events.map((e,i)=>`<button class="${e.scene===playerSceneIndex?'on':''}" style="left:${timelinePct(e.time,events)}%" onclick="jumpEvent(${i})" title="${fmtTime(e.time)} · ${esc(e.label)}"></button>`).join('')}</div><div class="playerLegend"><span><i class="lg tank"></i>Танк</span><span><i class="lg healer"></i>Хил</span><span><i class="lg dps"></i>ДД</span><span><i class="lg danger"></i>Опасность</span><span><i class="lg path"></i>Траектория к следующему кадру</span></div></section>`}
 function timelinePct(t,events){const max=Math.max(1,...events.map(e=>Number(e.time)||0));return Math.min(100,(Number(t)||0)/max*100)}
-function planner(b,bs){const sc=bs.scenes[Math.min(sceneIndex,bs.scenes.length-1)];const movable=sc.tokens.filter(t=>!['marker','boss'].includes(t[2]));if(!routeTokenId||!movable.some(t=>t[0]===routeTokenId))routeTokenId=movable[0]?.[0]||null;return `<section class="page plannerPage"><div class="plannerTop"><div><button onclick="prevScene()">‹</button><input id="sceneName" value="${esc(sc.name)}"><small>${sceneIndex+1}/${bs.scenes.length}</small><button onclick="nextScene()">›</button></div><div><button onclick="setView('player')">▶ Просмотр</button><button onclick="loadBossPreset()">Шаблон босса</button><button onclick="addScene()">＋ Сцена</button><button onclick="resetScene()">↻ Сброс</button><button class="red" onclick="delScene()">Удалить</button></div></div><div class="sceneStrip">${bs.scenes.map((x,i)=>`<button class="${i===sceneIndex?'on':''}" onclick="goScene(${i})"><b>${i+1}</b><span>${esc(x.name)}</span></button>`).join('')}</div><div class="planGrid"><div class="plannerCanvas">${arenaHtml(sc,{editable:true,next:bs.scenes[sceneIndex+1]||null})}<div class="sceneMeta"><button class="${showPaths?'on':''}" onclick="togglePaths()">⇢ Траектории</button><span class="keyBadge">Кадр · ${sceneAttachedTime(bs,sceneIndex)}</span><label>Длительность <input id="sceneDuration" type="number" min="1" max="120" value="${sc.duration||8}"> сек.</label></div><textarea id="sceneNote" placeholder="Описание сцены…">${esc(sc.note)}</textarea></div><div class="toolbox paletteToolbox">${plannerPaletteHtml()}<details class="advancedTools"><summary>Дополнительные инструменты</summary><div class="advancedBody"><h4>Маршрут игрока</h4><select class="routeSelect" onchange="selectRouteToken(this.value)">${movable.map(t=>`<option value="${t[0]}" ${routeTokenId===t[0]?'selected':''}>${esc(t[1])}</option>`).join('')}</select><button class="${routeEdit?'on':''}" onclick="toggleRouteEdit()">${routeEdit?'✓ Маршрут редактируется':'✦ Редактировать маршрут'}</button><button onclick="clearRoute()">Очистить маршрут</button><h4>Карта арены</h4><label class="mapControl">Масштаб <b>${Math.round(sc.map?.zoom||100)}%</b><input type="range" min="100" max="180" step="1" value="${sc.map?.zoom||100}" oninput="setMapSetting('zoom',this.value)"></label><label class="mapControl">Сдвиг X <b>${Math.round(sc.map?.x||0)}</b><input type="range" min="-30" max="30" step="1" value="${sc.map?.x||0}" oninput="setMapSetting('x',this.value)"></label><label class="mapControl">Сдвиг Y <b>${Math.round(sc.map?.y||0)}</b><input type="range" min="-30" max="30" step="1" value="${sc.map?.y||0}" oninput="setMapSetting('y',this.value)"></label><label class="mapControl">Затемнение <b>${Math.round(sc.map?.dark||0)}%</b><input type="range" min="0" max="65" step="1" value="${sc.map?.dark||0}" oninput="setMapSetting('dark',this.value)"></label><button onclick="resetMapSettings()">↻ Сбросить карту</button><p>Объекты на арене: перетаскивание — перемещение, двойной клик — подпись, ПКМ — удалить. Для эффекта колесо меняет размер, Shift+колесо — поворот.</p></div></details></div></div></section>`}
+function planner(b,bs){const sc=bs.scenes[Math.min(sceneIndex,bs.scenes.length-1)];const movable=sc.tokens.filter(t=>!['marker','boss'].includes(t[2]));if(!routeTokenId||!movable.some(t=>t[0]===routeTokenId))routeTokenId=movable[0]?.[0]||null;return `<section class="page plannerPage"><div class="plannerTop"><div><button onclick="prevScene()">‹</button><input id="sceneName" value="${esc(sc.name)}"><small>${sceneIndex+1}/${bs.scenes.length}</small><button onclick="nextScene()">›</button></div><div><button onclick="setView('player')">▶ Просмотр</button><button onclick="loadBossPreset()">Шаблон босса</button><button onclick="addScene()">＋ Сцена</button><button onclick="resetScene()">↻ Сброс</button><button class="red" onclick="delScene()">Удалить</button></div></div><div class="sceneStrip">${bs.scenes.map((x,i)=>`<button class="${i===sceneIndex?'on':''}" onclick="goScene(${i})"><b>${i+1}</b><span>${esc(x.name)}</span></button>`).join('')}</div><div class="planGrid"><div class="plannerCanvas">${arenaHtml(sc,{editable:true,next:bs.scenes[sceneIndex+1]||null})}<div class="sceneMeta"><button class="${showPaths?'on':''}" onclick="togglePaths()">⇢ Траектории</button><span class="keyBadge">Кадр · ${sceneAttachedTime(bs,sceneIndex)}</span><label>Длительность <input id="sceneDuration" type="number" min="1" max="120" value="${sc.duration||8}"> сек.</label></div><textarea id="sceneNote" placeholder="Описание сцены…">${esc(sc.note)}</textarea></div><div class="toolbox paletteToolbox">${plannerPaletteHtml()}<details class="advancedTools"><summary>Дополнительные инструменты</summary><div class="advancedBody"><h4>Маршрут игрока</h4><select class="routeSelect" onchange="selectRouteToken(this.value)">${movable.map(t=>`<option value="${t[0]}" ${routeTokenId===t[0]?'selected':''}>${esc(t[1])}</option>`).join('')}</select><button class="${routeEdit?'on':''}" onclick="toggleRouteEdit()">${routeEdit?'✓ Маршрут редактируется':'✦ Редактировать маршрут'}</button><button onclick="clearRoute()">Очистить маршрут</button><h4>Карта арены</h4><label class="mapControl">Масштаб <b>${Math.round(sc.map?.zoom||100)}%</b><input type="range" min="100" max="180" step="1" value="${sc.map?.zoom||100}" oninput="setMapSetting('zoom',this.value)"></label><label class="mapControl">Сдвиг X <b>${Math.round(sc.map?.x||0)}</b><input type="range" min="-30" max="30" step="1" value="${sc.map?.x||0}" oninput="setMapSetting('x',this.value)"></label><label class="mapControl">Сдвиг Y <b>${Math.round(sc.map?.y||0)}</b><input type="range" min="-30" max="30" step="1" value="${sc.map?.y||0}" oninput="setMapSetting('y',this.value)"></label><label class="mapControl">Затемнение <b>${Math.round(sc.map?.dark||0)}%</b><input type="range" min="0" max="65" step="1" value="${sc.map?.dark||0}" oninput="setMapSetting('dark',this.value)"></label><button onclick="resetMapSettings()">↻ Сбросить карту</button><h4>Подписи механик</h4><div class="labelTools"><button onclick="autoArrangeEffectLabels()">✥ Развести подписи</button><button onclick="resetSceneEffectLabels()">↻ Сбросить подписи</button></div><p><b>Подпись механики можно перетаскивать отдельно от объекта.</b> Shift при перетаскивании фиксирует одну ось; двойной клик или ПКМ по подписи возвращает авто-позицию. Объекты: перетаскивание — перемещение, двойной клик — изменить текст, ПКМ — удалить. Для эффекта колесо меняет размер, Shift+колесо — поворот.</p></div></details></div></div></section>`}
 function classSelectHtml(member,i){
   return `<select class="classSelect" onchange="setRosterClass(${i},this.value)"><option value="">— класс —</option>${wowClassDefs.map(c=>`<option value="${c.key}" ${member.classKey===c.key?'selected':''}>${c.name}</option>`).join('')}</select>`;
 }
@@ -798,10 +815,10 @@ function notes(b,bs){const ns=`[RaidRU] ${b.name}\n${b.rl}\n${priestMode?'Хол
 function glossary(b){const arr=[...b.spells,...priest];return `<section class="page"><div class="table"><div class="thead"><b>Русский клиент</b><b>Английское название</b><b>Источник</b></div>${arr.map((x,i)=>`<div><b>${x[0]}</b><code>${x[1]}</code><span>${i<b.spells.length?'Босс':'Холи-прист'}</span></div>`).join('')}</div></section>`}
 function chooseBoss(id){stopPlayback();stopReplay();current=id;sceneIndex=0;playerSceneIndex=0;render()} function setView(v){stopPlayback();stopReplay();view=v;render()} function setRole(v){role=v;render()} function setDiff(v){diff=v;render()} function togglePriest(){priestMode=!priestMode;render()} function fav(){const bs=bossState(current);bs.favorite=!bs.favorite;render()} function setProgress(v){bossState(current).progress=+v;save();render()} function saveNote(v){bossState(current).note=v;save()} function copyText(t){navigator.clipboard?.writeText(t);toast('Скопировано')}
 function filterBoss(q){document.querySelectorAll('.bosses button').forEach(x=>x.style.display=x.dataset.name.includes(q.toLowerCase())?'grid':'none')}
-function exportPlan(){const blob=new Blob([JSON.stringify({version:'0.8.2',boss:current,diff,role,data:bossState(current)},null,2)],{type:'application/json'}),a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=`raidru-${current}-v082.json`;a.click();URL.revokeObjectURL(a.href);toast('Стратегия экспортирована')}
+function exportPlan(){const blob=new Blob([JSON.stringify({version:'0.8.3',boss:current,diff,role,data:bossState(current)},null,2)],{type:'application/json'}),a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=`raidru-${current}-v083.json`;a.click();URL.revokeObjectURL(a.href);toast('Стратегия экспортирована')}
 function importPlanFile(file){if(!file)return;const r=new FileReader();r.onload=()=>{try{const p=JSON.parse(r.result);if(!p.boss||!p.data)throw new Error();state[p.boss]=p.data;current=p.boss;diff=p.diff||diff;role=p.role||role;bossState(current);save();toast('Стратегия импортирована');render()}catch(e){toast('Не удалось импортировать JSON')}};r.readAsText(file)}
 function sharePlan(){const u=buildShareUrl();navigator.clipboard?.writeText(u);history.replaceState(null,'',u);toast('Ссылка на стратегию скопирована')}
-function backupAll(){const blob=new Blob([JSON.stringify({version:'0.8.2',savedAt:new Date().toISOString(),state},null,2)],{type:'application/json'}),a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='raidru-backup-v082.json';a.click();URL.revokeObjectURL(a.href);toast('Резервная копия скачана')}
+function backupAll(){const blob=new Blob([JSON.stringify({version:'0.8.3',savedAt:new Date().toISOString(),state},null,2)],{type:'application/json'}),a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='raidru-backup-v083.json';a.click();URL.revokeObjectURL(a.href);toast('Резервная копия скачана')}
 function resetAllConfirm(){if(!confirm('Удалить локальные прогресс, планы, заметки и состав?'))return;localStorage.removeItem('raidru-standalone');location.hash='';location.reload()}
 function prevScene(){sceneIndex=Math.max(0,sceneIndex-1);render()} function nextScene(){sceneIndex=Math.min(bossState(current).scenes.length-1,sceneIndex+1);render()} function goScene(i){sceneIndex=i;render()}
 function loadBossPreset(){if(!confirm('Заменить текущие сцены и таймлайн готовым шаблоном босса?'))return;const bs=bossState(current);bs.scenes=bossPresetScenes(current).map((s,i)=>normalizeScene(s,current,i));bs.timelineV3=defaultTimeline(current);sceneIndex=0;save();toast('Шаблон босса и таймлайн загружены');render()}
@@ -995,16 +1012,71 @@ function resetMapSettings(){
   sc.map={zoom:100,x:0,y:0,dark:18};
   save();render();
 }
+function resetEffectLabelPosition(effectId,{silent=false}={}){
+  const sc=bossState(current).scenes[sceneIndex],fx=sc.effects.find(x=>x.id===effectId);
+  if(!fx)return;
+  delete fx.labelDx;delete fx.labelDy;
+  save();render();
+  if(!silent)toast('Подпись возвращена в авто-позицию');
+}
+function resetSceneEffectLabels(){
+  const sc=bossState(current).scenes[sceneIndex];
+  (sc.effects||[]).forEach(fx=>{delete fx.labelDx;delete fx.labelDy});
+  save();render();toast('Позиции подписей сброшены');
+}
+function autoArrangeEffectLabels(){
+  const sc=bossState(current).scenes[sceneIndex],layout=effectLabelLayout(sc,{ignoreManual:true});
+  layout.forEach(p=>{const fx=sc.effects.find(x=>x.id===p.id);if(!fx)return;fx.labelDx=+(p.x-(+fx.x||50)).toFixed(3);fx.labelDy=+(p.y-(+fx.y||50)).toFixed(3)});
+  save();render();toast('Подписи разведены автоматически');
+}
+function bindEffectLabel(node,sc){
+  const id=node.dataset.effectLabel;
+  const fx=sc.effects.find(x=>x.id===id);
+  if(!fx)return;
+  node.onpointerdown=e=>{
+    if(e.button!==0)return;
+    e.preventDefault();e.stopPropagation();
+    node.setPointerCapture(e.pointerId);
+    const arena=el('#arena'),r=arena.getBoundingClientRect();
+    const layout=effectLabelLayout(sc).find(x=>x.id===id);
+    const startX=layout?.x??(+fx.x||50),startY=layout?.y??(+fx.y||50);
+    const sx=e.clientX,sy=e.clientY;
+    node.classList.add('dragging','manual');
+    node.onpointermove=ev=>{
+      let x=Math.max(1.5,Math.min(98.5,(ev.clientX-r.left)/r.width*100));
+      let y=Math.max(1.5,Math.min(98.5,(ev.clientY-r.top)/r.height*100));
+      if(ev.shiftKey){
+        const dx=Math.abs(ev.clientX-sx),dy=Math.abs(ev.clientY-sy);
+        if(dx>=dy)y=startY;else x=startX;
+      }
+      fx.labelDx=+(x-(+fx.x||50)).toFixed(3);
+      fx.labelDy=+(y-(+fx.y||50)).toFixed(3);
+      node.style.left=x+'%';node.style.top=y+'%';
+      const svg=arena.querySelector('.effectLabelLeaders');
+      if(svg){
+        let line=svg.querySelector(`[data-effect-label-line="${id}"]`);
+        if(!line){line=document.createElementNS('http://www.w3.org/2000/svg','line');line.classList.add('effectLabelLeader');line.dataset.effectLabelLine=id;line.setAttribute('vector-effect','non-scaling-stroke');svg.appendChild(line)}
+        line.setAttribute('x1',+fx.x||50);line.setAttribute('y1',+fx.y||50);line.setAttribute('x2',x);line.setAttribute('y2',y);
+        line.style.display=Math.hypot(x-(+fx.x||50),y-(+fx.y||50))>3.5?'':'none';
+      }
+      save();
+    };
+    node.onpointerup=()=>{node.onpointermove=null;node.classList.remove('dragging');save();render()};
+  };
+  node.ondblclick=e=>{e.preventDefault();e.stopPropagation();resetEffectLabelPosition(id)};
+  node.oncontextmenu=e=>{e.preventDefault();e.stopPropagation();resetEffectLabelPosition(id)};
+}
 function setupPlanner(){
   const arena=el('#arena'),bs=bossState(current),sc=bs.scenes[sceneIndex],name=el('#sceneName'),note=el('#sceneNote'),dur=el('#sceneDuration');
   if(name)name.oninput=e=>{sc.name=e.target.value;save()}; if(note)note.oninput=e=>{sc.note=e.target.value;save()}; if(dur)dur.oninput=e=>{sc.duration=Math.max(1,+e.target.value||8);save()};
   arena?.querySelectorAll('.token').forEach(node=>bindDrag(node,sc.tokens,'token'));
   arena?.querySelectorAll('.effect').forEach(node=>{bindDrag(node,sc.effects,'effect');node.onwheel=e=>{e.preventDefault();const fx=sc.effects.find(x=>x.id===node.dataset.effect);if(!fx)return;if(e.shiftKey)fx.rot=(Number(fx.rot)||0)+(e.deltaY>0?10:-10);else{const d=e.deltaY>0?-2:2;fx.w=Math.max(6,Math.min(90,fx.w+d));fx.h=Math.max(4,Math.min(90,fx.h+(fx.type==='line'||fx.type==='arrow'?0:d)));}save();render()}})
+  arena?.querySelectorAll('.effectCallout.editable').forEach(node=>bindEffectLabel(node,sc));
   arena?.querySelectorAll('.waypoint').forEach(node=>bindWaypoint(node,sc));
   if(arena){
     arena.ondragover=e=>{if(e.dataTransfer?.types?.includes('application/x-raidru')){e.preventDefault();e.dataTransfer.dropEffect='copy'}};
     arena.ondrop=e=>{e.preventDefault();try{const p=JSON.parse(e.dataTransfer.getData('application/x-raidru')||'{}');const r=arena.getBoundingClientRect();const x=Math.max(2,Math.min(98,(e.clientX-r.left)/r.width*100)),y=Math.max(2,Math.min(98,(e.clientY-r.top)/r.height*100));spawnPlannerItem(p.kind,p.value,x,y)}catch(err){console.warn(err)}};
-    arena.onclick=e=>{if(!routeEdit||!routeTokenId)return;if(e.target.closest('.token,.effect,.waypoint,.mapDoor'))return;const r=arena.getBoundingClientRect();let x=Math.max(2,Math.min(98,(e.clientX-r.left)/r.width*100)),y=Math.max(2,Math.min(98,(e.clientY-r.top)/r.height*100));const p=snapArenaPoint(current,x,y,sc.name,.8);x=p.x;y=p.y;(sc.routes[routeTokenId]||(sc.routes[routeTokenId]=[])).push({x,y});save();render()};
+    arena.onclick=e=>{if(!routeEdit||!routeTokenId)return;if(e.target.closest('.token,.effect,.effectCallout,.waypoint,.mapDoor'))return;const r=arena.getBoundingClientRect();let x=Math.max(2,Math.min(98,(e.clientX-r.left)/r.width*100)),y=Math.max(2,Math.min(98,(e.clientY-r.top)/r.height*100));const p=snapArenaPoint(current,x,y,sc.name,.8);x=p.x;y=p.y;(sc.routes[routeTokenId]||(sc.routes[routeTokenId]=[])).push({x,y});save();render()};
   }
 }
 function selectRouteToken(id){routeTokenId=id;render()}
@@ -1017,7 +1089,7 @@ function bindWaypoint(node,sc){
 }
 function bindDrag(node,list,kind){
   const attr=kind==='token'?'id':'effect'; const key=node.dataset[attr];
-  node.onpointerdown=e=>{e.preventDefault();node.setPointerCapture(e.pointerId);const item=list.find(x=>(kind==='token'?x[0]:x.id)===key);node.onpointermove=ev=>{if(!item)return;const arena=el('#arena');const r=arena.getBoundingClientRect();let x=Math.max(3,Math.min(97,(ev.clientX-r.left)/r.width*100)),y=Math.max(3,Math.min(97,(ev.clientY-r.top)/r.height*100));const sc=bossState(current).scenes[sceneIndex],q=snapArenaPoint(current,x,y,sc?.name,kind==='token'?tokenArenaMargin(item):0);x=q.x;y=q.y;if(kind==='token'){item[3]=x;item[4]=y}else{item.x=x;item.y=y}node.style.left=x+'%';node.style.top=y+'%';save()};node.onpointerup=()=>{node.onpointermove=null}};
+  node.onpointerdown=e=>{e.preventDefault();node.setPointerCapture(e.pointerId);const item=list.find(x=>(kind==='token'?x[0]:x.id)===key);node.onpointermove=ev=>{if(!item)return;const arena=el('#arena');const r=arena.getBoundingClientRect();let x=Math.max(3,Math.min(97,(ev.clientX-r.left)/r.width*100)),y=Math.max(3,Math.min(97,(ev.clientY-r.top)/r.height*100));const sc=bossState(current).scenes[sceneIndex],q=snapArenaPoint(current,x,y,sc?.name,kind==='token'?tokenArenaMargin(item):0);x=q.x;y=q.y;if(kind==='token'){item[3]=x;item[4]=y}else{item.x=x;item.y=y;if(Number.isFinite(+item.labelDx)&&Number.isFinite(+item.labelDy)){const lab=arena.querySelector(`[data-effect-label="${key}"]`);if(lab){lab.style.left=Math.max(1.5,Math.min(98.5,x+(+item.labelDx||0)))+'%';lab.style.top=Math.max(1.5,Math.min(98.5,y+(+item.labelDy||0)))+'%'}const line=arena.querySelector(`[data-effect-label-line="${key}"]`);if(line){line.setAttribute('x1',x);line.setAttribute('y1',y);line.setAttribute('x2',x+(+item.labelDx||0));line.setAttribute('y2',y+(+item.labelDy||0))}}}node.style.left=x+'%';node.style.top=y+'%';save()};node.onpointerup=()=>{node.onpointermove=null}};
   node.ondblclick=()=>{const item=list.find(x=>(kind==='token'?x[0]:x.id)===key);const cur=kind==='token'?item?.[1]:item?.label;const v=prompt('Подпись',cur||'');if(v&&item){if(kind==='token')item[1]=v.slice(0,22);else item.label=v.slice(0,36);save();render()}};
   node.oncontextmenu=e=>{e.preventDefault();const i=list.findIndex(x=>(kind==='token'?x[0]:x.id)===key);if(i>=0&&confirm('Удалить объект?')){list.splice(i,1);save();render()}}
 }
