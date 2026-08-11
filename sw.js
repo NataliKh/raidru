@@ -1,9 +1,9 @@
-const CACHE='raidru-v081-startup-fix';
+const CACHE='raidru-v082-russian-ui';
 const ASSETS=[
 './',
 './index.html',
-'./styles.css?v=0.8.1',
-'./app.js?v=0.8.1',
+'./styles.css?v=0.8.2',
+'./app.js?v=0.8.2',
 './manifest.webmanifest',
 './icon.svg',
 './assets/maps/nekzali.webp',
