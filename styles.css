@@ -734,3 +734,15 @@
 @media(max-width:760px){
   .labelTools{grid-template-columns:1fr}
 }
+
+/* 0.8.7 — один mapID 2608, разные boss viewports */
+.raidMapViewportAdjust{position:absolute;inset:0;overflow:hidden;transform-origin:50% 50%;will-change:transform}
+.arenaMapImage.raidMapFull,.bossThumbViewport .raidMapFull{
+  position:absolute!important;right:auto!important;bottom:auto!important;
+  left:var(--rm-left)!important;top:var(--rm-top)!important;
+  width:var(--rm-width)!important;height:var(--rm-height)!important;
+  max-width:none!important;object-fit:fill!important;object-position:initial!important;
+  transform:none!important;filter:none!important;user-select:none;-webkit-user-drag:none;
+}
+.bossThumbViewport{position:absolute;inset:0;overflow:hidden;background:#090b0d}
+.bossThumbViewport .raidMapFull{display:block!important}

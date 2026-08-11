@@ -1,11 +1,12 @@
-const CACHE='raidru-v085-sentinels-heroic';
+const CACHE='raidru-v087-shared-raid-map';
 const ASSETS=[
 './',
 './index.html',
-'./styles.css?v=0.8.5',
-'./app.js?v=0.8.5',
+'./styles.css?v=0.8.7',
+'./app.js?v=0.8.7',
 './manifest.webmanifest',
 './icon.svg',
+'./assets/maps/2608-map.webp',
 './assets/maps/nekzali.webp',
 './assets/maps/sentinels.webp',
 './assets/maps/vashnik.webp',
