@@ -1,3 +1,12 @@
+# RaidRU v0.8.24
+
+## Критический фикс RaidPlan opacity
+
+- Исправлен баг, при котором отсутствующее `opacity` (`null`) трактовалось как `0` и делало импортированные объекты невидимыми.
+- Optional numeric metadata RaidPlan теперь проверяется null-safe для token/effect renderer.
+- Существующие уже импортированные сцены исправляются самим новым renderer, без удаления данных.
+- Раздельные Normal / Heroic / Mythic планы из 0.8.21–0.8.23 сохранены.
+
 ## 0.8.23 — RaidPlan visibility regression fix
 
 - Исправлена регрессия 0.8.22: контейнеры RaidPlan tokens/effects снова имеют стабильные слои над картой.
