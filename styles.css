@@ -894,3 +894,10 @@
 .raidplanArenaNative .effects{position:absolute!important;inset:0!important;z-index:3!important}
 .raidplanArenaNative .tokens{position:absolute!important;inset:0!important;z-index:6!important}
 .raidplanArenaNative .effectLabels{z-index:8!important}
+
+
+/* 0.8.25 — RaidPlan deep tooltip/card recovery */
+.rpNativeCard{overflow:visible!important;min-width:0!important;min-height:0!important}
+.rpNativeCardHead{min-height:2.7cqw}
+.rpNativeCardBody{overflow:visible!important;white-space:pre-wrap;word-break:normal;overflow-wrap:break-word}
+.token.raidplanNative-icon{overflow:visible}

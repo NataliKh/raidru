@@ -1,4 +1,4 @@
-# RaidRU v0.8.24
+# RaidRU v0.8.25
 
 ## Критический фикс RaidPlan opacity
 

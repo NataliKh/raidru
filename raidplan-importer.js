@@ -1,11 +1,11 @@
-/* RaidRU v0.8.24 — RaidPlan import adapter
+/* RaidRU v0.8.25 — RaidPlan import adapter
  * Isolated from app.js on purpose: RaidPlan developer integration is not documented yet,
  * so transport/schema changes should stay in this file.
  */
 (function(){
   'use strict';
 
-  const VERSION='0.8.24';
+  const VERSION='0.8.25';
   const STEP_KEYS=['steps','scenes','pages','slides','frames'];
   const ITEM_KEYS=['objects','elements','items','components','drawings','entities','children','nodes'];
   const ROLE_WORDS={
@@ -313,17 +313,68 @@
   function richField(v){
     if(typeof v==='string'||typeof v==='number')return preserveText(v);
     if(Array.isArray(v))return v.map(richField).filter(Boolean).join('\n');
-    if(obj(v)){for(const k of ['text','value','label','name','title','description','body']){const t=richField(v[k]);if(t)return t}}
+    if(obj(v)){for(const k of ['text','value','label','name','title','description','body','content','html','markdown','desc','tooltip']){const t=richField(v[k]);if(t)return t}}
     return '';
   }
+  function deepNamedField(root,keys,maxDepth=5){
+    const wanted=new Set(keys.map(x=>String(x).toLowerCase())),seen=new WeakSet();
+    let best='';
+    function walk(v,depth){
+      if(depth>maxDepth||v==null)return;
+      if(typeof v==='string'||typeof v==='number')return;
+      if(Array.isArray(v)){for(const x of v)walk(x,depth+1);return}
+      if(!obj(v)||seen.has(v))return;seen.add(v);
+      for(const [k,x] of Object.entries(v)){
+        if(wanted.has(String(k).toLowerCase())){
+          const t=richField(x);
+          if(t&&t.length>best.length)best=t;
+        }
+      }
+      for(const x of Object.values(v))if(obj(x))walk(x,depth+1);
+    }
+    walk(root,0);return best;
+  }
+  function humanStrings(root,maxDepth=5){
+    const out=[],seen=new WeakSet();
+    function add(v,key=''){
+      const t=preserveText(v);if(!t)return;
+      if(/^https?:\/\//i.test(t)||/^#?[0-9a-f]{3,8}$/i.test(t)||/^(true|false|null|undefined)$/i.test(t))return;
+      if(/(?:cdn\.|assets?\/|\.(?:png|jpe?g|webp|svg)(?:$|\?))/i.test(t))return;
+      if(/^(RaidPlan|icon|object|ability|spell|tooltip)$/i.test(t))return;
+      if(t.length<2)return;
+      out.push({text:t,key:String(key).toLowerCase()});
+    }
+    function walk(v,depth,key=''){
+      if(depth>maxDepth||v==null)return;
+      if(typeof v==='string'||typeof v==='number'){add(v,key);return}
+      if(Array.isArray(v)){for(const x of v)walk(x,depth+1,key);return}
+      if(!obj(v)||seen.has(v))return;seen.add(v);
+      for(const [k,x] of Object.entries(v)){
+        if(['asset','asseturl','url','src','fill','stroke','color','id','uuid','key'].includes(k.toLowerCase()))continue;
+        walk(x,depth+1,k);
+      }
+    }
+    walk(root,0);return out;
+  }
+  function meaningfulCardText(v){const t=preserveText(v);return t&&!/^(RaidPlan|Способность|Ability|Spell)$/i.test(t)?t:''}
   function iconCardMeta(o,tf,label,sourceOrder){
-    const a=o?.attr||{},wh=nativeSize(o,tf),asset=text(a.asset||a.assetUrl||'');
-    const cardTitle=richField(a.tooltipTitle||a.spellName||a.abilityName||a.lname||a.title||a.name||a.label)||preserveText(label);
-    const cardBody=richField(a.tooltipText||a.tooltip||a.description||a.details||a.body||a.helpText||a.longText);
-    const cardMeta=richField(a.range||a.castTime||a.cooldown||a.subtext||a.metaText);
-    const type=raidPlanNodeType(o),looksAbility=/spell|ability|status|effect|aura|tooltip|encounter.?icon/.test(`${type} ${text(a.kind)} ${text(a.category)} ${asset}`.toLowerCase());
+    const a=o?.attr||{},wh=nativeSize(o,tf),asset=text(a.asset||a.assetUrl||deepPick(o,[['asset'],['assetUrl'],['data','asset'],['meta','asset']])||'');
+    let cardTitle=meaningfulCardText(deepNamedField(o,['tooltipTitle','spellName','abilityName','lname','displayName','title','header','name','label']));
+    let cardBody=meaningfulCardText(deepNamedField(o,['tooltipText','description','details','body','helpText','longText','content','html','markdown','desc','effectText','tooltipBody','tooltipDescription']));
+    let cardMeta=meaningfulCardText(deepNamedField(o,['range','castTime','cooldown','subtext','metaText','durationText','cast','duration']));
+    const strings=humanStrings(o);
+    if(!cardTitle){const x=strings.find(x=>x.text.length<=90&&/(title|name|label|lname|spell|ability|header)/.test(x.key))||strings.find(x=>x.text.length<=70);if(x)cardTitle=x.text}
+    if(!cardBody){const x=strings.filter(x=>x.text!==cardTitle).sort((x,y)=>y.text.length-x.text.length).find(x=>x.text.length>=45);if(x)cardBody=x.text}
+    if(!cardMeta){const x=strings.find(x=>x.text!==cardTitle&&x.text!==cardBody&&x.text.length<=100&&/(range|cast|cooldown|duration|meta|subtext)/.test(x.key));if(x)cardMeta=x.text}
+    cardTitle=meaningfulCardText(cardTitle);cardBody=meaningfulCardText(cardBody);cardMeta=meaningfulCardText(cardMeta);
+    const type=raidPlanNodeType(o),probe=`${type} ${text(a.kind)} ${text(a.category)} ${text(o?.kind)} ${text(o?.category)} ${asset} ${Object.keys(o||{}).join(' ')}`.toLowerCase();
+    const looksAbility=/spell|ability|status|effect|aura|tooltip|encounter.?icon|wow.?spell|wow.?ability/.test(probe);
     const large=(wh.w??0)>=11||(wh.h??0)>=11;
-    return{cardTitle,cardBody,cardMeta,renderAsCard:!!(large&&looksAbility&&(cardTitle||cardBody)),sourceOrder};
+    const hasContent=!!(cardTitle||cardBody||cardMeta);
+    // Never use the generic fallback label "RaidPlan" as evidence that a tooltip card has content.
+    // If the source does not expose tooltip text, render a compact native icon instead of a huge empty panel.
+    const renderAsCard=!!(large&&looksAbility&&hasContent);
+    return{cardTitle,cardBody,cardMeta,renderAsCard,iconOnly:!!(large&&looksAbility&&!hasContent),sourceOrder};
   }
   function roleAssetMeta(o,tf,role,sourceOrder=0){
     const asset=text(o?.attr?.asset||'');return nativeMeta(o,tf,'role',{role,asset,assetUrl:cdnAsset(asset),sourceOrder});
@@ -408,7 +459,11 @@
 
     if(/boss|enemy|npc|ability|spell|icon|sticker|encounter|object/.test(s)){
       const asset2=text(o?.attr?.asset||o?.attr?.assetUrl||'');
-      if(asset2){report.tokens++;return{kind:'token',value:[`rp-${report.seq++}`,label,'text',+p.x.toFixed(2),+p.y.toFixed(2),nativeMeta(o,tf,'icon',{assetUrl:cdnAsset(asset2),objectFit:text(o?.attr?.objectFit||'contain'),lname:preserveText(o?.attr?.lname||''),rawLabel:preserveText(label),...iconCardMeta(o,tf,label,sourceOrder)})]}}
+      if(asset2){
+        const card=iconCardMeta(o,tf,label,sourceOrder),meta=nativeMeta(o,tf,'icon',{assetUrl:cdnAsset(asset2),objectFit:text(o?.attr?.objectFit||'contain'),lname:preserveText(o?.attr?.lname||''),rawLabel:preserveText(label),...card});
+        if(card.iconOnly){const base=Math.max(2.4,Math.min(5.2,Math.min(meta.w||4,meta.h||4)));meta.w=base;meta.h=base;}
+        report.tokens++;return{kind:'token',value:[`rp-${report.seq++}`,card.cardTitle||label,'text',+p.x.toFixed(2),+p.y.toFixed(2),meta]}
+      }
       const it=nearestEncounter(label,bossId);
       if(it){report.tokens++;return{kind:'token',value:[`rp-${report.seq++}`,it.name,'encounter',+p.x.toFixed(2),+p.y.toFixed(2),{kind:'encounter',key:it.key,boss:it.boss||bossId,category:it.category,icon:it.icon,name:it.name,aliases:it.aliases||'',source:'raidplan'}]}}
     }
