@@ -302,6 +302,7 @@ function raidMarkerKey(label){
 function rosterTokenMeta(t){return t?.[5]?.kind==='roster'?t[5]:null}
 function encounterTokenMeta(t){return t?.[5]?.kind==='encounter'?t[5]:null}
 function classTokenMeta(t){return t?.[5]&&['roster','class'].includes(t[5].kind)?t[5]:null}
+function raidPlanTokenMeta(t){return t?.[5]?.kind==='raidplan'?t[5]:null}
 function tokenExtraClass(t){
   if(t?.[2]==='marker'){
     const k=raidMarkerKey(t[1]);
@@ -309,6 +310,8 @@ function tokenExtraClass(t){
   }
   const enc=encounterTokenMeta(t);
   if(enc)return ` encounterIcon encounter-${enc.category||'ability'}`;
+  const rp=raidPlanTokenMeta(t);
+  if(rp&&rp.subtype!=='player')return ` raidplanToken raidplan-${rp.subtype||'object'}`;
   const meta=classTokenMeta(t);
   return meta?` rosterUnit class-${meta.classKey||'unknown'}`:'';
 }
@@ -327,11 +330,13 @@ function tokenInnerHtml(t){
   if(t?.[2]==='marker'&&raidMarkerKey(t[1]))return markerInnerHtml(t);
   if(encounterTokenMeta(t))return encounterInnerHtml(t);
   if(classTokenMeta(t))return rosterInnerHtml(t);
+  if(raidPlanTokenMeta(t))return `<span class="raidplanTokenLabel">${esc(t?.[1]||'RaidPlan')}</span>`;
   return esc(t?.[1]||'');
 }
 function tokenTitle(t,editable=false){
   if(t?.[2]==='marker'&&raidMarkerKey(t[1]))return raidMarkerDefs.find(m=>m.key===raidMarkerKey(t[1]))?.name||'Рейдовая метка';
   const enc=encounterTokenMeta(t);if(enc)return `${enc.name||t[1]} · ${enc.category==='boss'?'босс':enc.category==='npc'?'существо':enc.category==='object'?'объект':'механика'}`;
+  const rp=raidPlanTokenMeta(t);if(rp)return `${t?.[1]||'RaidPlan'} · импортировано из RaidPlan`;
   const meta=classTokenMeta(t),c=wowClass(meta?.classKey);
   if(meta)return `${t[1]}${c?' · '+c.name:''} · ${meta.role==='tank'?'танк':meta.role==='healer'?'хил':meta.range==='melee'?'мили ДД':'рэнж ДД'}`;
   return editable?'Двойной клик — переименовать':'';
@@ -340,6 +345,7 @@ function tokenNativeTitle(t,editable=false){return encounterTokenMeta(t)?'':toke
 function tokenHoverLabel(t,editable=false){
   const enc=encounterTokenMeta(t);
   if(enc)return enc.name||t?.[1]||'Объект';
+  if(raidPlanTokenMeta(t))return t?.[1]||'RaidPlan';
   return tokenTitle(t,editable);
 }
 
@@ -861,7 +867,7 @@ function restoreFromHash(){try{if(!location.hash.startsWith('#share='))return;co
 function save(){state.current=current;state.role=role;state.diff=diff;state.view=view;state.priestMode=priestMode;state.showPaths=showPaths;state.plannerPaletteTab=plannerPaletteTab;state.plannerSpawnMode=plannerSpawnMode;state.plannerArenaSnap=plannerArenaSnap;state.plannerIconTab=plannerIconTab;localStorage.setItem('raidru-standalone',JSON.stringify(state))}
 function render(){
   save();const b=raid.find(x=>x.id===current),bs=bossState(current);
-  el('#app').innerHTML=`<div class="shell"><aside><div class="brand"><div class="mark">R</div><div><b>RaidRU</b><small>рейдовые тактики по-русски</small></div></div><div class="season"><small>Midnight · Сезон 2</small><b>Ядовитая бездна</b></div><input class="search" placeholder="Найти босса…" oninput="filterBoss(this.value)"><div class="bosses">${orderedRaid().map(x=>`<button data-name="${esc((x.name+' '+x.en).toLowerCase())}" class="${x.id===current?'on':''}" onclick="chooseBoss('${x.id}')"><i>${x.order}</i><span><b>${x.name}</b><small>Босс ${x.order}</small></span><em>${bossState(x.id).favorite?'★':''}</em></button>`).join('')}</div><div class="version">RaidRU 0.8.11 · NSRT voice notes</div></aside><main><header>${[['dashboard','Рейд'],['guide','Тактика'],['player','План: просмотр'],['planner','Планировщик'],['timeline','Таймлайн'],['roster','Состав'],['notes','Заметки'],['glossary','Словарь']].map(x=>`<button class="${view===x[0]?'on':''}" onclick="setView('${x[0]}')">${x[1]}</button>`).join('')}<span></span><button class="priest ${priestMode?'on':''}" onclick="togglePriest()">♥ Холи-прист</button><button onclick="sharePlan()">↗ Поделиться</button><button onclick="exportPlan()">⇩ Экспорт</button><label class="importBtn">⇧ Импорт<input type="file" accept="application/json,.json" onchange="importPlanFile(this.files[0])"></label></header>${view==='dashboard'?dashboardHero():`<section class="hero"><div><small>MIDNIGHT / ЯДОВИТАЯ БЕЗДНА / БОСС ${b.order}</small><div class="title"><h1>${b.name}</h1><button onclick="fav()">${bs.favorite?'★':'☆'}</button></div><p>${b.summary}</p></div><div class="heroRight"><div class="diff">${[['normal','Обычный'],['heroic','Героический'],['mythic','Эпохальный']].map(x=>`<button class="${diff===x[0]?'on':''}" onclick="setDiff('${x[0]}')">${x[1]}</button>`).join('')}</div><label>Освоение <b>${bs.progress}%</b><input type="range" min="0" max="100" step="10" value="${bs.progress}" oninput="setProgress(this.value)"></label></div></section>`}${content(b,bs)}<footer class="siteCredit">Карты и ресурсы для планирования: <a href="https://raidplan.io/" target="_blank" rel="noopener noreferrer">RaidPlan.io</a> · Карты по mapID Heroic Replay (2606/2607/2608/2609) и тайминги: Warcraft Logs/RPGLogs · Иконки планировщика: локальные ассеты RaidRU · Голосовые таймеры: NSRT Heroic BossTimelines · Рейдовые значки: игровые ресурсы сообщества</footer></main></div>`;
+  el('#app').innerHTML=`<div class="shell"><aside><div class="brand"><div class="mark">R</div><div><b>RaidRU</b><small>рейдовые тактики по-русски</small></div></div><div class="season"><small>Midnight · Сезон 2</small><b>Ядовитая бездна</b></div><input class="search" placeholder="Найти босса…" oninput="filterBoss(this.value)"><div class="bosses">${orderedRaid().map(x=>`<button data-name="${esc((x.name+' '+x.en).toLowerCase())}" class="${x.id===current?'on':''}" onclick="chooseBoss('${x.id}')"><i>${x.order}</i><span><b>${x.name}</b><small>Босс ${x.order}</small></span><em>${bossState(x.id).favorite?'★':''}</em></button>`).join('')}</div><div class="version">RaidRU 0.8.12 · RaidPlan Import</div></aside><main><header>${[['dashboard','Рейд'],['guide','Тактика'],['player','План: просмотр'],['planner','Планировщик'],['timeline','Таймлайн'],['roster','Состав'],['notes','Заметки'],['glossary','Словарь']].map(x=>`<button class="${view===x[0]?'on':''}" onclick="setView('${x[0]}')">${x[1]}</button>`).join('')}<span></span><button class="priest ${priestMode?'on':''}" onclick="togglePriest()">♥ Холи-прист</button><button class="raidplanHeaderBtn" onclick="openRaidPlanImport()">⇄ RaidPlan</button><button onclick="sharePlan()">↗ Поделиться</button><button onclick="exportPlan()">⇩ Экспорт</button><label class="importBtn">⇧ Импорт<input type="file" accept="application/json,.json" onchange="importPlanFile(this.files[0])"></label></header>${view==='dashboard'?dashboardHero():`<section class="hero"><div><small>MIDNIGHT / ЯДОВИТАЯ БЕЗДНА / БОСС ${b.order}</small><div class="title"><h1>${b.name}</h1><button onclick="fav()">${bs.favorite?'★':'☆'}</button></div><p>${b.summary}</p></div><div class="heroRight"><div class="diff">${[['normal','Обычный'],['heroic','Героический'],['mythic','Эпохальный']].map(x=>`<button class="${diff===x[0]?'on':''}" onclick="setDiff('${x[0]}')">${x[1]}</button>`).join('')}</div><label>Освоение <b>${bs.progress}%</b><input type="range" min="0" max="100" step="10" value="${bs.progress}" oninput="setProgress(this.value)"></label></div></section>`}${content(b,bs)}<footer class="siteCredit">Карты и ресурсы для планирования: <a href="https://raidplan.io/" target="_blank" rel="noopener noreferrer">RaidPlan.io</a> · Карты по mapID Heroic Replay (2606/2607/2608/2609) и тайминги: Warcraft Logs/RPGLogs · Иконки планировщика: локальные ассеты RaidRU · Голосовые таймеры: NSRT Heroic BossTimelines · Рейдовые значки: игровые ресурсы сообщества</footer></main></div>`;
   if(view==='planner') setupPlanner();
   if(view==='player') setupPlayer();
 }
@@ -1157,6 +1163,45 @@ function notes(b,bs){
 function glossary(b){const arr=[...b.spells,...priest];return `<section class="page"><div class="table"><div class="thead"><b>Русский клиент</b><b>Английское название</b><b>Источник</b></div>${arr.map((x,i)=>`<div><b>${x[0]}</b><code>${x[1]}</code><span>${i<b.spells.length?'Босс':'Холи-прист'}</span></div>`).join('')}</div></section>`}
 function chooseBoss(id){stopPlayback();stopReplay();current=id;sceneIndex=0;playerSceneIndex=0;render()} function setView(v){stopPlayback();stopReplay();view=v;render()} function setRole(v){role=v;render()} function setDiff(v){diff=v;render()} function togglePriest(){priestMode=!priestMode;render()} function fav(){const bs=bossState(current);bs.favorite=!bs.favorite;render()} function setProgress(v){bossState(current).progress=+v;save();render()} function saveNote(v){bossState(current).note=v;save()} function copyText(t){navigator.clipboard?.writeText(t);toast('Скопировано')}
 function filterBoss(q){document.querySelectorAll('.bosses button').forEach(x=>x.style.display=x.dataset.name.includes(q.toLowerCase())?'grid':'none')}
+function openRaidPlanImport(){
+  closeRaidPlanImport();
+  const wrap=document.createElement('div');wrap.id='raidPlanImportModal';wrap.className='raidplanModalBackdrop';
+  wrap.innerHTML=`<div class="raidplanModal" role="dialog" aria-modal="true" aria-labelledby="rpImportTitle"><div class="raidplanModalHead"><div><small>RAIDRU 0.8.12</small><h2 id="rpImportTitle">Импорт из RaidPlan.io</h2></div><button onclick="closeRaidPlanImport()">×</button></div><p class="raidplanIntro">Вставь публичную ссылку RaidPlan. RaidRU попробует прочитать план напрямую. Если браузер заблокирует cross-origin доступ, ниже есть резервный импорт JSON — текущие сцены по умолчанию <b>не удаляются</b>.</p><div class="raidplanImportGrid"><label><span>Босс RaidRU</span><select id="rpBoss"><option value="" selected>Автоопределение (иначе текущий босс)</option>${raid.map(b=>`<option value="${b.id}">${b.order}. ${esc(b.name)}</option>`).join('')}</select></label><label><span>Режим</span><select id="rpMode"><option value="append">Добавить сцены к текущему плану</option><option value="replace">Заменить сцены (с резервной копией)</option></select></label></div><div class="raidplanUrlRow"><input id="rpUrl" placeholder="https://raidplan.io/plan/…"><button class="primary" onclick="raidPlanImportFromUrl()">Импортировать ссылку</button></div><div class="raidplanDivider"><span>или JSON</span></div><textarea id="rpJson" class="raidplanJson" placeholder="Вставь сюда JSON RaidPlan или JSON из RaidRU RaidPlan Browser Export…"></textarea><div class="raidplanActions"><button onclick="raidPlanImportFromText()">Импортировать JSON</button><label class="importBtn">Открыть JSON-файл<input type="file" accept="application/json,.json" onchange="raidPlanImportFile(this.files[0])"></label><a class="raidplanToolLink" href="./tools/raidplan-browser-export.js" target="_blank" rel="noopener">Открыть резервный Browser Exporter</a>${state._raidPlanBackups?.[current]?`<button onclick="closeRaidPlanImport();restoreRaidPlanBackup()">↶ Вернуть план до импорта</button>`:''}</div><div id="rpStatus" class="raidplanStatus"><b>Что переносится:</b> шаги → сцены, игроки/роли/классы, рейдовые метки, текст, круги/soak, линии, стрелки и конусы. Polygon пока переносится как ограничивающая зона.</div><details class="raidplanFallback"><summary>Если импорт по ссылке заблокирован RaidPlan</summary><ol><li>Открой нужный план на RaidPlan.io.</li><li>Открой DevTools → Sources → Snippets.</li><li>Открой файл <code>tools/raidplan-browser-export.js</code>, вставь его как Snippet и запусти.</li><li>Экспортёр скопирует найденные данные плана в буфер. Вставь их в поле JSON выше.</li></ol><p>Скрипт читает только данные, уже загруженные в открытой вкладке RaidPlan; cookies/пароли он не экспортирует.</p></details></div>`;
+  wrap.addEventListener('click',e=>{if(e.target===wrap)closeRaidPlanImport()});document.body.appendChild(wrap);setTimeout(()=>el('#rpUrl')?.focus(),0);
+}
+function closeRaidPlanImport(){document.getElementById('raidPlanImportModal')?.remove()}
+function raidPlanImportStatus(msg,type='info'){const s=el('#rpStatus');if(!s)return;s.className=`raidplanStatus ${type}`;s.innerHTML=msg}
+function raidPlanSelectedBoss(){return el('#rpBoss')?.value||''}
+function raidPlanSelectedMode(){return el('#rpMode')?.value==='replace'?'replace':'append'}
+async function raidPlanApplyRaw(raw){
+  try{
+    if(!window.RaidPlanImporter)throw new Error('Модуль RaidPlan Import не загружен.');
+    raidPlanImportStatus('Разбираю структуру RaidPlan…','busy');
+    const result=RaidPlanImporter.convert(raw,{bossId:raidPlanSelectedBoss()||undefined,currentBoss:current});
+    const mode=raidPlanSelectedMode();
+    if(mode==='replace'&&!confirm(`Заменить текущие сцены босса «${raid.find(b=>b.id===result.bossId)?.name||result.bossId}»? RaidRU сохранит автоматическую резервную копию.`)){raidPlanImportStatus('Импорт отменён — текущий план не изменён.','info');return}
+    const summary=RaidPlanImporter.applyConverted(result,mode);
+    closeRaidPlanImport();toast(`RaidPlan: ${result.report.steps} сцен импортировано`);
+    setTimeout(()=>toast(summary),350);
+  }catch(e){console.warn('RaidPlan import',e);raidPlanImportStatus(`<b>Не удалось импортировать:</b> ${esc(e?.message||String(e))}`,'error')}
+}
+async function raidPlanImportFromUrl(){
+  const input=el('#rpUrl')?.value?.trim();if(!input){raidPlanImportStatus('Вставь публичную ссылку RaidPlan.','error');return}
+  try{
+    raidPlanImportStatus('Читаю публичный план RaidPlan…','busy');
+    const raw=await RaidPlanImporter.fetchUrl(input);
+    await raidPlanApplyRaw(raw);
+  }catch(e){console.warn(e);raidPlanImportStatus(`<b>Автоматический URL-импорт не прошёл:</b> ${esc(e?.message||String(e))}<br><span>Это ожидаемо, если RaidPlan блокирует CORS. Используй резервный Browser Exporter или вставь RaidPlan JSON ниже.</span>`,'warn')}
+}
+function raidPlanImportFromText(){
+  try{const raw=RaidPlanImporter.parseInput(el('#rpJson')?.value||'');raidPlanApplyRaw(raw)}catch(e){raidPlanImportStatus(`<b>JSON не распознан:</b> ${esc(e?.message||String(e))}`,'error')}
+}
+function raidPlanImportFile(file){if(!file)return;const r=new FileReader();r.onload=()=>{const ta=el('#rpJson');if(ta)ta.value=String(r.result||'');raidPlanImportFromText()};r.onerror=()=>raidPlanImportStatus('Не удалось прочитать файл.','error');r.readAsText(file)}
+function restoreRaidPlanBackup(){
+  const b=state._raidPlanBackups?.[current];if(!b){toast('Резервной копии RaidPlan для этого босса нет');return}
+  if(!confirm('Вернуть сцены и таймлайн, сохранённые перед последним импортом RaidPlan?'))return;
+  const bs=bossState(current);bs.scenes=deep(b.scenes||[]);bs.timelineV3=deep(b.timelineV3||[]);bs.note=b.note||bs.note;sceneIndex=0;playerSceneIndex=0;save();render();toast('Резервная копия восстановлена');
+}
 function exportPlan(){const blob=new Blob([JSON.stringify({version:'0.8.3',boss:current,diff,role,data:bossState(current)},null,2)],{type:'application/json'}),a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=`raidru-${current}-v083.json`;a.click();URL.revokeObjectURL(a.href);toast('Стратегия экспортирована')}
 function importPlanFile(file){if(!file)return;const r=new FileReader();r.onload=()=>{try{const p=JSON.parse(r.result);if(!p.boss||!p.data)throw new Error();state[p.boss]=p.data;current=p.boss;diff=p.diff||diff;role=p.role||role;bossState(current);save();toast('Стратегия импортирована');render()}catch(e){toast('Не удалось импортировать JSON')}};r.readAsText(file)}
 function sharePlan(){const u=buildShareUrl();navigator.clipboard?.writeText(u);history.replaceState(null,'',u);toast('Ссылка на стратегию скопирована')}

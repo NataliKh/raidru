@@ -1,9 +1,11 @@
-const CACHE='raidru-v0811-nsrt-voice';
+const CACHE='raidru-v0812-raidplan-import';
 const ASSETS=[
 './',
 './index.html',
-'./styles.css?v=0.8.11',
-'./app.js?v=0.8.11',
+'./styles.css?v=0.8.12',
+'./app.js?v=0.8.12',
+'./raidplan-importer.js?v=0.8.12',
+'./tools/raidplan-browser-export.js',
 './manifest.webmanifest',
 './icon.svg',
 './assets/maps/2606-map.webp',

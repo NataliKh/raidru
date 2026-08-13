@@ -763,3 +763,21 @@
 .nsrtActions code{color:#bfe6ff}
 .nsrtActions .primary{font-weight:800}
 @media(max-width:760px){.nsrtTitle{flex-direction:column}.nsrtBadges{justify-content:flex-start}.nsrtImport{min-height:260px}}
+
+/* v0.8.12 — RaidPlan Import */
+.raidplanHeaderBtn{border-color:#395a79!important;color:#9fcdf5!important;background:#101b27!important}
+.raidplanModalBackdrop{position:fixed;inset:0;background:rgba(3,6,10,.82);backdrop-filter:blur(5px);z-index:500;display:grid;place-items:center;padding:22px}
+.raidplanModal{width:min(880px,96vw);max-height:92vh;overflow:auto;background:#0e141b;border:1px solid #314151;border-radius:16px;box-shadow:0 26px 80px #000c;padding:18px}
+.raidplanModalHead{display:flex;justify-content:space-between;align-items:flex-start;gap:16px;border-bottom:1px solid #222e39;padding-bottom:13px;margin-bottom:12px}
+.raidplanModalHead small{display:block;color:#67d7a0;font-size:9px;letter-spacing:.13em}.raidplanModalHead h2{margin:4px 0 0;font-size:20px}.raidplanModalHead>button{width:34px;height:34px;border:1px solid #34414d;background:#141b23;color:#a9b6c4;border-radius:9px;font-size:20px}
+.raidplanIntro{color:#98a6b4;font-size:12px;line-height:1.55;margin:0 0 14px}.raidplanIntro b{color:#d8e9df}
+.raidplanImportGrid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px}.raidplanImportGrid label{display:flex;flex-direction:column;gap:5px;color:#7e8b99;font-size:9px;text-transform:uppercase;letter-spacing:.07em}.raidplanImportGrid select,.raidplanUrlRow input,.raidplanJson{background:#090e14;border:1px solid #2c3946;color:#dce5ed;border-radius:9px;padding:10px;outline:0}.raidplanImportGrid select:focus,.raidplanUrlRow input:focus,.raidplanJson:focus{border-color:#43866a}
+.raidplanUrlRow{display:grid;grid-template-columns:1fr auto;gap:8px}.raidplanUrlRow button,.raidplanActions button,.raidplanToolLink{border:1px solid #2d3b47;background:#151c24;color:#aeb9c5;border-radius:8px;padding:9px 11px;text-decoration:none}.raidplanUrlRow .primary{border-color:#3f845e;background:#193524;color:#a9edc5;font-weight:800}
+.raidplanDivider{display:flex;align-items:center;gap:10px;color:#617080;font-size:9px;text-transform:uppercase;margin:14px 0}.raidplanDivider:before,.raidplanDivider:after{content:"";height:1px;background:#25303a;flex:1}
+.raidplanJson{display:block;width:100%;min-height:180px;resize:vertical;font:10px/1.45 ui-monospace,SFMono-Regular,Consolas,monospace}
+.raidplanActions{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:9px}.raidplanActions .importBtn{font-size:12px}.raidplanToolLink{font-size:12px;color:#9cc8e9}
+.raidplanStatus{margin-top:12px;padding:10px 12px;border:1px solid #2b3945;background:#111820;border-radius:9px;color:#8e9baa;font-size:11px;line-height:1.5}.raidplanStatus.busy{border-color:#3b6954;color:#9bd8b5}.raidplanStatus.error{border-color:#713a43;background:#201217;color:#f0a0a7}.raidplanStatus.warn{border-color:#725d32;background:#211b10;color:#e5c279}.raidplanStatus.info{border-color:#33495e}
+.raidplanFallback{margin-top:12px;border-top:1px solid #25303a;padding-top:10px;color:#8593a1;font-size:11px}.raidplanFallback summary{cursor:pointer;color:#b3c0cc;font-weight:700}.raidplanFallback ol{line-height:1.65}.raidplanFallback code{color:#8bd6ad}
+.token.raidplanToken{width:auto;min-width:32px;max-width:180px;height:auto;min-height:30px;padding:6px 9px;border-radius:8px;background:rgba(12,19,27,.9);border:1px solid #6e8091;color:#e6edf3;font-size:9px;line-height:1.15;text-align:center;box-shadow:0 5px 15px #0009;white-space:normal}
+.token.raidplan-text{border-color:#d1b65f;background:rgba(30,27,15,.92);color:#f3e5ab}.token.raidplan-icon{border-color:#728de0;background:rgba(18,24,44,.92)}.raidplanTokenLabel{display:block;max-width:160px}
+@media(max-width:700px){.raidplanImportGrid,.raidplanUrlRow{grid-template-columns:1fr}.raidplanModalBackdrop{padding:8px}.raidplanModal{width:100%;max-height:96vh}.raidplanActions{align-items:stretch;flex-direction:column}.raidplanActions>*{width:100%;text-align:center}}
