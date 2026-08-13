@@ -781,4 +781,23 @@
 .token.raidplanToken{width:auto;min-width:32px;max-width:180px;height:auto;min-height:30px;padding:6px 9px;border-radius:8px;background:rgba(12,19,27,.9);border:1px solid #6e8091;color:#e6edf3;font-size:9px;line-height:1.15;text-align:center;box-shadow:0 5px 15px #0009;white-space:normal}
 .token.raidplan-text{border-color:#d1b65f;background:rgba(30,27,15,.92);color:#f3e5ab}.token.raidplan-icon{border-color:#728de0;background:rgba(18,24,44,.92)}.raidplanTokenLabel{display:block;max-width:160px}
 @media(max-width:700px){.raidplanImportGrid,.raidplanUrlRow{grid-template-columns:1fr}.raidplanModalBackdrop{padding:8px}.raidplanModal{width:100%;max-height:96vh}.raidplanActions{align-items:stretch;flex-direction:column}.raidplanActions>*{width:100%;text-align:center}}
-\n/* 0.8.15 — отдельные наборы сцен RaidRU / RaidPlan */\n.scenarioSourceBar{display:flex;align-items:stretch;gap:7px;margin:0 0 10px;padding:7px;border:1px solid #26323d;background:#0d131a;border-radius:11px}\n.scenarioSourceBar>span{display:flex;align-items:center;padding:0 7px;color:#687786;font-size:9px;letter-spacing:.08em;text-transform:uppercase;font-weight:800}\n.scenarioSourceBar button{min-width:150px;display:flex;flex-direction:column;align-items:flex-start;gap:2px;padding:8px 12px;border:1px solid #2b3946;background:#121a22;color:#9aa9b7;border-radius:8px;text-align:left}\n.scenarioSourceBar button b{font-size:12px;color:#d3dde6}.scenarioSourceBar button small{font-size:9px;color:#6f8190}\n.scenarioSourceBar button.on{border-color:#4b8c6b;background:#14271e;box-shadow:inset 0 -2px #55b17d}.scenarioSourceBar button.on b{color:#b8f0cf}.scenarioSourceBar button.on small{color:#83bb9b}\n.scenarioSourceBar button:disabled{opacity:.42;cursor:not-allowed}.scenarioSourceBar>em{margin-left:auto;align-self:center;padding:5px 9px;border:1px solid #294637;border-radius:999px;color:#75b992;font-size:9px;font-style:normal;white-space:nowrap}\n.raidplanDestination{display:flex;flex-direction:column;justify-content:center;gap:4px;padding:8px 10px;border:1px solid #2f5943;background:#112019;border-radius:9px}.raidplanDestination>span{color:#7e8b99;font-size:9px;text-transform:uppercase;letter-spacing:.07em}.raidplanDestination>b{color:#afe4c4;font-size:12px}.raidplanDestination>small{color:#769184;font-size:10px;line-height:1.35}\n@media(max-width:760px){.scenarioSourceBar{flex-wrap:wrap}.scenarioSourceBar>span{width:100%;padding:2px 4px}.scenarioSourceBar button{min-width:0;flex:1}.scenarioSourceBar>em{width:100%;margin:0;text-align:center}.raidplanImportGrid{grid-template-columns:1fr}}\n
+
+
+/* 0.8.16 — polished scenario tabs */
+.scenarioSourceCard{margin:0 0 14px;padding:12px;border:1px solid #26323d;background:linear-gradient(180deg,#0e141b,#0b1016);border-radius:14px;display:flex;flex-direction:column;gap:10px;box-shadow:inset 0 1px 0 rgba(255,255,255,.02)}
+.scenarioSourceHead{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap}
+.scenarioSourceHead small{display:block;color:#6f7f8f;font-size:10px;letter-spacing:.08em;text-transform:uppercase;font-weight:800;margin-bottom:3px}
+.scenarioSourceHead b{display:block;color:#e6edf3;font-size:14px;line-height:1.3}
+.scenarioSourceHead em{padding:6px 10px;border:1px solid #294637;border-radius:999px;color:#83c49f;background:#102017;font-size:10px;font-style:normal;white-space:nowrap}
+.scenarioSourceTabs{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+.scenarioTab{display:flex;flex-direction:column;align-items:flex-start;gap:4px;padding:12px 14px;border:1px solid #2b3946;background:#121a22;color:#9aa9b7;border-radius:11px;text-align:left;transition:border-color .15s ease,background .15s ease,transform .15s ease,box-shadow .15s ease;min-height:72px}
+.scenarioTab:hover:not(:disabled){border-color:#3a4e60;background:#141f29;transform:translateY(-1px)}
+.scenarioTab strong{font-size:14px;line-height:1.2;color:#d9e3ec}
+.scenarioTab span{font-size:11px;line-height:1.4;color:#7990a3}
+.scenarioTab.on{border-color:#4b8c6b;background:linear-gradient(180deg,#173023,#13261c);box-shadow:inset 0 -2px 0 #55b17d,0 0 0 1px rgba(85,177,125,.08)}
+.scenarioTab.on strong{color:#bbf3d0}
+.scenarioTab.on span{color:#9ed0b1}
+.scenarioTab:disabled{opacity:.45;cursor:not-allowed;filter:saturate(.8)}
+.raidplanDestination{display:flex;flex-direction:column;justify-content:center;gap:4px;padding:10px 12px;border:1px solid #2f5943;background:#112019;border-radius:10px}
+.raidplanDestination>span{color:#7e8b99;font-size:9px;text-transform:uppercase;letter-spacing:.07em}.raidplanDestination>b{color:#afe4c4;font-size:12px}.raidplanDestination>small{color:#769184;font-size:10px;line-height:1.35}
+@media(max-width:760px){.scenarioSourceCard{padding:10px}.scenarioSourceTabs{grid-template-columns:1fr}.scenarioSourceHead em{white-space:normal}.raidplanImportGrid{grid-template-columns:1fr}}
