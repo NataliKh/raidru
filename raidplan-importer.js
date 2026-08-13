@@ -1,11 +1,11 @@
-/* RaidRU v0.8.14 — RaidPlan import adapter
+/* RaidRU v0.8.15 — RaidPlan import adapter
  * Isolated from app.js on purpose: RaidPlan developer integration is not documented yet,
  * so transport/schema changes should stay in this file.
  */
 (function(){
   'use strict';
 
-  const VERSION='0.8.14';
+  const VERSION='0.8.15';
   const STEP_KEYS=['steps','scenes','pages','slides','frames'];
   const ITEM_KEYS=['objects','elements','items','components','drawings','entities','children','nodes'];
   const ROLE_WORDS={
@@ -392,20 +392,22 @@
     return `${r.steps} сцен · ${r.tokens} объектов/игроков · ${r.effects} зон/линий · ${r.skipped} пропущено${r.approximated?` · ${r.approximated} приближённо`:''}. Координаты: ${coord}.`;
   }
 
-  function applyConverted(result,mode='append'){
+  function applyConverted(result,mode='separate'){
     const bossId=result.bossId;
     if(typeof bossState!=='function')throw new Error('RaidRU state недоступен.');
     const bs=bossState(bossId),now=new Date().toISOString();
-    state._raidPlanBackups=state._raidPlanBackups||{};
-    state._raidPlanBackups[bossId]={createdAt:now,scenes:deep(bs.scenes||[]),timelineV3:deep(bs.timelineV3||[]),note:bs.note||''};
+    // RaidRU-сцены намеренно не меняются. Повторный импорт резервирует только предыдущую RaidPlan-вкладку.
+    state._raidPlanTabBackups=state._raidPlanTabBackups||{};
+    if(bs.raidPlanScenes?.length){state._raidPlanTabBackups[bossId]={createdAt:now,scenes:deep(bs.raidPlanScenes),timelineV3:deep(bs.raidPlanTimelineV3||[]),importMeta:deep(bs.raidPlanImport||{})}}
     const imported=result.scenes.map((s,i)=>normalizeScene(deep({...s,name:`RP ${i+1}. ${s.name.replace(/^RaidPlan\s*·?\s*/i,'')}`}),bossId,i));
-    let start=0;
-    if(mode==='replace'){bs.scenes=imported;start=0}else{start=(bs.scenes||[]).length;bs.scenes=[...(bs.scenes||[]),...imported]}
-    bs.raidPlanImport={at:now,name:result.planName,report:result.report,mode};
-    current=bossId;sceneIndex=start;playerSceneIndex=start;view='planner';
+    bs.raidPlanScenes=imported;
+    bs.raidPlanTimelineV3=typeof raidPlanTimelineForScenes==='function'?raidPlanTimelineForScenes(imported):imported.map((s,i)=>({id:`rp-time-${i}`,time:i*35,label:s.name,type:'move',scene:i,note:s.note||''}));
+    bs.raidPlanImport={at:now,name:result.planName,report:result.report,mode:'separate-tab'};
+    state._scenarioSourceByBoss=state._scenarioSourceByBoss||{};state._scenarioSourceByBoss[bossId]='raidplan';
+    current=bossId;sceneIndex=0;playerSceneIndex=0;view='planner';
     if(typeof save==='function')save();
     if(typeof render==='function')render();
-    return reportText(result.report);
+    return `${reportText(result.report)} Сохранено в отдельной вкладке RaidPlan; сценарии RaidRU не изменены.`;
   }
 
   window.RaidPlanImporter={VERSION,planCode,canonicalUrl,userdataUrl,findPlanRoot,findSteps,flattenItems,bossFromRaw,convert,fetchUrl,parseInput,applyConverted,reportText};

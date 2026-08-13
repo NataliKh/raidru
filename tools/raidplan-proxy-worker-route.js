@@ -1,4 +1,4 @@
-/* RaidRU v0.8.14 — Cloudflare Worker route for RaidPlan URL import.
+/* RaidRU v0.8.15 — Cloudflare Worker route for RaidPlan URL import.
  *
  * Add the handleRaidPlan() function to the existing RaidRU Worker and route
  * /raidplan requests to it BEFORE the WCL handlers:
