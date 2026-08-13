@@ -903,3 +903,13 @@
 .token.raidplanNative-icon{overflow:visible}
 
 /* 0.8.26 — fill/stroke alpha is resolved by effectHtml; keep shape opacity independent. */
+
+/* 0.8.28 — custom RaidPlan arenas + Fabric text scaling */
+.rpNativeText{
+  text-align:var(--rp-text-align,left)!important;
+  line-height:var(--rp-line-height,1.18)!important;
+  font-family:var(--rp-font-family,inherit)!important;
+  font-weight:var(--rp-font-weight,inherit)!important;
+}
+.arenaMap-raidplan-native.raidPlanMapMissing{background:#050608!important}
+.effect.raidplanNativeEffect[style*="z-index:1"]{pointer-events:none}

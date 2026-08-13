@@ -1,11 +1,11 @@
-/* RaidRU v0.8.26 — RaidPlan import adapter
+/* RaidRU v0.8.28 — RaidPlan import adapter
  * Isolated from app.js on purpose: RaidPlan developer integration is not documented yet,
  * so transport/schema changes should stay in this file.
  */
 (function(){
   'use strict';
 
-  const VERSION='0.8.27';
+  const VERSION='0.8.28';
   const STEP_KEYS=['steps','scenes','pages','slides','frames'];
   const ITEM_KEYS=['objects','elements','items','components','drawings','entities','children','nodes'];
   const ROLE_WORDS={
@@ -263,8 +263,21 @@
   function canvasSize(step,plan){
     if(step?.__raidplanV2){
       const arena=arr(step.nodes).find(n=>text(n?.type).toLowerCase()==='arena');
+      // Prefer explicit canvas fields when present.  arena.meta.size is not always
+      // the planner canvas: on custom/blank steps it may be the custom arena itself
+      // (e.g. a 600x600 circle inside RaidPlan's standard 1200x675 board).
+      const ew=finite(deepPick(arena,[['meta','canvas','w'],['meta','canvas','width'],['attr','canvasWidth'],['attr','canvas','width']]));
+      const eh=finite(deepPick(arena,[['meta','canvas','h'],['meta','canvas','height'],['attr','canvasHeight'],['attr','canvas','height']]));
+      if(ew&&eh)return{w:ew,h:eh};
       const aw=finite(arena?.meta?.size?.w),ah=finite(arena?.meta?.size?.h);
-      if(aw&&ah)return{w:aw,h:ah};
+      if(aw&&ah){
+        const ratio=aw/ah;
+        // RaidPlan's board is 16:9.  Only treat arena size as canvas size when it
+        // actually looks like a board; square/circular custom arenas are content.
+        if(ratio>=1.45&&ratio<=2.05)return{w:aw,h:ah};
+        return{w:1200,h:675};
+      }
+      return{w:1200,h:675};
     }
     const w=finite(deepPick(step,[['canvasWidth'],['width'],['canvas','width'],['background','width'],['background','naturalWidth']]))||
             finite(deepPick(plan,[['canvasWidth'],['width'],['canvas','width'],['background','width'],['background','naturalWidth']]));
@@ -368,8 +381,11 @@
   }
 
   function nativeSize(o,tf){
-    const w=finite(deepPick(o,[['meta','size','w'],['meta','size','width'],['size','w'],['size','width'],['width'],['w']]));
-    const h=finite(deepPick(o,[['meta','size','h'],['meta','size','height'],['size','h'],['size','height'],['height'],['h']]));
+    // RaidPlan/Fabric objects may keep their base geometry either in meta.size or
+    // directly in attr.width/attr.height.  The latter is common for text boxes.
+    // Missing attr geometry was the reason large labels wrapped into narrow columns.
+    const w=finite(deepPick(o,[['meta','size','w'],['meta','size','width'],['size','w'],['size','width'],['attr','width'],['attr','w'],['attr','size','width'],['attr','size','w'],['width'],['w']]));
+    const h=finite(deepPick(o,[['meta','size','h'],['meta','size','height'],['size','h'],['size','height'],['attr','height'],['attr','h'],['attr','size','height'],['attr','size','h'],['height'],['h']]));
     const {sx,sy}=nativeScale(o);
     return{
       w:w!=null?Math.max(.08,w*sx*(tf.scaleX||1)):null,
@@ -377,21 +393,36 @@
     };
   }
   function raidPlanArena(step){return step?.__raidplanV2?arr(step.nodes).find(n=>raidPlanNodeType(n)==='arena')||null:null}
+  function arenaShapeKind(arena){
+    const a=arena?.attr||{},probe=[a.shape,a.arenaShape,a.kind,a.variant,a.geometry,a.mask,a.clipShape].filter(Boolean).join(' ').toLowerCase();
+    if(/circle|round/.test(probe))return 'circle';
+    if(/ellipse|oval/.test(probe))return 'ellipse';
+    if(/rect|square|box/.test(probe))return 'rect';
+    return '';
+  }
+  function arenaHasCustomVisual(arena){
+    const a=arena?.attr||{},shape=arenaShapeKind(arena),fill=a.fill??a.backgroundColor??a.bgColor??a.color,stroke=a.stroke??a.borderColor??a.outlineColor;
+    return !!(shape&&(text(fill).trim()||text(stroke).trim()));
+  }
   function raidPlanBackground(step){
     const arena=raidPlanArena(step),a=arena?.attr||{};
     if(a.imageUrl)return cdnAsset(a.imageUrl);
     const raid=text(a.raid||'').replace('.midnight.','.');
-    const boss=text(a.boss||''),map=text(a.map||'');
+    const boss=text(a.boss||''),map=text(a.map||'').trim(),mode=text(a.backgroundType||a.backgroundMode||a.mode||'').trim().toLowerCase();
+    // A RaidPlan step may deliberately use a blank/custom arena.  Do not invent a
+    // boss-map URL for it; scene 9 in the Mythic test plan uses exactly this layout.
+    if(/^(?:none|blank|transparent|custom|empty|off)$/i.test(map)||/(?:^|[-_ ])(?:none|blank|custom|empty)(?:$|[-_ ])/.test(mode))return '';
+    if(arenaHasCustomVisual(arena)&&!map)return '';
     if(raid&&boss){const suffix=map&&map!=='default'?`-${map}`:'';return `https://cdn.raidplan.io/raid/${raid}/map/${boss}${suffix}.jpg`}
     return '';
   }
   function nativeMeta(o,tf,subtype,extra={}){
-    const wh=nativeSize(o,tf),font=finite(o?.attr?.fontSize),cw=tf?.canvas?.w||1200;
+    const wh=nativeSize(o,tf),font=finite(o?.attr?.fontSize),cw=tf?.canvas?.w||1200,{sx,sy}=nativeScale(o);
     const opacity=deepAlpha(o,'opacity');
     const sourceOrder=finite(extra.sourceOrder)??0;
     const explicitZ=finite(o?.meta?.zIndex??o?.meta?.z??o?.zIndex??o?.z);
     let rawAttr={};try{rawAttr=JSON.parse(JSON.stringify(o?.attr||{}))}catch(_){}
-    return{kind:'raidplan',native:true,subtype,source:'RaidPlan',sourceType:raidPlanNodeType(o),w:wh.w,h:wh.h,fontCqw:font!=null?font/cw*100:null,angle:readRotation(o),opacity:opacity!=null?clamp(opacity,0,1):null,z:explicitZ??sourceOrder,sourceOrder,rawAttr,...extra};
+    return{kind:'raidplan',native:true,subtype,source:'RaidPlan',sourceType:raidPlanNodeType(o),w:wh.w,h:wh.h,fontCqw:font!=null?font*(Math.abs(sy)||Math.abs(sx)||1)/cw*100:null,angle:readRotation(o),opacity:opacity!=null?clamp(opacity,0,1):null,z:explicitZ??sourceOrder,sourceOrder,rawAttr,...extra};
   }
   function richField(v){
     if(typeof v==='string'||typeof v==='number')return preserveText(v);
@@ -476,7 +507,9 @@
     if(nodeType==='itext'){
       const raw=preserveText(o?.attr?.text||label),meta=nativeMeta(o,tf,'text',{
         text:raw,fill:text(o?.attr?.fill||'#ffffff'),backgroundColor:o?.attr?.backgroundColor||null,
-        textAlign:text(o?.attr?.textAlign||'left'),verticalAlign:text(o?.attr?.verticalAlign||'top'),styles:Array.isArray(o?.attr?.styles)?o.attr.styles:[],sourceOrder
+        textAlign:text(o?.attr?.textAlign||'left'),verticalAlign:text(o?.attr?.verticalAlign||'top'),
+        lineHeight:finite(o?.attr?.lineHeight),fontFamily:text(o?.attr?.fontFamily||''),fontWeight:o?.attr?.fontWeight??null,
+        styles:Array.isArray(o?.attr?.styles)?o.attr.styles:[],sourceOrder
       });
       report.text++;report.tokens++;
       return{kind:'token',value:[`rp-${report.seq++}`,raw,'text',+p.x.toFixed(2),+p.y.toFixed(2),meta]};
@@ -580,13 +613,29 @@
     return `RaidPlan · сцена ${i+1}`;
   }
 
+  function arenaVisualEffect(step,tf,report){
+    const arena=raidPlanArena(step);if(!arena||hiddenRaidPlanNode(arena)||!arenaHasCustomVisual(arena))return null;
+    const a=arena.attr||{},shape=arenaShapeKind(arena)||'rect',wh=nativeSize(arena,tf),alpha=shapeAlpha(arena);
+    let w=wh.w,h=wh.h;
+    const radius=finite(a.radius??a.r??arena?.radius);
+    if(radius!=null){const {sx,sy}=nativeScale(arena);if(w==null)w=radius*2*sx*(tf.scaleX||1);if(h==null)h=radius*2*sy*(tf.scaleY||1)}
+    if(w==null||h==null)return null;
+    const raw=readXY(arena),q=raw.x!=null&&raw.y!=null?tf.map(raw.x,raw.y):{x:50,y:50};
+    const fill=a.fill??a.backgroundColor??a.bgColor??a.color??'transparent';
+    const stroke=a.stroke??a.borderColor??a.outlineColor??'transparent';
+    const strokeWidth=finite(a.strokeWidth??a.borderWidth??a.outlineWidth);
+    report.effects++;report.arenaVisuals=(report.arenaVisuals||0)+1;
+    return{id:`rpfx-${report.seq++}`,type:'zone',x:+clamp(q.x,-10,110).toFixed(2),y:+clamp(q.y,-10,110).toFixed(2),w:+clamp(Math.abs(w),.08,99).toFixed(2),h:+clamp(Math.abs(h),.08,99).toFixed(2),rot:+readRotation(arena).toFixed(2),label:'',raidPlan:{native:true,hideLabel:true,arenaVisual:true,shapeKind:shape,shapeLabel:'',stroke:text(stroke),fill:fill,strokeWidth:strokeWidth??null,opacity:alpha.opacity,fillOpacity:alpha.fillOpacity,strokeOpacity:alpha.strokeOpacity,z:-100,sourceOrder:-100}};
+  }
+
   function convert(raw,opts={}){
     const plan=findPlanRoot(raw),steps=findSteps(plan),bossId=opts.bossId||bossFromRaw(plan)||bossFromRaw(raw)||opts.currentBoss||'nekzali';
-    const report={version:VERSION,bossId,steps:steps.length,tokens:0,effects:0,text:0,skipped:0,hidden:0,suppressedBackdropFills:0,approximated:0,unsupported:[],modes:{},seq:1};
+    const report={version:VERSION,bossId,steps:steps.length,tokens:0,effects:0,text:0,skipped:0,hidden:0,suppressedBackdropFills:0,arenaVisuals:0,approximated:0,unsupported:[],modes:{},seq:1};
     if(!steps.length)throw new Error('В данных RaidPlan не найден массив steps/scenes/pages.');
     const scenes=steps.map((step,i)=>{
       const name=stepName(step,i),items=flattenItems(step),tf=coordTransform(items,step,plan,bossId);report.modes[tf.mode]=(report.modes[tf.mode]||0)+1;
       const scene={name,note:stepNote(plan,i)||'',duration:8,map:{zoom:100,x:0,y:0,dark:0},tokens:[],effects:[],routes:{},raidPlan:{step:i+1,coordMode:tf.mode,background:raidPlanBackground(step),canvas:tf.canvas||canvasSize(step,plan),sourceCode:plan.code||'',revision:plan.revision??null}};
+      const arenaFx=arenaVisualEffect(step,tf,report);if(arenaFx)scene.effects.push(arenaFx);
       for(let order=0;order<items.length;order++){const o=items[order],c=convertItem(o,{tf,bossId,sceneName:name,report,order});if(!c)continue;if(c.kind==='token')scene.tokens.push(c.value);else scene.effects.push(c.value)}
       if(!scene.tokens.length&&!scene.effects.length){scene.tokens.push([`rp-${report.seq++}`,'Пустая сцена RaidPlan','text',50,50,{kind:'raidplan',subtype:'text',source:'RaidPlan'}]);report.tokens++}
       try{return typeof normalizeScene==='function'?normalizeScene(scene,bossId,i):scene}catch(_){return scene}
@@ -657,7 +706,7 @@
     const imported=result.scenes.map((scene,i)=>normalizeScene(deep({...scene,name:scene.name.replace(/^RaidPlan\s*·?\s*/i,'')}),bossId,i));
     bs.raidPlanScenes=imported;
     bs.raidPlanTimelineV3=typeof raidPlanTimelineForScenes==='function'?raidPlanTimelineForScenes(imported):imported.map((scene,i)=>({id:`rp-time-${i}`,time:i*35,label:scene.name,type:'move',scene:i,note:scene.note||''}));
-    bs.raidPlanImport={at:now,name:result.planName,report:result.report,mode:'separate-tab',sourceCode:result.rawRoot?.code||'',revision:result.rawRoot?.revision??null,renderer:'native-v8-hidden-helper-safe',difficulty:activeDiff,sceneStats:imported.map(sc=>({tokens:(sc.tokens||[]).length,effects:(sc.effects||[]).length}))};
+    bs.raidPlanImport={at:now,name:result.planName,report:result.report,mode:'separate-tab',sourceCode:result.rawRoot?.code||'',revision:result.rawRoot?.revision??null,renderer:'native-v9-custom-arena-text-scale',difficulty:activeDiff,sceneStats:imported.map(sc=>({tokens:(sc.tokens||[]).length,effects:(sc.effects||[]).length}))};
     if(typeof setScenarioSourceFor==='function')setScenarioSourceFor(bossId,'raidplan',activeDiff);else{state._scenarioSourceByBoss=state._scenarioSourceByBoss||{};state._scenarioSourceByBoss[bossId]='raidplan'}
     if(mode!=='silent-refresh'){current=bossId;if(typeof diff!=='undefined')diff=activeDiff;sceneIndex=0;playerSceneIndex=0;view='planner'}
     if(typeof save==='function')save();
@@ -668,10 +717,10 @@
   async function refreshCurrentIfLegacy(){
     try{
       if(typeof bossState!=='function'||typeof current==='undefined')return false;
-      const activeDiff=typeof diff!=='undefined'?diff:'heroic';const bs=bossState(current,activeDiff);if(!bs?.raidPlanScenes?.length||bs?.raidPlanImport?.renderer==='native-v8-hidden-helper-safe')return false;
+      const activeDiff=typeof diff!=='undefined'?diff:'heroic';const bs=bossState(current,activeDiff);if(!bs?.raidPlanScenes?.length||bs?.raidPlanImport?.renderer==='native-v9-custom-arena-text-scale')return false;
       const name=text(bs?.raidPlanImport?.name||''),code=text(bs?.raidPlanImport?.sourceCode||'')||(name.match(/RaidPlan\s+([A-Za-z0-9_-]{8,64})/i)?.[1]||'');
       if(!code)return false;
-      const guard=`raidru-rp-refresh-${current}-${activeDiff}-${code}-0824`;if(typeof sessionStorage!=='undefined'&&sessionStorage.getItem(guard))return false;
+      const guard=`raidru-rp-refresh-${current}-${activeDiff}-${code}-0828`;if(typeof sessionStorage!=='undefined'&&sessionStorage.getItem(guard))return false;
       if(typeof sessionStorage!=='undefined')sessionStorage.setItem(guard,'1');
       const raw=await fetchUrl(code),result=convert(raw,{bossId:current,currentBoss:current});applyConverted(result,'silent-refresh',{difficulty:activeDiff});return true;
     }catch(e){console.warn('RaidPlan legacy refresh skipped',e);return false}

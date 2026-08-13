@@ -1,3 +1,15 @@
+# RaidRU v0.8.28
+
+## RaidPlan scene 9 fidelity fix
+
+- Исправлен корень проблемы scene 9: квадратный `arena.meta.size` больше не принимается за размер 16:9 canvas; для custom arena используется стандартный 1200×675 canvas.
+- Поддержка custom/blank arena RaidPlan: если сцена рисует собственную арену (например круг с fill/stroke), она больше не теряется.
+- Сломанная/несуществующая background-карта скрывается без broken-image значка; blank-сцена остаётся чёрной, как в RaidPlan.
+- Масштаб Fabric text теперь применяется и к fontSize, а не только к ширине/высоте блока. Это убирает огромный текст и вертикальные переносы по 2–3 буквы.
+- Размеры текста дополнительно читаются из attr.width/attr.height.
+- Сохраняются textAlign, lineHeight, fontFamily и fontWeight.
+- Renderer: native-v9-custom-arena-text-scale.
+
 # RaidRU v0.8.27
 
 ## RaidPlan hidden/helper geometry fix
