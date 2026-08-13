@@ -1,10 +1,10 @@
-const CACHE='raidru-v0822-difficulty-plans';
+const CACHE='raidru-v0823-raidplan-layer-fix';
 const ASSETS=[
 './',
 './index.html',
-'./styles.css?v=0.8.22',
-'./app.js?v=0.8.22',
-'./raidplan-importer.js?v=0.8.22',
+'./styles.css?v=0.8.23',
+'./app.js?v=0.8.23',
+'./raidplan-importer.js?v=0.8.23',
 './tools/raidplan-browser-export.js',
 './manifest.webmanifest',
 './icon.svg',

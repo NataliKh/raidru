@@ -878,10 +878,19 @@
 @media(max-width:640px){.difficultyChoiceGrid{grid-template-columns:1fr}.difficultySwitchModal{padding:14px}}
 
 /* 0.8.22 — RaidPlan v4 fidelity / cross-layer ordering */
-.raidplanArenaNative .effects,.raidplanArenaNative .tokens{z-index:auto}
+.raidplanArenaNative .effects{z-index:3!important}
+.raidplanArenaNative .tokens{z-index:6!important}
 .raidplanArenaNative .effect.raidplanNativeEffect,.raidplanArenaNative .token.raidplanNative{position:absolute}
 .rpNativeCard{width:100%;height:100%;min-width:120px;min-height:64px;box-sizing:border-box;overflow:hidden;background:rgba(4,8,13,.96);border:1px solid #33414e;border-radius:4px;color:#f6d53c;box-shadow:0 5px 14px #000b;text-align:left;font-size:max(8px,.72cqw);line-height:1.28}
 .rpNativeCardHead{display:flex;align-items:flex-start;gap:.45cqw;padding:.42cqw .5cqw;border-bottom:1px solid #28343f;color:#f3f5f7}
 .rpNativeCardHead img{width:max(22px,2.25cqw);height:max(22px,2.25cqw);object-fit:cover;flex:0 0 auto;border-radius:2px}
 .rpNativeCardHead b{display:block;font-size:max(9px,.86cqw);line-height:1.18}.rpNativeCardHead small{display:block;color:#dfe6ec;font-size:max(7px,.58cqw);margin-top:.12cqw}
 .rpNativeCardBody{padding:.42cqw .5cqw;color:#f4d537;white-space:pre-wrap;overflow:hidden}
+
+/* 0.8.23 — regression guard: RaidPlan visual objects must stay above map/shade.
+   Separate stacking contexts are intentional; fidelity is more important than cross-type z interleaving. */
+.raidplanArenaNative .arenaMap{z-index:0!important}
+.raidplanArenaNative .mapShade{z-index:1!important}
+.raidplanArenaNative .effects{position:absolute!important;inset:0!important;z-index:3!important}
+.raidplanArenaNative .tokens{position:absolute!important;inset:0!important;z-index:6!important}
+.raidplanArenaNative .effectLabels{z-index:8!important}
