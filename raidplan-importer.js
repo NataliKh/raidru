@@ -5,7 +5,7 @@
 (function(){
   'use strict';
 
-  const VERSION='0.8.26';
+  const VERSION='0.8.27';
   const STEP_KEYS=['steps','scenes','pages','slides','frames'];
   const ITEM_KEYS=['objects','elements','items','components','drawings','entities','children','nodes'];
   const ROLE_WORDS={
@@ -66,6 +66,57 @@
     return null;
   }
   function shapeAlpha(o){return{opacity:deepAlpha(o,'opacity'),fillOpacity:deepAlpha(o,'fill'),strokeOpacity:deepAlpha(o,'stroke')}}
+
+  function flagTrue(v){
+    if(v===true||v===1)return true;
+    if(typeof v==='string')return /^(1|true|yes|on)$/i.test(v.trim());
+    return false;
+  }
+  function flagFalse(v){
+    if(v===false||v===0)return true;
+    if(typeof v==='string')return /^(0|false|no|off)$/i.test(v.trim());
+    return false;
+  }
+  // RaidPlan keeps hidden/editor helper nodes in the payload. The planner itself
+  // does not paint them, so RaidRU must not turn them into encounter mechanics.
+  function hiddenRaidPlanNode(o){
+    const roots=[o?.meta,o?.attr,o?.data,o];
+    for(const r of roots){
+      if(flagTrue(r?.hidden)||flagTrue(r?.isHidden)||flagTrue(r?.disabled))return true;
+      if(r&&Object.prototype.hasOwnProperty.call(r,'visible')&&flagFalse(r.visible))return true;
+      if(r&&Object.prototype.hasOwnProperty.call(r,'display')&&String(r.display).toLowerCase()==='none')return true;
+    }
+    const probe=[o?.type,o?.kind,o?.category,o?.meta?.type,o?.meta?.kind,o?.meta?.category,o?.attr?.type,o?.attr?.kind,o?.attr?.category,o?.attr?.name]
+      .filter(v=>v!=null).join(' ').toLowerCase();
+    return /(?:^|[\s_-])(clip(?:path)?|mask|viewport|hitbox|selection|helper|guide|interaction)(?:$|[\s_-])/.test(probe);
+  }
+  function transparentColor(v){
+    const c=text(v).trim().toLowerCase();
+    if(!c||c==='transparent'||c==='none')return true;
+    if(/^rgba\([^)]*,\s*0(?:\.0+)?\s*\)$/.test(c))return true;
+    if(/^#(?:[0-9a-f]{6}00|[0-9a-f]{3}0)$/.test(c))return true;
+    return false;
+  }
+  function nearWhiteColor(v){
+    const c=text(v).trim().toLowerCase();
+    if(/^#fff(?:fff)?$/.test(c))return true;
+    let m=c.match(/^#([0-9a-f]{6})(?:[0-9a-f]{2})?$/i);
+    if(m){const h=m[1],r=parseInt(h.slice(0,2),16),g=parseInt(h.slice(2,4),16),b=parseInt(h.slice(4,6),16);return r>=245&&g>=245&&b>=245}
+    m=c.match(/^rgba?\(\s*([0-9.]+)\s*,\s*([0-9.]+)\s*,\s*([0-9.]+)/i);
+    return !!(m&&+m[1]>=245&&+m[2]>=245&&+m[3]>=245);
+  }
+  // Safety for editor/background geometry. A near-full-canvas, unlabeled white
+  // shape with no explicit fill alpha is almost always a planner helper/mask.
+  // Keep its stroke/geometry metadata, but do not flood the encounter map white.
+  function suppressUnresolvedBackdropFill(o,geom,shapeLabel,alpha){
+    if(shapeLabel||alpha?.fillOpacity!=null)return false;
+    if(!nearWhiteColor(o?.attr?.fill??o?.style?.fill??o?.fill))return false;
+    if((geom?.w||0)<58||(geom?.h||0)<58)return false;
+    const semantic=typeString(o);
+    if(/danger|damage|safe|soak|stack|aoe|mechanic/.test(semantic))return false;
+    const stroke=o?.attr?.stroke??o?.style?.stroke??o?.stroke;
+    return transparentColor(stroke)||!text(stroke).trim();
+  }
 
   function planCode(input){
     const s=text(input).trim();
@@ -417,6 +468,7 @@
   function convertItem(o,ctx){
     const {tf,bossId,sceneName,report}=ctx,sourceOrder=Number.isFinite(+ctx.order)?+ctx.order:0,nodeType=raidPlanNodeType(o),s=typeString(o),label=objectLabel(o)||'RaidPlan',p=pointFor(o,tf,bossId,sceneName);
     if(nodeType==='arena')return null;
+    if(hiddenRaidPlanNode(o)){report.hidden=(report.hidden||0)+1;return null}
     if(!p){report.skipped++;return null}
 
     // 1) Text is text. Do this BEFORE any role/marker heuristics: instructions often
@@ -472,7 +524,9 @@
       const mapped=poly.map(x=>tf.map(x.x,x.y)),xs=mapped.map(x=>x.x),ys=mapped.map(x=>x.y);
       report.approximated++;report.effects++;
       const shapeLabel=preserveText(objectLabel(o)),alpha=shapeAlpha(o);
-      return{kind:'effect',value:{id:`rpfx-${report.seq++}`,type:'zone',x:+((Math.min(...xs)+Math.max(...xs))/2).toFixed(2),y:+((Math.min(...ys)+Math.max(...ys))/2).toFixed(2),w:+clamp(Math.max(...xs)-Math.min(...xs),.5,99).toFixed(2),h:+clamp(Math.max(...ys)-Math.min(...ys),.5,99).toFixed(2),rot:readRotation(o),label:'',raidPlan:{native:true,hideLabel:true,shapeKind:'polygon',shapeLabel,fill:o?.attr?.fill||null,stroke:o?.attr?.stroke||null,strokeWidth:finite(o?.attr?.strokeWidth),opacity:alpha.opacity,fillOpacity:alpha.fillOpacity,strokeOpacity:alpha.strokeOpacity,z:finite(o?.meta?.zIndex??o?.meta?.z??o?.zIndex??o?.z)??sourceOrder,sourceOrder}}};
+      const pg={w:clamp(Math.max(...xs)-Math.min(...xs),.5,99),h:clamp(Math.max(...ys)-Math.min(...ys),.5,99)};
+      const suppressFill=suppressUnresolvedBackdropFill(o,pg,shapeLabel,alpha);if(suppressFill)report.suppressedBackdropFills=(report.suppressedBackdropFills||0)+1;
+      return{kind:'effect',value:{id:`rpfx-${report.seq++}`,type:'zone',x:+((Math.min(...xs)+Math.max(...xs))/2).toFixed(2),y:+((Math.min(...ys)+Math.max(...ys))/2).toFixed(2),w:+pg.w.toFixed(2),h:+pg.h.toFixed(2),rot:readRotation(o),label:'',raidPlan:{native:true,hideLabel:true,shapeKind:'polygon',shapeLabel,fill:suppressFill?'transparent':(o?.attr?.fill||null),stroke:o?.attr?.stroke||null,strokeWidth:finite(o?.attr?.strokeWidth),opacity:alpha.opacity,fillOpacity:alpha.fillOpacity,strokeOpacity:alpha.strokeOpacity,suppressedBackdropFill:suppressFill,z:finite(o?.meta?.zIndex??o?.meta?.z??o?.zIndex??o?.z)??sourceOrder,sourceOrder}}};
     }
     if(et){
       let geom=(nodeType==='line')?fabricLineGeometry(o,tf):((et==='line'||et==='arrow')?lineFromEndpoints(o,tf,bossId,sceneName):null);
@@ -486,7 +540,8 @@
       if(nodeType==='path'||/tether|group|pin|locked/.test(s))report.approximated++;
       const shapeLabel=et==='zone'?preserveText(objectLabel(o)):'';
       const font=finite(o?.attr?.fontSize),cw=tf?.canvas?.w||1200,alpha=shapeAlpha(o);
-      return{kind:'effect',value:{id:`rpfx-${report.seq++}`,type:et,x:+clamp(geom.x,-10,110).toFixed(2),y:+clamp(geom.y,-10,110).toFixed(2),w:+geom.w.toFixed(2),h:+geom.h.toFixed(2),rot:+(geom.rot||0).toFixed(2),label:'',raidPlan:{native:true,hideLabel:true,nodeType,shapeKind:et==='zone'?shapeKind:null,shapeLabel,shapeFontCqw:font!=null?font/cw*100:null,labelFill:text(o?.attr?.textFill||o?.attr?.fontColor||o?.attr?.color||'#ffffff'),stroke:text(o?.attr?.stroke||'transparent'),fill:o?.attr?.fill||null,strokeWidth:strokeWidth??null,opacity:alpha.opacity,fillOpacity:alpha.fillOpacity,strokeOpacity:alpha.strokeOpacity,rx:finite(o?.attr?.rx??o?.attr?.radius),startType:text(o?.attr?.startType||'none'),endType:text(o?.attr?.endType||'none'),z:finite(o?.meta?.zIndex??o?.meta?.z??o?.zIndex??o?.z)??sourceOrder,sourceOrder}}};
+      const suppressFill=et==='zone'&&suppressUnresolvedBackdropFill(o,geom,shapeLabel,alpha);if(suppressFill)report.suppressedBackdropFills=(report.suppressedBackdropFills||0)+1;
+      return{kind:'effect',value:{id:`rpfx-${report.seq++}`,type:et,x:+clamp(geom.x,-10,110).toFixed(2),y:+clamp(geom.y,-10,110).toFixed(2),w:+geom.w.toFixed(2),h:+geom.h.toFixed(2),rot:+(geom.rot||0).toFixed(2),label:'',raidPlan:{native:true,hideLabel:true,nodeType,shapeKind:et==='zone'?shapeKind:null,shapeLabel,shapeFontCqw:font!=null?font/cw*100:null,labelFill:text(o?.attr?.textFill||o?.attr?.fontColor||o?.attr?.color||'#ffffff'),stroke:text(o?.attr?.stroke||'transparent'),fill:suppressFill?'transparent':(o?.attr?.fill||null),strokeWidth:strokeWidth??null,opacity:alpha.opacity,fillOpacity:alpha.fillOpacity,strokeOpacity:alpha.strokeOpacity,suppressedBackdropFill:suppressFill,rx:finite(o?.attr?.rx??o?.attr?.radius),startType:text(o?.attr?.startType||'none'),endType:text(o?.attr?.endType||'none'),z:finite(o?.meta?.zIndex??o?.meta?.z??o?.zIndex??o?.z)??sourceOrder,sourceOrder}}};
     }
 
     if(/boss|enemy|npc|ability|spell|icon|sticker|encounter|object/.test(s)){
@@ -527,7 +582,7 @@
 
   function convert(raw,opts={}){
     const plan=findPlanRoot(raw),steps=findSteps(plan),bossId=opts.bossId||bossFromRaw(plan)||bossFromRaw(raw)||opts.currentBoss||'nekzali';
-    const report={version:VERSION,bossId,steps:steps.length,tokens:0,effects:0,text:0,skipped:0,approximated:0,unsupported:[],modes:{},seq:1};
+    const report={version:VERSION,bossId,steps:steps.length,tokens:0,effects:0,text:0,skipped:0,hidden:0,suppressedBackdropFills:0,approximated:0,unsupported:[],modes:{},seq:1};
     if(!steps.length)throw new Error('В данных RaidPlan не найден массив steps/scenes/pages.');
     const scenes=steps.map((step,i)=>{
       const name=stepName(step,i),items=flattenItems(step),tf=coordTransform(items,step,plan,bossId);report.modes[tf.mode]=(report.modes[tf.mode]||0)+1;
@@ -602,7 +657,7 @@
     const imported=result.scenes.map((scene,i)=>normalizeScene(deep({...scene,name:scene.name.replace(/^RaidPlan\s*·?\s*/i,'')}),bossId,i));
     bs.raidPlanScenes=imported;
     bs.raidPlanTimelineV3=typeof raidPlanTimelineForScenes==='function'?raidPlanTimelineForScenes(imported):imported.map((scene,i)=>({id:`rp-time-${i}`,time:i*35,label:scene.name,type:'move',scene:i,note:scene.note||''}));
-    bs.raidPlanImport={at:now,name:result.planName,report:result.report,mode:'separate-tab',sourceCode:result.rawRoot?.code||'',revision:result.rawRoot?.revision??null,renderer:'native-v7-alpha-safe',difficulty:activeDiff,sceneStats:imported.map(sc=>({tokens:(sc.tokens||[]).length,effects:(sc.effects||[]).length}))};
+    bs.raidPlanImport={at:now,name:result.planName,report:result.report,mode:'separate-tab',sourceCode:result.rawRoot?.code||'',revision:result.rawRoot?.revision??null,renderer:'native-v8-hidden-helper-safe',difficulty:activeDiff,sceneStats:imported.map(sc=>({tokens:(sc.tokens||[]).length,effects:(sc.effects||[]).length}))};
     if(typeof setScenarioSourceFor==='function')setScenarioSourceFor(bossId,'raidplan',activeDiff);else{state._scenarioSourceByBoss=state._scenarioSourceByBoss||{};state._scenarioSourceByBoss[bossId]='raidplan'}
     if(mode!=='silent-refresh'){current=bossId;if(typeof diff!=='undefined')diff=activeDiff;sceneIndex=0;playerSceneIndex=0;view='planner'}
     if(typeof save==='function')save();
@@ -613,7 +668,7 @@
   async function refreshCurrentIfLegacy(){
     try{
       if(typeof bossState!=='function'||typeof current==='undefined')return false;
-      const activeDiff=typeof diff!=='undefined'?diff:'heroic';const bs=bossState(current,activeDiff);if(!bs?.raidPlanScenes?.length||bs?.raidPlanImport?.renderer==='native-v7-alpha-safe')return false;
+      const activeDiff=typeof diff!=='undefined'?diff:'heroic';const bs=bossState(current,activeDiff);if(!bs?.raidPlanScenes?.length||bs?.raidPlanImport?.renderer==='native-v8-hidden-helper-safe')return false;
       const name=text(bs?.raidPlanImport?.name||''),code=text(bs?.raidPlanImport?.sourceCode||'')||(name.match(/RaidPlan\s+([A-Za-z0-9_-]{8,64})/i)?.[1]||'');
       if(!code)return false;
       const guard=`raidru-rp-refresh-${current}-${activeDiff}-${code}-0824`;if(typeof sessionStorage!=='undefined'&&sessionStorage.getItem(guard))return false;

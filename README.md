@@ -1,4 +1,14 @@
-# RaidRU v0.8.26
+# RaidRU v0.8.27
+
+## RaidPlan hidden/helper geometry fix
+
+- Hidden RaidPlan nodes (`meta.hidden`, `visible:false`) are no longer rendered.
+- Editor helper/mask/clip/viewport nodes are ignored.
+- Near-full-canvas unlabeled white helper shapes without explicit fill alpha no longer flood the map with an opaque white fill.
+- Normal/Heroic/Mythic storage and separate RaidPlan tabs are unchanged.
+- RaidPlan renderer: `native-v8-hidden-helper-safe`.
+
+# RaidRU v0.8.27
 
 ## Исправление прозрачности фигур RaidPlan
 
