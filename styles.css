@@ -901,3 +901,5 @@
 .rpNativeCardHead{min-height:2.7cqw}
 .rpNativeCardBody{overflow:visible!important;white-space:pre-wrap;word-break:normal;overflow-wrap:break-word}
 .token.raidplanNative-icon{overflow:visible}
+
+/* 0.8.26 — fill/stroke alpha is resolved by effectHtml; keep shape opacity independent. */

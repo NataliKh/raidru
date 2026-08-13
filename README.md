@@ -1,4 +1,14 @@
-# RaidRU v0.8.25
+# RaidRU v0.8.26
+
+## Исправление прозрачности фигур RaidPlan
+
+- Раздельно импортируются `opacity`, `fillOpacity` и `strokeOpacity`.
+- Поддержаны `alpha`, `globalAlpha`, `fillAlpha`, `strokeAlpha`, проценты 0–100 и alpha внутри `rgba()/hsla()/#RGBA/#RRGGBBAA`.
+- Полупрозрачные белые/цветные зоны больше не становятся непрозрачными плитами поверх всей арены.
+- Общая прозрачность объекта не смешивается с прозрачностью только заливки/обводки.
+- Renderer: `native-v7-alpha-safe`; сохранённые RaidPlan-вкладки автоматически перечитываются.
+- Normal / Heroic / Mythic и отдельные RaidPlan-вкладки сохранены.
+
 
 ## Критический фикс RaidPlan opacity
 

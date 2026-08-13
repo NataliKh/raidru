@@ -1,11 +1,11 @@
-/* RaidRU v0.8.25 — RaidPlan import adapter
+/* RaidRU v0.8.26 — RaidPlan import adapter
  * Isolated from app.js on purpose: RaidPlan developer integration is not documented yet,
  * so transport/schema changes should stay in this file.
  */
 (function(){
   'use strict';
 
-  const VERSION='0.8.25';
+  const VERSION='0.8.26';
   const STEP_KEYS=['steps','scenes','pages','slides','frames'];
   const ITEM_KEYS=['objects','elements','items','components','drawings','entities','children','nodes'];
   const ROLE_WORDS={
@@ -34,6 +34,38 @@
   const clean=s=>text(s).replace(/<[^>]+>/g,' ').replace(/\s+/g,' ').trim();
   const preserveText=s=>text(s).replace(/<br\s*\/?\s*>/gi,'\n').replace(/<[^>]+>/g,'').replace(/\r\n/g,'\n').trim();
   const cdnAsset=asset=>asset?(/^https?:\/\//i.test(text(asset))?text(asset):`https://cdn.raidplan.io/${text(asset).replace(/^\/+/, '')}`):'';
+
+  // RaidPlan/Fabric revisions have used several names for alpha.  Keep fill and
+  // stroke alpha separate: applying only a global opacity turns translucent
+  // arena overlays into solid white/black slabs.
+  function alphaNumber(v){
+    const n=finite(v);if(n==null)return null;
+    // Some serializers store percentages (18 instead of .18).
+    const x=n>1&&n<=100?n/100:n;return clamp(x,0,1);
+  }
+  function colorEmbeddedAlpha(v){
+    const c=text(v).trim();if(!c)return null;
+    let m=c.match(/^rgba\(\s*[^,]+,\s*[^,]+,\s*[^,]+,\s*([0-9.]+)\s*\)$/i);
+    if(m)return alphaNumber(m[1]);
+    m=c.match(/^hsla\(\s*[^,]+,\s*[^,]+,\s*[^,]+,\s*([0-9.]+)\s*\)$/i);
+    if(m)return alphaNumber(m[1]);
+    const h=c.match(/^#([0-9a-f]{4}|[0-9a-f]{8})$/i);
+    if(h){const x=h[1],a=x.length===4?parseInt(x[3]+x[3],16):parseInt(x.slice(6,8),16);return a/255}
+    return null;
+  }
+  function deepAlpha(o,kind='opacity'){
+    const roots=[o?.attr,o?.style,o?.data,o?.meta,o];
+    const keys=kind==='fill'
+      ?['fillOpacity','fillAlpha','backgroundOpacity','backgroundAlpha']
+      :kind==='stroke'
+        ?['strokeOpacity','strokeAlpha','borderOpacity','borderAlpha']
+        :['opacity','alpha','globalAlpha'];
+    for(const root of roots)for(const k of keys){const n=alphaNumber(root?.[k]);if(n!=null)return n}
+    if(kind==='fill')return colorEmbeddedAlpha(o?.attr?.fill??o?.style?.fill??o?.fill);
+    if(kind==='stroke')return colorEmbeddedAlpha(o?.attr?.stroke??o?.style?.stroke??o?.stroke);
+    return null;
+  }
+  function shapeAlpha(o){return{opacity:deepAlpha(o,'opacity'),fillOpacity:deepAlpha(o,'fill'),strokeOpacity:deepAlpha(o,'stroke')}}
 
   function planCode(input){
     const s=text(input).trim();
@@ -304,7 +336,7 @@
   }
   function nativeMeta(o,tf,subtype,extra={}){
     const wh=nativeSize(o,tf),font=finite(o?.attr?.fontSize),cw=tf?.canvas?.w||1200;
-    const opacity=finite(o?.attr?.opacity??o?.opacity??o?.meta?.opacity);
+    const opacity=deepAlpha(o,'opacity');
     const sourceOrder=finite(extra.sourceOrder)??0;
     const explicitZ=finite(o?.meta?.zIndex??o?.meta?.z??o?.zIndex??o?.z);
     let rawAttr={};try{rawAttr=JSON.parse(JSON.stringify(o?.attr||{}))}catch(_){}
@@ -439,8 +471,8 @@
     if(poly.length>=3){
       const mapped=poly.map(x=>tf.map(x.x,x.y)),xs=mapped.map(x=>x.x),ys=mapped.map(x=>x.y);
       report.approximated++;report.effects++;
-      const shapeLabel=preserveText(objectLabel(o));
-      return{kind:'effect',value:{id:`rpfx-${report.seq++}`,type:'zone',x:+((Math.min(...xs)+Math.max(...xs))/2).toFixed(2),y:+((Math.min(...ys)+Math.max(...ys))/2).toFixed(2),w:+clamp(Math.max(...xs)-Math.min(...xs),.5,99).toFixed(2),h:+clamp(Math.max(...ys)-Math.min(...ys),.5,99).toFixed(2),rot:readRotation(o),label:'',raidPlan:{native:true,hideLabel:true,shapeKind:'polygon',shapeLabel,fill:o?.attr?.fill||null,stroke:o?.attr?.stroke||null,strokeWidth:finite(o?.attr?.strokeWidth),opacity:finite(o?.attr?.opacity),z:finite(o?.meta?.zIndex??o?.meta?.z??o?.zIndex??o?.z)??sourceOrder,sourceOrder}}};
+      const shapeLabel=preserveText(objectLabel(o)),alpha=shapeAlpha(o);
+      return{kind:'effect',value:{id:`rpfx-${report.seq++}`,type:'zone',x:+((Math.min(...xs)+Math.max(...xs))/2).toFixed(2),y:+((Math.min(...ys)+Math.max(...ys))/2).toFixed(2),w:+clamp(Math.max(...xs)-Math.min(...xs),.5,99).toFixed(2),h:+clamp(Math.max(...ys)-Math.min(...ys),.5,99).toFixed(2),rot:readRotation(o),label:'',raidPlan:{native:true,hideLabel:true,shapeKind:'polygon',shapeLabel,fill:o?.attr?.fill||null,stroke:o?.attr?.stroke||null,strokeWidth:finite(o?.attr?.strokeWidth),opacity:alpha.opacity,fillOpacity:alpha.fillOpacity,strokeOpacity:alpha.strokeOpacity,z:finite(o?.meta?.zIndex??o?.meta?.z??o?.zIndex??o?.z)??sourceOrder,sourceOrder}}};
     }
     if(et){
       let geom=(nodeType==='line')?fabricLineGeometry(o,tf):((et==='line'||et==='arrow')?lineFromEndpoints(o,tf,bossId,sceneName):null);
@@ -453,8 +485,8 @@
       if(nativeLine&&strokeWidth!=null)geom.h=Math.max(.12,strokeWidth*(tf.scaleY||1));
       if(nodeType==='path'||/tether|group|pin|locked/.test(s))report.approximated++;
       const shapeLabel=et==='zone'?preserveText(objectLabel(o)):'';
-      const font=finite(o?.attr?.fontSize),cw=tf?.canvas?.w||1200;
-      return{kind:'effect',value:{id:`rpfx-${report.seq++}`,type:et,x:+clamp(geom.x,-10,110).toFixed(2),y:+clamp(geom.y,-10,110).toFixed(2),w:+geom.w.toFixed(2),h:+geom.h.toFixed(2),rot:+(geom.rot||0).toFixed(2),label:'',raidPlan:{native:true,hideLabel:true,nodeType,shapeKind:et==='zone'?shapeKind:null,shapeLabel,shapeFontCqw:font!=null?font/cw*100:null,labelFill:text(o?.attr?.textFill||o?.attr?.fontColor||o?.attr?.color||'#ffffff'),stroke:text(o?.attr?.stroke||'transparent'),fill:o?.attr?.fill||null,strokeWidth:strokeWidth??null,opacity:finite(o?.attr?.opacity),rx:finite(o?.attr?.rx??o?.attr?.radius),startType:text(o?.attr?.startType||'none'),endType:text(o?.attr?.endType||'none'),z:finite(o?.meta?.zIndex??o?.meta?.z??o?.zIndex??o?.z)??sourceOrder,sourceOrder}}};
+      const font=finite(o?.attr?.fontSize),cw=tf?.canvas?.w||1200,alpha=shapeAlpha(o);
+      return{kind:'effect',value:{id:`rpfx-${report.seq++}`,type:et,x:+clamp(geom.x,-10,110).toFixed(2),y:+clamp(geom.y,-10,110).toFixed(2),w:+geom.w.toFixed(2),h:+geom.h.toFixed(2),rot:+(geom.rot||0).toFixed(2),label:'',raidPlan:{native:true,hideLabel:true,nodeType,shapeKind:et==='zone'?shapeKind:null,shapeLabel,shapeFontCqw:font!=null?font/cw*100:null,labelFill:text(o?.attr?.textFill||o?.attr?.fontColor||o?.attr?.color||'#ffffff'),stroke:text(o?.attr?.stroke||'transparent'),fill:o?.attr?.fill||null,strokeWidth:strokeWidth??null,opacity:alpha.opacity,fillOpacity:alpha.fillOpacity,strokeOpacity:alpha.strokeOpacity,rx:finite(o?.attr?.rx??o?.attr?.radius),startType:text(o?.attr?.startType||'none'),endType:text(o?.attr?.endType||'none'),z:finite(o?.meta?.zIndex??o?.meta?.z??o?.zIndex??o?.z)??sourceOrder,sourceOrder}}};
     }
 
     if(/boss|enemy|npc|ability|spell|icon|sticker|encounter|object/.test(s)){
@@ -570,7 +602,7 @@
     const imported=result.scenes.map((scene,i)=>normalizeScene(deep({...scene,name:scene.name.replace(/^RaidPlan\s*·?\s*/i,'')}),bossId,i));
     bs.raidPlanScenes=imported;
     bs.raidPlanTimelineV3=typeof raidPlanTimelineForScenes==='function'?raidPlanTimelineForScenes(imported):imported.map((scene,i)=>({id:`rp-time-${i}`,time:i*35,label:scene.name,type:'move',scene:i,note:scene.note||''}));
-    bs.raidPlanImport={at:now,name:result.planName,report:result.report,mode:'separate-tab',sourceCode:result.rawRoot?.code||'',revision:result.rawRoot?.revision??null,renderer:'native-v6-null-safe',difficulty:activeDiff,sceneStats:imported.map(sc=>({tokens:(sc.tokens||[]).length,effects:(sc.effects||[]).length}))};
+    bs.raidPlanImport={at:now,name:result.planName,report:result.report,mode:'separate-tab',sourceCode:result.rawRoot?.code||'',revision:result.rawRoot?.revision??null,renderer:'native-v7-alpha-safe',difficulty:activeDiff,sceneStats:imported.map(sc=>({tokens:(sc.tokens||[]).length,effects:(sc.effects||[]).length}))};
     if(typeof setScenarioSourceFor==='function')setScenarioSourceFor(bossId,'raidplan',activeDiff);else{state._scenarioSourceByBoss=state._scenarioSourceByBoss||{};state._scenarioSourceByBoss[bossId]='raidplan'}
     if(mode!=='silent-refresh'){current=bossId;if(typeof diff!=='undefined')diff=activeDiff;sceneIndex=0;playerSceneIndex=0;view='planner'}
     if(typeof save==='function')save();
@@ -581,7 +613,7 @@
   async function refreshCurrentIfLegacy(){
     try{
       if(typeof bossState!=='function'||typeof current==='undefined')return false;
-      const activeDiff=typeof diff!=='undefined'?diff:'heroic';const bs=bossState(current,activeDiff);if(!bs?.raidPlanScenes?.length||bs?.raidPlanImport?.renderer==='native-v6-null-safe')return false;
+      const activeDiff=typeof diff!=='undefined'?diff:'heroic';const bs=bossState(current,activeDiff);if(!bs?.raidPlanScenes?.length||bs?.raidPlanImport?.renderer==='native-v7-alpha-safe')return false;
       const name=text(bs?.raidPlanImport?.name||''),code=text(bs?.raidPlanImport?.sourceCode||'')||(name.match(/RaidPlan\s+([A-Za-z0-9_-]{8,64})/i)?.[1]||'');
       if(!code)return false;
       const guard=`raidru-rp-refresh-${current}-${activeDiff}-${code}-0824`;if(typeof sessionStorage!=='undefined'&&sessionStorage.getItem(guard))return false;

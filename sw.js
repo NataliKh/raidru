@@ -2,9 +2,9 @@ const CACHE='raidru-v0825-raidplan-null-safe';
 const ASSETS=[
 './',
 './index.html',
-'./styles.css?v=0.8.25',
-'./app.js?v=0.8.25',
-'./raidplan-importer.js?v=0.8.25',
+'./styles.css?v=0.8.26',
+'./app.js?v=0.8.26',
+'./raidplan-importer.js?v=0.8.26',
 './tools/raidplan-browser-export.js',
 './manifest.webmanifest',
 './icon.svg',
