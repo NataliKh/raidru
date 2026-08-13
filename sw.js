@@ -1,10 +1,10 @@
-const CACHE='raidru-v0819-raidplan-native-renderer';
+const CACHE='raidru-v0820-raidplan-native-renderer';
 const ASSETS=[
 './',
 './index.html',
-'./styles.css?v=0.8.19',
-'./app.js?v=0.8.19',
-'./raidplan-importer.js?v=0.8.19',
+'./styles.css?v=0.8.20',
+'./app.js?v=0.8.20',
+'./raidplan-importer.js?v=0.8.20',
 './tools/raidplan-browser-export.js',
 './manifest.webmanifest',
 './icon.svg',

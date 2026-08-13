@@ -812,7 +812,7 @@
 .raidplanRestore{display:flex;justify-content:flex-end;margin-top:10px;padding-top:10px;border-top:1px solid #25303a}
 .raidplanRestore button{border:1px solid #2c3945;background:#111820;color:#91a0ad;border-radius:8px;padding:8px 10px}
 
-/* 0.8.19 — RaidPlan native renderer: keep original visual grammar inside RaidPlan tab */
+/* 0.8.20 — RaidPlan native renderer: keep original visual grammar inside RaidPlan tab */
 .raidplanArenaNative{container-type:inline-size;aspect-ratio:1200/675!important;background:#050608!important}
 .arenaMap-raidplan-native{background:#050608!important}
 .arenaMap-raidplan-native .raidPlanMapImage{object-fit:cover!important;object-position:center!important;filter:none!important}
@@ -826,7 +826,7 @@
   box-shadow:none!important;color:var(--rp-color,#fff)!important;
   overflow:visible!important;line-height:1.16!important;text-align:left!important;
   transform:translate(-50%,-50%) rotate(var(--rp-angle,0deg));
-  z-index:14;
+  z-index:14;opacity:var(--rp-opacity,1);
 }
 .token.raidplanNative:hover{filter:brightness(1.08);z-index:25}
 .token.raidplanNative.dragging{filter:brightness(1.12);z-index:30}
@@ -845,10 +845,15 @@
 .rpNativeMob img{display:block;width:100%;height:100%;object-fit:cover;border-radius:50%;pointer-events:none;user-select:none;-webkit-user-drag:none}
 .rpMobDirection{position:absolute;left:50%;top:-15%;width:42%;height:24%;transform:translateX(-50%);background:var(--rp-ring,#d7180b);clip-path:polygon(50% 0,100% 100%,50% 70%,0 100%);filter:drop-shadow(0 2px 2px #0008);pointer-events:none}
 
-.effect.raidplanNativeEffect{clip-path:none!important;box-shadow:none!important;border:0!important;background:transparent!important}
+.effect.raidplanNativeEffect{clip-path:none!important;box-shadow:none!important;border:0!important;background:transparent!important;opacity:var(--rp-opacity,1)}
 .effect.raidplanNativeLine,.effect.raidplanNativeArrow{height:var(--rp-h,.7%)!important;background:var(--rp-stroke,#fff)!important;border-radius:999px!important;overflow:visible!important}
 .effect.raidplanNativeArrow::after{content:"";position:absolute;right:-.8%;top:50%;transform:translate(45%,-50%);width:0;height:0;border-top:max(5px,.65cqw) solid transparent;border-bottom:max(5px,.65cqw) solid transparent;border-left:max(10px,1.15cqw) solid var(--rp-stroke,#fff);filter:drop-shadow(0 1px 1px #0007)}
-.effect.raidplanNativeZone{background:var(--rp-fill,rgba(110,45,45,.55))!important;border:1px solid var(--rp-stroke,transparent)!important;border-radius:50%!important}
+.effect.raidplanNativeZone{background:var(--rp-fill,rgba(110,45,45,.55))!important;border:var(--rp-stroke-w,1px) solid var(--rp-stroke,transparent)!important;border-radius:0!important;overflow:visible!important}
+.effect.raidplanNativeCircle{border-radius:50%!important}
+.effect.raidplanNativeEllipse{border-radius:50%!important}
+.effect.raidplanNativeRect{border-radius:max(1px,.12cqw)!important}
+.effect.raidplanNativePolygon{border-radius:0!important}
+.rpNativeShapeLabel{position:absolute;inset:0;display:grid;place-items:center;padding:.12cqw;color:var(--rp-label-color,#fff);font-size:calc(var(--rp-shape-font,.9) * 1cqw);line-height:1.05;text-align:center;white-space:pre-wrap;text-shadow:0 1px 2px #000c;pointer-events:none;transform:rotate(calc(-1 * var(--rot,0deg)))}
 
 .sceneStrip.raidplanSceneStrip{gap:6px;overflow:visible}
 .sceneStrip.raidplanSceneStrip button{min-width:40px;width:40px;height:36px;display:grid;grid-template-columns:1fr;place-items:center;padding:5px;border-radius:8px}
@@ -858,3 +863,7 @@
   .raidplanArenaNative{aspect-ratio:1200/675!important}
   .rpNativeText{font-size:max(8px,calc(var(--rp-font,1.75) * 1cqw))!important}
 }
+
+/* 0.8.20 composite-object fidelity */
+.token.raidplanNative-icon{opacity:var(--rp-opacity,1)}
+.token.raidplanNative-icon .rpNativeAsset{max-width:100%;max-height:100%}

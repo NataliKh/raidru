@@ -1,11 +1,11 @@
-/* RaidRU v0.8.19 — RaidPlan import adapter
+/* RaidRU v0.8.20 — RaidPlan import adapter
  * Isolated from app.js on purpose: RaidPlan developer integration is not documented yet,
  * so transport/schema changes should stay in this file.
  */
 (function(){
   'use strict';
 
-  const VERSION='0.8.19';
+  const VERSION='0.8.20';
   const STEP_KEYS=['steps','scenes','pages','slides','frames'];
   const ITEM_KEYS=['objects','elements','items','components','drawings','entities','children','nodes'];
   const ROLE_WORDS={
@@ -25,7 +25,7 @@
 
   const obj=v=>v&&typeof v==='object';
   const arr=v=>Array.isArray(v)?v:obj(v)?Object.values(v):[];
-  const finite=v=>Number.isFinite(Number(v))?Number(v):null;
+  const finite=v=>(v==null||v==='')?null:(Number.isFinite(Number(v))?Number(v):null);
   const clamp=(n,a,b)=>Math.max(a,Math.min(b,n));
   const text=v=>v==null?'':String(v);
   const safeJsonParse=s=>{try{return JSON.parse(s)}catch(_){return null}};
@@ -109,11 +109,19 @@
     const y=finite(deepPick(o,[['y'],['top'],['cy'],['position','y'],['pos','y'],['meta','pos','y'],['transform','y'],['point','y'],['coordinates','y'],['location','y']]));
     return{x,y};
   }
+  function nativeScale(o){
+    // RaidPlan has used both {scale:{x,y}} and scalar scale values across planner revisions.
+    // Treat all variants as equivalent; ignoring scalar scale is what made small spell icons huge.
+    const scalar=finite(deepPick(o,[['meta','scale'],['scale']]));
+    const sx=finite(deepPick(o,[['meta','scale','x'],['scale','x'],['meta','scaleX'],['scaleX']]))??scalar??1;
+    const sy=finite(deepPick(o,[['meta','scale','y'],['scale','y'],['meta','scaleY'],['scaleY']]))??scalar??1;
+    return{sx:Math.abs(sx)||1,sy:Math.abs(sy)||1};
+  }
   function readWH(o){
     let w=finite(deepPick(o,[['w'],['width'],['size','width'],['size','w'],['meta','size','w'],['meta','size','width'],['dimensions','width'],['radius']]));
     let h=finite(deepPick(o,[['h'],['height'],['size','height'],['size','h'],['meta','size','h'],['meta','size','height'],['dimensions','height'],['radius']]));
-    const sx=finite(deepPick(o,[['meta','scale','x'],['scale','x']]))??1,sy=finite(deepPick(o,[['meta','scale','y'],['scale','y']]))??1;
-    if(w!=null)w*=Math.abs(sx);if(h!=null)h*=Math.abs(sy);
+    const {sx,sy}=nativeScale(o);
+    if(w!=null)w*=sx;if(h!=null)h*=sy;
     return{w,h};
   }
   function readRotation(o){
@@ -277,10 +285,12 @@
   }
 
   function nativeSize(o,tf){
-    const w=finite(o?.meta?.size?.w),h=finite(o?.meta?.size?.h),sx=Math.abs(finite(o?.meta?.scale?.x)??1),sy=Math.abs(finite(o?.meta?.scale?.y)??1);
+    const w=finite(deepPick(o,[['meta','size','w'],['meta','size','width'],['size','w'],['size','width'],['width'],['w']]));
+    const h=finite(deepPick(o,[['meta','size','h'],['meta','size','height'],['size','h'],['size','height'],['height'],['h']]));
+    const {sx,sy}=nativeScale(o);
     return{
-      w:w!=null?Math.max(.2,w*sx*(tf.scaleX||1)):null,
-      h:h!=null?Math.max(.2,h*sy*(tf.scaleY||1)):null
+      w:w!=null?Math.max(.08,w*sx*(tf.scaleX||1)):null,
+      h:h!=null?Math.max(.08,h*sy*(tf.scaleY||1)):null
     };
   }
   function raidPlanArena(step){return step?.__raidplanV2?arr(step.nodes).find(n=>raidPlanNodeType(n)==='arena')||null:null}
@@ -294,7 +304,9 @@
   }
   function nativeMeta(o,tf,subtype,extra={}){
     const wh=nativeSize(o,tf),font=finite(o?.attr?.fontSize),cw=tf?.canvas?.w||1200;
-    return{kind:'raidplan',native:true,subtype,source:'RaidPlan',w:wh.w,h:wh.h,fontCqw:font!=null?font/cw*100:null,angle:readRotation(o),...extra};
+    const opacity=finite(o?.attr?.opacity??o?.opacity??o?.meta?.opacity);
+    const z=finite(o?.meta?.zIndex??o?.meta?.z??o?.zIndex??o?.z);
+    return{kind:'raidplan',native:true,subtype,source:'RaidPlan',sourceType:raidPlanNodeType(o),w:wh.w,h:wh.h,fontCqw:font!=null?font/cw*100:null,angle:readRotation(o),opacity:opacity!=null?clamp(opacity,0,1):null,z,...extra};
   }
   function roleAssetMeta(o,tf,role){
     const asset=text(o?.attr?.asset||'');return nativeMeta(o,tf,'role',{role,asset,assetUrl:cdnAsset(asset)});
@@ -352,29 +364,34 @@
     else if(/arrow/.test(s)||nodeType==='line'&&/drawn|arrow/.test(text(o?.attr?.endType).toLowerCase()))et='arrow';
     else if(nodeType==='line'||nodeType==='path'||/tether|line|beam|link/.test(s))et='line';
     else if(/soak|stack|safe/.test(s))et='soak';
-    else if(nodeType==='circle'||/circle|ellipse|aoe|zone|area|ring|donut|rect|rectangle|square/.test(s))et='zone';
+    else if(['circle','ellipse','rect','rectangle','square'].includes(nodeType)||/circle|ellipse|aoe|zone|area|ring|donut|rect|rectangle|square/.test(s))et='zone';
+    const shapeKind=['rect','rectangle','square'].includes(nodeType)||/\b(rect|rectangle|square)\b/.test(s)?'rect':(nodeType==='ellipse'||/\bellipse\b/.test(s)?'ellipse':(nodeType==='circle'||/\bcircle\b/.test(s)?'circle':'zone'));
 
     const poly=(nodeType==='line'||nodeType==='path')?[]:pointsOf(o);
     if(poly.length>=3){
       const mapped=poly.map(x=>tf.map(x.x,x.y)),xs=mapped.map(x=>x.x),ys=mapped.map(x=>x.y);
       report.approximated++;report.effects++;
-      return{kind:'effect',value:{id:`rpfx-${report.seq++}`,type:'zone',x:+((Math.min(...xs)+Math.max(...xs))/2).toFixed(2),y:+((Math.min(...ys)+Math.max(...ys))/2).toFixed(2),w:+clamp(Math.max(...xs)-Math.min(...xs),.5,99).toFixed(2),h:+clamp(Math.max(...ys)-Math.min(...ys),.5,99).toFixed(2),rot:0,label:'',raidPlan:{native:true,hideLabel:true,fill:o?.attr?.fill||null,stroke:o?.attr?.stroke||null}}};
+      const shapeLabel=preserveText(objectLabel(o));
+      return{kind:'effect',value:{id:`rpfx-${report.seq++}`,type:'zone',x:+((Math.min(...xs)+Math.max(...xs))/2).toFixed(2),y:+((Math.min(...ys)+Math.max(...ys))/2).toFixed(2),w:+clamp(Math.max(...xs)-Math.min(...xs),.5,99).toFixed(2),h:+clamp(Math.max(...ys)-Math.min(...ys),.5,99).toFixed(2),rot:readRotation(o),label:'',raidPlan:{native:true,hideLabel:true,shapeKind:'polygon',shapeLabel,fill:o?.attr?.fill||null,stroke:o?.attr?.stroke||null,strokeWidth:finite(o?.attr?.strokeWidth),opacity:finite(o?.attr?.opacity)}}};
     }
     if(et){
       let geom=(nodeType==='line')?fabricLineGeometry(o,tf):((et==='line'||et==='arrow')?lineFromEndpoints(o,tf,bossId,sceneName):null);
-      const wh=readWH(o);if(!geom)geom={x:p.x,y:p.y,w:wh.w!=null?tf.sizeScale(wh.w):((et==='line'||et==='arrow')?35:22),h:wh.h!=null?tf.sizeScale(wh.h):((et==='line'||et==='arrow')?6:22),rot:readRotation(o)};
-      if(nodeType==='circle'){const nwh=nativeSize(o,tf);geom.w=nwh.w??12;geom.h=nwh.h??geom.w}
+      const wh=readWH(o),nwh=nativeSize(o,tf);
+      if(!geom)geom={x:p.x,y:p.y,w:nwh.w??(wh.w!=null?wh.w*(tf.scaleX||tf.sizeScale(1)):((et==='line'||et==='arrow')?35:22)),h:nwh.h??(wh.h!=null?wh.h*(tf.scaleY||tf.sizeScale(1)):((et==='line'||et==='arrow')?6:22)),rot:readRotation(o)};
+      if(et==='zone'&&(nwh.w!=null||nwh.h!=null)){geom.w=nwh.w??nwh.h??12;geom.h=nwh.h??nwh.w??12}
       if(wh.w!=null&&wh.h==null&&/(radius)/.test(s)){geom.w=geom.h=tf.sizeScale(wh.w)*2}
-      geom.w=clamp(Math.abs(geom.w)||12,.25,99);geom.h=clamp(Math.abs(geom.h)||.8,.25,99);report.effects++;
+      geom.w=clamp(Math.abs(geom.w)||12,.08,99);geom.h=clamp(Math.abs(geom.h)||.8,.08,99);report.effects++;
       const strokeWidth=finite(o?.attr?.strokeWidth),nativeLine=nodeType==='line';
-      if(nativeLine&&strokeWidth!=null)geom.h=Math.max(.25,strokeWidth*(tf.scaleY||1));
+      if(nativeLine&&strokeWidth!=null)geom.h=Math.max(.12,strokeWidth*(tf.scaleY||1));
       if(nodeType==='path'||/tether|group|pin|locked/.test(s))report.approximated++;
-      return{kind:'effect',value:{id:`rpfx-${report.seq++}`,type:et,x:+clamp(geom.x,-10,110).toFixed(2),y:+clamp(geom.y,-10,110).toFixed(2),w:+geom.w.toFixed(2),h:+geom.h.toFixed(2),rot:+(geom.rot||0).toFixed(2),label:'',raidPlan:{native:true,hideLabel:true,nodeType,stroke:text(o?.attr?.stroke||'#ffffff'),fill:o?.attr?.fill||null,strokeWidth:strokeWidth??null,startType:text(o?.attr?.startType||'none'),endType:text(o?.attr?.endType||'none')}}};
+      const shapeLabel=et==='zone'?preserveText(objectLabel(o)):'';
+      const font=finite(o?.attr?.fontSize),cw=tf?.canvas?.w||1200;
+      return{kind:'effect',value:{id:`rpfx-${report.seq++}`,type:et,x:+clamp(geom.x,-10,110).toFixed(2),y:+clamp(geom.y,-10,110).toFixed(2),w:+geom.w.toFixed(2),h:+geom.h.toFixed(2),rot:+(geom.rot||0).toFixed(2),label:'',raidPlan:{native:true,hideLabel:true,nodeType,shapeKind:et==='zone'?shapeKind:null,shapeLabel,shapeFontCqw:font!=null?font/cw*100:null,labelFill:text(o?.attr?.textFill||o?.attr?.fontColor||o?.attr?.color||'#ffffff'),stroke:text(o?.attr?.stroke||'transparent'),fill:o?.attr?.fill||null,strokeWidth:strokeWidth??null,opacity:finite(o?.attr?.opacity),rx:finite(o?.attr?.rx??o?.attr?.radius),startType:text(o?.attr?.startType||'none'),endType:text(o?.attr?.endType||'none')}}};
     }
 
     if(/boss|enemy|npc|ability|spell|icon|sticker|encounter|object/.test(s)){
       const asset2=text(o?.attr?.asset||o?.attr?.assetUrl||'');
-      if(asset2){report.tokens++;return{kind:'token',value:[`rp-${report.seq++}`,label,'text',+p.x.toFixed(2),+p.y.toFixed(2),nativeMeta(o,tf,'icon',{assetUrl:cdnAsset(asset2)})]}}
+      if(asset2){report.tokens++;return{kind:'token',value:[`rp-${report.seq++}`,label,'text',+p.x.toFixed(2),+p.y.toFixed(2),nativeMeta(o,tf,'icon',{assetUrl:cdnAsset(asset2),objectFit:text(o?.attr?.objectFit||'contain'),lname:preserveText(o?.attr?.lname||''),rawLabel:preserveText(label)})]}}
       const it=nearestEncounter(label,bossId);
       if(it){report.tokens++;return{kind:'token',value:[`rp-${report.seq++}`,it.name,'encounter',+p.x.toFixed(2),+p.y.toFixed(2),{kind:'encounter',key:it.key,boss:it.boss||bossId,category:it.category,icon:it.icon,name:it.name,aliases:it.aliases||'',source:'raidplan'}]}}
     }
@@ -479,7 +496,7 @@
     const imported=result.scenes.map((s,i)=>normalizeScene(deep({...s,name:s.name.replace(/^RaidPlan\s*·?\s*/i,'')}),bossId,i));
     bs.raidPlanScenes=imported;
     bs.raidPlanTimelineV3=typeof raidPlanTimelineForScenes==='function'?raidPlanTimelineForScenes(imported):imported.map((s,i)=>({id:`rp-time-${i}`,time:i*35,label:s.name,type:'move',scene:i,note:s.note||''}));
-    bs.raidPlanImport={at:now,name:result.planName,report:result.report,mode:'separate-tab',sourceCode:result.rawRoot?.code||'',revision:result.rawRoot?.revision??null,renderer:'native-v2'};
+    bs.raidPlanImport={at:now,name:result.planName,report:result.report,mode:'separate-tab',sourceCode:result.rawRoot?.code||'',revision:result.rawRoot?.revision??null,renderer:'native-v3'};
     state._scenarioSourceByBoss=state._scenarioSourceByBoss||{};state._scenarioSourceByBoss[bossId]='raidplan';
     if(mode!=='silent-refresh'){current=bossId;sceneIndex=0;playerSceneIndex=0;view='planner'}
     if(typeof save==='function')save();
@@ -490,14 +507,17 @@
   async function refreshCurrentIfLegacy(){
     try{
       if(typeof bossState!=='function'||typeof current==='undefined')return false;
-      const bs=bossState(current);if(!bs?.raidPlanScenes?.length||bs?.raidPlanImport?.renderer==='native-v2')return false;
+      const bs=bossState(current);if(!bs?.raidPlanScenes?.length||bs?.raidPlanImport?.renderer==='native-v3')return false;
       const name=text(bs?.raidPlanImport?.name||''),code=text(bs?.raidPlanImport?.sourceCode||'')||(name.match(/RaidPlan\s+([A-Za-z0-9_-]{8,64})/i)?.[1]||'');
       if(!code)return false;
-      const guard=`raidru-rp-refresh-${current}-${code}-0819`;if(typeof sessionStorage!=='undefined'&&sessionStorage.getItem(guard))return false;
+      const guard=`raidru-rp-refresh-${current}-${code}-0820`;if(typeof sessionStorage!=='undefined'&&sessionStorage.getItem(guard))return false;
       if(typeof sessionStorage!=='undefined')sessionStorage.setItem(guard,'1');
       const raw=await fetchUrl(code),result=convert(raw,{bossId:current,currentBoss:current});applyConverted(result,'silent-refresh');return true;
     }catch(e){console.warn('RaidPlan legacy refresh skipped',e);return false}
   }
 
   window.RaidPlanImporter={VERSION,planCode,canonicalUrl,userdataUrl,findPlanRoot,findSteps,flattenItems,bossFromRaw,convert,fetchUrl,parseInput,applyConverted,reportText,refreshCurrentIfLegacy};
+  // Rebuild an already imported RaidPlan tab when renderer semantics change.
+  // This is silent and uses the same private RaidRU backend endpoint; no user action is needed.
+  if(typeof setTimeout==='function')setTimeout(()=>{refreshCurrentIfLegacy().catch(()=>{})},80);
 })();
