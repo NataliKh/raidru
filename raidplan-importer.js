@@ -5,7 +5,7 @@
 (function(){
   'use strict';
 
-  const VERSION='0.8.15';
+  const VERSION='0.8.17';
   const STEP_KEYS=['steps','scenes','pages','slides','frames'];
   const ITEM_KEYS=['objects','elements','items','components','drawings','entities','children','nodes'];
   const ROLE_WORDS={
@@ -362,27 +362,27 @@
     return `https://userdata.raidplan.io/${c}.json${q}`;
   }
   async function fetchUrl(input){
-    const url=canonicalUrl(input),code=planCode(input);if(!url||!code)throw new Error('Нужна ссылка вида https://raidplan.io/plan/…');
-    // First try RaidPlan's data endpoint. It is the actual v2 payload used by the planner,
-    // but browsers may block it from GitHub Pages because RaidPlan does not expose CORS.
+    const code=planCode(input);if(!code)throw new Error('Нужна ссылка вида https://raidplan.io/plan/…');
+    // GitHub Pages intentionally talks only to the RaidRU backend. RaidPlan's userdata
+    // host does not expose browser CORS, so direct client-side probing just creates a
+    // broken UX and leaks implementation details to the user.
+    const endpoint=text(window.RAIDRU_RAIDPLAN_API||'https://raidru-wcl.raidru-wcl.workers.dev/raidplan').trim();
+    if(!endpoint)throw new Error('Сервис импорта временно недоступен.');
+    const sep=endpoint.includes('?')?'&':'?';
+    let r;
     try{
-      const r=await fetch(userdataUrl(code),{method:'GET',mode:'cors',credentials:'omit',cache:'no-store',headers:{Accept:'application/json'}});
-      if(r.ok){const v=await r.json();if(v)return v}
-    }catch(_){}
-    // Optional private no-store proxy on the user's own Cloudflare Worker.
-    const proxy=text(window.RAIDRU_RAIDPLAN_PROXY||'https://raidru-wcl.raidru-wcl.workers.dev/raidplan').trim();
-    if(proxy){
-      try{
-        const sep=proxy.includes('?')?'&':'?';const r=await fetch(`${proxy}${sep}code=${encodeURIComponent(code)}`,{credentials:'omit',cache:'no-store',headers:{Accept:'application/json'}});
-        if(r.ok){const v=await r.json();if(v)return v}
-      }catch(_){}
+      r=await fetch(`${endpoint}${sep}code=${encodeURIComponent(code)}`,{
+        method:'GET',credentials:'omit',cache:'no-store',headers:{Accept:'application/json'}
+      });
+    }catch(_){throw new Error('Не удалось связаться с сервисом импорта RaidPlan.');}
+    if(!r.ok){
+      if(r.status===404)throw new Error('План RaidPlan не найден или ссылка недействительна.');
+      if(r.status===403)throw new Error('Этот план недоступен для импорта по ссылке.');
+      throw new Error('Сервис импорта RaidPlan временно недоступен.');
     }
-    // Last chance: old/embedded schemas on the plan page.
-    try{
-      const r=await fetch(url,{method:'GET',mode:'cors',credentials:'omit',cache:'no-store',headers:{Accept:'application/json,text/html;q=0.9,*/*;q=0.8'}});
-      if(r.ok){const ct=r.headers.get('content-type')||'',body=await r.text();if(/json/i.test(ct)){const v=safeJsonParse(body);if(v)return v}const direct=safeJsonParse(body);if(direct)return direct;return parseEmbeddedHtml(body)}
-    }catch(_){}
-    throw new Error('RaidPlan JSON найден по предсказуемому userdata endpoint, но браузер не даёт RaidRU прочитать его из-за CORS. Разверни no-store Worker route из tools/raidplan-proxy-worker-route.js или открой JSON через Browser Exporter v0.3.');
+    let v;try{v=await r.json()}catch(_){throw new Error('RaidPlan вернул повреждённые данные.');}
+    if(!v)throw new Error('RaidPlan не вернул данные плана.');
+    return v;
   }
 
   function parseInput(s){const v=safeJsonParse(text(s).trim());if(!v)throw new Error('Это не JSON RaidPlan.');return v}

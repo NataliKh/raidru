@@ -2,9 +2,9 @@ const CACHE='raidru-v0815-raidplan-separate-tabs';
 const ASSETS=[
 './',
 './index.html',
-'./styles.css?v=0.8.16',
-'./app.js?v=0.8.16',
-'./raidplan-importer.js?v=0.8.16',
+'./styles.css?v=0.8.17',
+'./app.js?v=0.8.17',
+'./raidplan-importer.js?v=0.8.17',
 './tools/raidplan-browser-export.js',
 './manifest.webmanifest',
 './icon.svg',

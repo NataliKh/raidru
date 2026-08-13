@@ -801,3 +801,13 @@
 .raidplanDestination{display:flex;flex-direction:column;justify-content:center;gap:4px;padding:10px 12px;border:1px solid #2f5943;background:#112019;border-radius:10px}
 .raidplanDestination>span{color:#7e8b99;font-size:9px;text-transform:uppercase;letter-spacing:.07em}.raidplanDestination>b{color:#afe4c4;font-size:12px}.raidplanDestination>small{color:#769184;font-size:10px;line-height:1.35}
 @media(max-width:760px){.scenarioSourceCard{padding:10px}.scenarioSourceTabs{grid-template-columns:1fr}.scenarioSourceHead em{white-space:normal}.raidplanImportGrid{grid-template-columns:1fr}}
+
+
+/* 0.8.17 — RaidPlan import is a normal product flow, no technical fallbacks in UI */
+.raidplanSimpleModal{width:min(760px,96vw)}
+.raidplanPrimaryImport{margin-top:14px}
+.raidplanPrimaryImport input{font-size:13px;padding:12px 13px}
+.raidplanPrimaryImport button{min-width:150px;font-weight:800}
+.raidplanPrimaryImport button:disabled{opacity:.6;cursor:wait}
+.raidplanRestore{display:flex;justify-content:flex-end;margin-top:10px;padding-top:10px;border-top:1px solid #25303a}
+.raidplanRestore button{border:1px solid #2c3945;background:#111820;color:#91a0ad;border-radius:8px;padding:8px 10px}
