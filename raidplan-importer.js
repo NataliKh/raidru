@@ -366,19 +366,19 @@
     // GitHub Pages intentionally talks only to the RaidRU backend. RaidPlan's userdata
     // host does not expose browser CORS, so direct client-side probing just creates a
     // broken UX and leaks implementation details to the user.
-    const endpoint=text(window.RAIDRU_RAIDPLAN_API||'https://raidru-wcl.raidru-wcl.workers.dev/raidplan').trim();
-    if(!endpoint)throw new Error('Сервис импорта временно недоступен.');
+    const endpoint=text(window.RAIDRU_RAIDPLAN_API||'https://raidru-raidplan.raidru-wcl.workers.dev/raidplan').trim();
+    if(!endpoint)throw new Error('Попробуй ещё раз через несколько секунд.');
     const sep=endpoint.includes('?')?'&':'?';
     let r;
     try{
       r=await fetch(`${endpoint}${sep}code=${encodeURIComponent(code)}`,{
         method:'GET',credentials:'omit',cache:'no-store',headers:{Accept:'application/json'}
       });
-    }catch(_){throw new Error('Не удалось связаться с сервисом импорта RaidPlan.');}
+    }catch(_){throw new Error('Не удалось загрузить план. Попробуй ещё раз.');}
     if(!r.ok){
       if(r.status===404)throw new Error('План RaidPlan не найден или ссылка недействительна.');
       if(r.status===403)throw new Error('Этот план недоступен для импорта по ссылке.');
-      throw new Error('Сервис импорта RaidPlan временно недоступен.');
+      throw new Error('Не удалось загрузить план. Попробуй ещё раз.');
     }
     let v;try{v=await r.json()}catch(_){throw new Error('RaidPlan вернул повреждённые данные.');}
     if(!v)throw new Error('RaidPlan не вернул данные плана.');
