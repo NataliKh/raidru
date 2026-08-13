@@ -1,11 +1,11 @@
-/* RaidRU v0.8.15 — RaidPlan import adapter
+/* RaidRU v0.8.19 — RaidPlan import adapter
  * Isolated from app.js on purpose: RaidPlan developer integration is not documented yet,
  * so transport/schema changes should stay in this file.
  */
 (function(){
   'use strict';
 
-  const VERSION='0.8.17';
+  const VERSION='0.8.19';
   const STEP_KEYS=['steps','scenes','pages','slides','frames'];
   const ITEM_KEYS=['objects','elements','items','components','drawings','entities','children','nodes'];
   const ROLE_WORDS={
@@ -32,6 +32,8 @@
   const pick=(o,keys)=>{for(const k of keys){if(o&&o[k]!=null)return o[k]}return null};
   const deepPick=(o,paths)=>{for(const path of paths){let v=o;for(const k of path){v=v?.[k]}if(v!=null)return v}return null};
   const clean=s=>text(s).replace(/<[^>]+>/g,' ').replace(/\s+/g,' ').trim();
+  const preserveText=s=>text(s).replace(/<br\s*\/?\s*>/gi,'\n').replace(/<[^>]+>/g,'').replace(/\r\n/g,'\n').trim();
+  const cdnAsset=asset=>asset?(/^https?:\/\//i.test(text(asset))?text(asset):`https://cdn.raidplan.io/${text(asset).replace(/^\/+/, '')}`):'';
 
   function planCode(input){
     const s=text(input).trim();
@@ -125,18 +127,33 @@
       .filter(Boolean).join(' ').toLowerCase();
   }
   function roleType(o){
-    const s=typeString(o);
-    if(/role\/tank\.svg|\btank\b|танк/.test(s))return 'tank';
-    if(/role\/healer\.svg|\bhealer\b|\bheal\b|хил|лекарь/.test(s))return 'healer';
-    if(/role\/mdps\.svg|\bmdps\b|\bmelee\b|мили/.test(s))return 'melee';
-    if(/role\/rdps\.svg|\brdps\b|\branged\b|\brange\b|рдд/.test(s))return 'ranged';
-    for(const [role,words] of Object.entries(ROLE_WORDS))if(words.some(w=>s.includes(w)))return role;
+    const node=raidPlanNodeType(o),asset=text(o?.attr?.asset||pick(o,['asset','icon'])||'').toLowerCase();
+    // В RaidPlan v2 роль определяется прежде всего asset-файлом. Текстовые блоки
+    // нельзя классифицировать по словам "танк/РДД" внутри самой инструкции.
+    if(node==='itext')return '';
+    if(/role\/tank\.svg(?:$|\?)/.test(asset))return 'tank';
+    if(/role\/healer\.svg(?:$|\?)/.test(asset))return 'healer';
+    if(/role\/mdps\.svg(?:$|\?)/.test(asset))return 'melee';
+    if(/role\/rdps\.svg(?:$|\?)/.test(asset))return 'ranged';
+    const roleRaw=[pick(o,['role','job','class']),pick(o?.attr||{},['role','job','class'])].filter(Boolean).join(' ').toLowerCase();
+    if(/\btank\b|танк/.test(roleRaw))return 'tank';
+    if(/\bhealer\b|\bheal\b|хил|лекарь/.test(roleRaw))return 'healer';
+    if(/\bmdps\b|\bmelee\b|мили/.test(roleRaw))return 'melee';
+    if(/\brdps\b|\branged\b|\brange\b|рдд/.test(roleRaw))return 'ranged';
     return '';
   }
   function markerKey(o){
-    const s=typeString(o),rawType=text(pick(o,['type','kind','objectType','category','icon'])).toLowerCase(),lab=objectLabel(o).toLowerCase();
+    const asset=text(o?.attr?.asset||pick(o,['asset','icon'])||'').toLowerCase();
+    if(/game\/wow\/role\//.test(asset))return '';
+    const assetPairs=[
+      ['star','/raid/star.'],['circle','/raid/circle.'],['diamond','/raid/diamond.'],['triangle','/raid/triangle.'],
+      ['moon','/raid/moon.'],['square','/raid/square.'],['cross','/raid/cross.'],['skull','/raid/skull.']
+    ];
+    for(const [k,needle] of assetPairs)if(asset.includes(needle))return k;
+    const rawType=text(pick(o,['type','kind','objectType','category','icon'])).toLowerCase(),lab=objectLabel(o).toLowerCase();
     const explicit=/marker|raid.?mark|waymark|world.?mark/.test(rawType)||/[★⭐●◆♦▲☾■✕☠💀]/.test(lab);
-    if(!explicit)return ''; // plain circle/square/polygon are geometry, not raid markers
+    if(!explicit)return '';
+    const s=[rawType,lab,text(o?.attr?.text),text(o?.attr?.lname)].join(' ').toLowerCase();
     const pairs=[
       ['star',['star','звезд','⭐','★']],['circle',['circle','orange','круг','●']],['diamond',['diamond','purple','ромб','◆']],
       ['triangle',['triangle','green','треуг','▲']],['moon',['moon','луна','☾']],['square',['square','blue','квадрат','■']],
@@ -240,8 +257,14 @@
     const ps=pointsOf(o),size=tf?.canvas||null;
     if(ps.length>=2){
       const a=ps[0],b=ps[ps.length-1];
-      const looksAbsolute=!size||(a.x>=-1&&a.x<=size.w+1&&b.x>=-1&&b.x<=size.w+1&&a.y>=-1&&a.y<=size.h+1&&b.y>=-1&&b.y<=size.h+1);
-      if(looksAbsolute){const p1=tf.map(a.x,a.y),p2=tf.map(b.x,b.y);return{x:(p1.x+p2.x)/2,y:(p1.y+p2.y)/2,w:Math.hypot(p2.x-p1.x,p2.y-p1.y),h:5,rot:Math.atan2(p2.y-p1.y,p2.x-p1.x)*180/Math.PI}}
+      const looksAbsolute=!size||(a.x>=-size.w*.15&&a.x<=size.w*1.15&&b.x>=-size.w*.15&&b.x<=size.w*1.15&&a.y>=-size.h*.15&&a.y<=size.h*1.15&&b.y>=-size.h*.15&&b.y<=size.h*1.15);
+      if(looksAbsolute){
+        const p1=tf.map(a.x,a.y),p2=tf.map(b.x,b.y),dx=b.x-a.x,dy=b.y-a.y;
+        // CSS width is relative to arena WIDTH. For a 1200x675 RaidPlan canvas,
+        // angle/length must therefore be calculated in source pixels, not between X/Y percentages.
+        const widthPct=size?Math.hypot(dx,dy)*(100/size.w):Math.hypot(p2.x-p1.x,p2.y-p1.y);
+        return{x:(p1.x+p2.x)/2,y:(p1.y+p2.y)/2,w:widthPct,h:5,rot:Math.atan2(dy,dx)*180/Math.PI};
+      }
     }
     return null;
   }
@@ -253,13 +276,65 @@
     return nearestEncounter(label,bossId);
   }
 
+  function nativeSize(o,tf){
+    const w=finite(o?.meta?.size?.w),h=finite(o?.meta?.size?.h),sx=Math.abs(finite(o?.meta?.scale?.x)??1),sy=Math.abs(finite(o?.meta?.scale?.y)??1);
+    return{
+      w:w!=null?Math.max(.2,w*sx*(tf.scaleX||1)):null,
+      h:h!=null?Math.max(.2,h*sy*(tf.scaleY||1)):null
+    };
+  }
+  function raidPlanArena(step){return step?.__raidplanV2?arr(step.nodes).find(n=>raidPlanNodeType(n)==='arena')||null:null}
+  function raidPlanBackground(step){
+    const arena=raidPlanArena(step),a=arena?.attr||{};
+    if(a.imageUrl)return cdnAsset(a.imageUrl);
+    const raid=text(a.raid||'').replace('.midnight.','.');
+    const boss=text(a.boss||''),map=text(a.map||'');
+    if(raid&&boss){const suffix=map&&map!=='default'?`-${map}`:'';return `https://cdn.raidplan.io/raid/${raid}/map/${boss}${suffix}.jpg`}
+    return '';
+  }
+  function nativeMeta(o,tf,subtype,extra={}){
+    const wh=nativeSize(o,tf),font=finite(o?.attr?.fontSize),cw=tf?.canvas?.w||1200;
+    return{kind:'raidplan',native:true,subtype,source:'RaidPlan',w:wh.w,h:wh.h,fontCqw:font!=null?font/cw*100:null,angle:readRotation(o),...extra};
+  }
+  function roleAssetMeta(o,tf,role){
+    const asset=text(o?.attr?.asset||'');return nativeMeta(o,tf,'role',{role,asset,assetUrl:cdnAsset(asset)});
+  }
+  function markerAssetMeta(o,tf,key){
+    const asset=text(o?.attr?.asset||'');return nativeMeta(o,tf,'marker',{markerKey:key,asset,assetUrl:cdnAsset(asset)});
+  }
   function convertItem(o,ctx){
     const {tf,bossId,sceneName,report}=ctx,nodeType=raidPlanNodeType(o),s=typeString(o),label=objectLabel(o)||'RaidPlan',p=pointFor(o,tf,bossId,sceneName);
     if(nodeType==='arena')return null;
     if(!p){report.skipped++;return null}
 
+    // 1) Text is text. Do this BEFORE any role/marker heuristics: instructions often
+    // contain words like "танк" and "РДД" and must never become player markers.
+    if(nodeType==='itext'){
+      const raw=preserveText(o?.attr?.text||label),meta=nativeMeta(o,tf,'text',{
+        text:raw,fill:text(o?.attr?.fill||'#ffffff'),backgroundColor:o?.attr?.backgroundColor||null,
+        textAlign:text(o?.attr?.textAlign||'left'),verticalAlign:text(o?.attr?.verticalAlign||'top'),styles:Array.isArray(o?.attr?.styles)?o.attr.styles:[]
+      });
+      report.text++;report.tokens++;
+      return{kind:'token',value:[`rp-${report.seq++}`,raw,'text',+p.x.toFixed(2),+p.y.toFixed(2),meta]};
+    }
+
+    // 2) RaidPlan v2 marker assets: role icons and raid markers are different things,
+    // even though both use markerStyle="square".
+    const asset=text(o?.attr?.asset||'');
+    if(nodeType==='marker'&&/game\/wow\/role\//i.test(asset)){
+      const role=roleType(o)||'ranged',rt=role,meta=roleAssetMeta(o,tf,role);report.tokens++;
+      return{kind:'token',value:[`rp-${report.seq++}`,({tank:'Танк',healer:'Хил',melee:'Мили',ranged:'РДД'}[role]||'Игрок'),rt,+p.x.toFixed(2),+p.y.toFixed(2),meta]};
+    }
     const mkey=markerKey(o);
-    if(mkey){report.tokens++;return{kind:'token',value:[`rp-${report.seq++}`,markerLabel(mkey),'marker',+p.x.toFixed(2),+p.y.toFixed(2),{kind:'raidplan',subtype:'marker',source:'RaidPlan'}]}}
+    if(nodeType==='marker'&&mkey){report.tokens++;return{kind:'token',value:[`rp-${report.seq++}`,markerLabel(mkey),'marker',+p.x.toFixed(2),+p.y.toFixed(2),markerAssetMeta(o,tf,mkey)]}}
+
+    // 3) Mob portraits are rendered from RaidPlan displayId with original size/ring.
+    if(nodeType==='mob'){
+      const display=text(o?.attr?.displayId||''),rawName=preserveText(o?.attr?.lname||label)||'Существо';
+      const meta=nativeMeta(o,tf,'mob',{displayId:display,assetUrl:display?`https://cdn.raidplan.io/wow/portrait/${display}.png`:'',ringColor:text(o?.attr?.ringColor||'#d7180b'),ringSize:finite(o?.attr?.ringSize)??0,noDir:!!o?.attr?.noDir,noTip:!!o?.attr?.noTip});
+      const it=mobEncounter(o,bossId,rawName);if(it){meta.encounterKey=it.key;meta.category=it.category;}
+      report.tokens++;return{kind:'token',value:[`rp-${report.seq++}`,rawName,it?.category==='boss'?'boss':'encounter',+p.x.toFixed(2),+p.y.toFixed(2),meta]};
+    }
 
     const role=roleType(o),cmeta=classMeta(o,label,role);
     if(role||cmeta||/(player|character|member|assignment|slot|role|class|job)/.test(s)){
@@ -267,14 +342,9 @@
       return{kind:'token',value:[`rp-${report.seq++}`,roleLabel,rt,+p.x.toFixed(2),+p.y.toFixed(2),cmeta||{kind:'raidplan',subtype:'player',source:'RaidPlan'}]};
     }
 
-    if(nodeType==='itext'||/(^|\s)(text|label|note|annotation|caption)(\s|$)/.test(s)||(!pick(o,['type','kind','objectType','shape','category'])&&label)){
-      report.text++;report.tokens++;return{kind:'token',value:[`rp-${report.seq++}`,label,'text',+p.x.toFixed(2),+p.y.toFixed(2),{kind:'raidplan',subtype:'text',source:'RaidPlan'}]};
-    }
-
-    if(nodeType==='mob'){
-      const it=mobEncounter(o,bossId,label);
-      if(it){report.tokens++;return{kind:'token',value:[`rp-${report.seq++}`,it.name,it.category==='boss'?'boss':'encounter',+p.x.toFixed(2),+p.y.toFixed(2),{kind:'encounter',key:it.key,boss:bossId,category:it.category,icon:it.icon,name:it.name,aliases:it.aliases||'',source:'raidplan'}]}}
-      report.tokens++;return{kind:'token',value:[`rp-${report.seq++}`,label,'marker',+p.x.toFixed(2),+p.y.toFixed(2),{kind:'raidplan',subtype:'mob',displayId:o?.attr?.displayId||'',source:'RaidPlan'}]};
+    // Generic legacy text/labels.
+    if(/(^|\s)(text|label|note|annotation|caption)(\s|$)/.test(s)||(!pick(o,['type','kind','objectType','shape','category'])&&label)){
+      const raw=preserveText(label);report.text++;report.tokens++;return{kind:'token',value:[`rp-${report.seq++}`,raw,'text',+p.x.toFixed(2),+p.y.toFixed(2),nativeMeta(o,tf,'text',{text:raw})]};
     }
 
     let et='';
@@ -288,22 +358,25 @@
     if(poly.length>=3){
       const mapped=poly.map(x=>tf.map(x.x,x.y)),xs=mapped.map(x=>x.x),ys=mapped.map(x=>x.y);
       report.approximated++;report.effects++;
-      return{kind:'effect',value:{id:`rpfx-${report.seq++}`,type:'zone',x:+((Math.min(...xs)+Math.max(...xs))/2).toFixed(2),y:+((Math.min(...ys)+Math.max(...ys))/2).toFixed(2),w:+clamp(Math.max(...xs)-Math.min(...xs),6,90).toFixed(2),h:+clamp(Math.max(...ys)-Math.min(...ys),6,90).toFixed(2),rot:0,label:label||'Polygon (приближённо)'}};
+      return{kind:'effect',value:{id:`rpfx-${report.seq++}`,type:'zone',x:+((Math.min(...xs)+Math.max(...xs))/2).toFixed(2),y:+((Math.min(...ys)+Math.max(...ys))/2).toFixed(2),w:+clamp(Math.max(...xs)-Math.min(...xs),.5,99).toFixed(2),h:+clamp(Math.max(...ys)-Math.min(...ys),.5,99).toFixed(2),rot:0,label:'',raidPlan:{native:true,hideLabel:true,fill:o?.attr?.fill||null,stroke:o?.attr?.stroke||null}}};
     }
     if(et){
       let geom=(nodeType==='line')?fabricLineGeometry(o,tf):((et==='line'||et==='arrow')?lineFromEndpoints(o,tf,bossId,sceneName):null);
       const wh=readWH(o);if(!geom)geom={x:p.x,y:p.y,w:wh.w!=null?tf.sizeScale(wh.w):((et==='line'||et==='arrow')?35:22),h:wh.h!=null?tf.sizeScale(wh.h):((et==='line'||et==='arrow')?6:22),rot:readRotation(o)};
-      if(nodeType==='circle'){geom.w=wh.w!=null?tf.sizeScale(wh.w):12;geom.h=wh.h!=null?tf.sizeScale(wh.h):geom.w}
+      if(nodeType==='circle'){const nwh=nativeSize(o,tf);geom.w=nwh.w??12;geom.h=nwh.h??geom.w}
       if(wh.w!=null&&wh.h==null&&/(radius)/.test(s)){geom.w=geom.h=tf.sizeScale(wh.w)*2}
-      geom.w=clamp(Math.abs(geom.w)||12,3,95);geom.h=clamp(Math.abs(geom.h)||6,3,95);report.effects++;
+      geom.w=clamp(Math.abs(geom.w)||12,.25,99);geom.h=clamp(Math.abs(geom.h)||.8,.25,99);report.effects++;
+      const strokeWidth=finite(o?.attr?.strokeWidth),nativeLine=nodeType==='line';
+      if(nativeLine&&strokeWidth!=null)geom.h=Math.max(.25,strokeWidth*(tf.scaleY||1));
       if(nodeType==='path'||/tether|group|pin|locked/.test(s))report.approximated++;
-      return{kind:'effect',value:{id:`rpfx-${report.seq++}`,type:et,x:+clamp(geom.x,0.5,99.5).toFixed(2),y:+clamp(geom.y,0.5,99.5).toFixed(2),w:+geom.w.toFixed(2),h:+geom.h.toFixed(2),rot:+(geom.rot||0).toFixed(2),label:(label&&label!=='RaidPlan')?label:({zone:'Зона RaidPlan',soak:'Soak',line:'Линия RaidPlan',arrow:'Стрелка RaidPlan',cone:'Конус RaidPlan'}[et])}};
+      return{kind:'effect',value:{id:`rpfx-${report.seq++}`,type:et,x:+clamp(geom.x,-10,110).toFixed(2),y:+clamp(geom.y,-10,110).toFixed(2),w:+geom.w.toFixed(2),h:+geom.h.toFixed(2),rot:+(geom.rot||0).toFixed(2),label:'',raidPlan:{native:true,hideLabel:true,nodeType,stroke:text(o?.attr?.stroke||'#ffffff'),fill:o?.attr?.fill||null,strokeWidth:strokeWidth??null,startType:text(o?.attr?.startType||'none'),endType:text(o?.attr?.endType||'none')}}};
     }
 
     if(/boss|enemy|npc|ability|spell|icon|sticker|encounter|object/.test(s)){
+      const asset2=text(o?.attr?.asset||o?.attr?.assetUrl||'');
+      if(asset2){report.tokens++;return{kind:'token',value:[`rp-${report.seq++}`,label,'text',+p.x.toFixed(2),+p.y.toFixed(2),nativeMeta(o,tf,'icon',{assetUrl:cdnAsset(asset2)})]}}
       const it=nearestEncounter(label,bossId);
       if(it){report.tokens++;return{kind:'token',value:[`rp-${report.seq++}`,it.name,'encounter',+p.x.toFixed(2),+p.y.toFixed(2),{kind:'encounter',key:it.key,boss:it.boss||bossId,category:it.category,icon:it.icon,name:it.name,aliases:it.aliases||'',source:'raidplan'}]}}
-      report.tokens++;return{kind:'token',value:[`rp-${report.seq++}`,label,'text',+p.x.toFixed(2),+p.y.toFixed(2),{kind:'raidplan',subtype:'icon',source:'RaidPlan'}]};
     }
 
     report.unsupported.push(clean(pick(o,['type','kind','objectType','shape','category'])||'unknown'));report.skipped++;return null;
@@ -312,10 +385,14 @@
   function noteFrom(v){
     const parts=[];
     for(const k of ['notes','note','description','header','footer','markdown']){const x=v?.[k];if(typeof x==='string'&&clean(x))parts.push(clean(x))}
-    if(v?.__raidplanV2){
-      for(const n of arr(v.nodes))if(raidPlanNodeType(n)==='itext'&&clean(n?.attr?.text))parts.push(clean(n.attr.text));
-    }
+    // Текстовые блоки на карте не являются заметкой шага. В RaidPlan v2
+    // заметки хранятся отдельно в step_notes_raw.
+    if(Array.isArray(v?.step_notes_raw))for(const x of v.step_notes_raw)if(preserveText(x))parts.push(preserveText(x));
     return [...new Set(parts)].join('\n');
+  }
+  function stepNote(plan,i){
+    const raw=Array.isArray(plan?.step_notes_raw)?plan.step_notes_raw[i]:'';
+    return preserveText(raw||'');
   }
   function stepName(step,i){
     const explicit=clean(pick(step,['name','title','label','header'])||'');if(explicit)return explicit;
@@ -333,7 +410,7 @@
     if(!steps.length)throw new Error('В данных RaidPlan не найден массив steps/scenes/pages.');
     const scenes=steps.map((step,i)=>{
       const name=stepName(step,i),items=flattenItems(step),tf=coordTransform(items,step,plan,bossId);report.modes[tf.mode]=(report.modes[tf.mode]||0)+1;
-      const scene={name,note:noteFrom(step)||noteFrom(plan)||'Импортировано из RaidPlan.',duration:8,map:{zoom:100,x:0,y:0,dark:4},tokens:[],effects:[],routes:{},raidPlan:{step:i+1,coordMode:tf.mode}};
+      const scene={name,note:stepNote(plan,i)||'',duration:8,map:{zoom:100,x:0,y:0,dark:0},tokens:[],effects:[],routes:{},raidPlan:{step:i+1,coordMode:tf.mode,background:raidPlanBackground(step),canvas:tf.canvas||canvasSize(step,plan),sourceCode:plan.code||'',revision:plan.revision??null}};
       for(const o of items){const c=convertItem(o,{tf,bossId,sceneName:name,report});if(!c)continue;if(c.kind==='token')scene.tokens.push(c.value);else scene.effects.push(c.value)}
       if(!scene.tokens.length&&!scene.effects.length){scene.tokens.push([`rp-${report.seq++}`,'Пустая сцена RaidPlan','text',50,50,{kind:'raidplan',subtype:'text',source:'RaidPlan'}]);report.tokens++}
       try{return typeof normalizeScene==='function'?normalizeScene(scene,bossId,i):scene}catch(_){return scene}
@@ -399,16 +476,28 @@
     // RaidRU-сцены намеренно не меняются. Повторный импорт резервирует только предыдущую RaidPlan-вкладку.
     state._raidPlanTabBackups=state._raidPlanTabBackups||{};
     if(bs.raidPlanScenes?.length){state._raidPlanTabBackups[bossId]={createdAt:now,scenes:deep(bs.raidPlanScenes),timelineV3:deep(bs.raidPlanTimelineV3||[]),importMeta:deep(bs.raidPlanImport||{})}}
-    const imported=result.scenes.map((s,i)=>normalizeScene(deep({...s,name:`RP ${i+1}. ${s.name.replace(/^RaidPlan\s*·?\s*/i,'')}`}),bossId,i));
+    const imported=result.scenes.map((s,i)=>normalizeScene(deep({...s,name:s.name.replace(/^RaidPlan\s*·?\s*/i,'')}),bossId,i));
     bs.raidPlanScenes=imported;
     bs.raidPlanTimelineV3=typeof raidPlanTimelineForScenes==='function'?raidPlanTimelineForScenes(imported):imported.map((s,i)=>({id:`rp-time-${i}`,time:i*35,label:s.name,type:'move',scene:i,note:s.note||''}));
-    bs.raidPlanImport={at:now,name:result.planName,report:result.report,mode:'separate-tab'};
+    bs.raidPlanImport={at:now,name:result.planName,report:result.report,mode:'separate-tab',sourceCode:result.rawRoot?.code||'',revision:result.rawRoot?.revision??null,renderer:'native-v2'};
     state._scenarioSourceByBoss=state._scenarioSourceByBoss||{};state._scenarioSourceByBoss[bossId]='raidplan';
-    current=bossId;sceneIndex=0;playerSceneIndex=0;view='planner';
+    if(mode!=='silent-refresh'){current=bossId;sceneIndex=0;playerSceneIndex=0;view='planner'}
     if(typeof save==='function')save();
     if(typeof render==='function')render();
     return `${reportText(result.report)} Сохранено в отдельной вкладке RaidPlan; сценарии RaidRU не изменены.`;
   }
 
-  window.RaidPlanImporter={VERSION,planCode,canonicalUrl,userdataUrl,findPlanRoot,findSteps,flattenItems,bossFromRaw,convert,fetchUrl,parseInput,applyConverted,reportText};
+  async function refreshCurrentIfLegacy(){
+    try{
+      if(typeof bossState!=='function'||typeof current==='undefined')return false;
+      const bs=bossState(current);if(!bs?.raidPlanScenes?.length||bs?.raidPlanImport?.renderer==='native-v2')return false;
+      const name=text(bs?.raidPlanImport?.name||''),code=text(bs?.raidPlanImport?.sourceCode||'')||(name.match(/RaidPlan\s+([A-Za-z0-9_-]{8,64})/i)?.[1]||'');
+      if(!code)return false;
+      const guard=`raidru-rp-refresh-${current}-${code}-0819`;if(typeof sessionStorage!=='undefined'&&sessionStorage.getItem(guard))return false;
+      if(typeof sessionStorage!=='undefined')sessionStorage.setItem(guard,'1');
+      const raw=await fetchUrl(code),result=convert(raw,{bossId:current,currentBoss:current});applyConverted(result,'silent-refresh');return true;
+    }catch(e){console.warn('RaidPlan legacy refresh skipped',e);return false}
+  }
+
+  window.RaidPlanImporter={VERSION,planCode,canonicalUrl,userdataUrl,findPlanRoot,findSteps,flattenItems,bossFromRaw,convert,fetchUrl,parseInput,applyConverted,reportText,refreshCurrentIfLegacy};
 })();
