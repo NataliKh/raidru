@@ -28,7 +28,7 @@ const NEKZALI_PLAN_VERSION='0.8.4-nekzali-wcl-heroic-v1';
 const SENTINELS_PLAN_VERSION='0.8.5-sentinels-wcl-heroic-v1';
 const SSZORAK_PLAN_VERSION='0.8.9-sszorak-wcl-heroic-v1';
 const FANGS_PLAN_VERSION='0.8.9-twin-fangs-wcl-heroic-v1';
-const RAIDPLAN_TABS_VERSION='0.8.20-native-renderer-v1';
+const RAIDPLAN_TABS_VERSION='0.8.21-difficulty-plans-v1';
 // Важно: миграции вызываются только после инициализации encounterLibrary и остальных const.
 // Иначе normalizeScene() попадает в temporal dead zone encounterLibrary на первом запуске/старом localStorage.
 function runStartupMigrations(){
@@ -250,6 +250,8 @@ function runStartupMigrations(){
 }
 function orderedRaid(){return [...raid].sort((a,b)=>a.order-b.order)}
 let current=state.current||'nekzali', role=state.role||'all', diff=state.diff||'heroic', view=(state.view==='replay'?'planner':(state.view||'dashboard')), priestMode=state.priestMode!==false, sceneIndex=0;
+const difficultyLabels={normal:'Обычный',heroic:'Героический',mythic:'Эпохальный'};
+let pendingDifficultySwitch=null;
 let rehearsalTimer=null, playbackTimer=null, playerSceneIndex=0, playerPlaying=false, playerSpeed=1, showPaths=state.showPaths!==false;
 let routeEdit=false, routeTokenId=null;
 let plannerPaletteTab=state.plannerPaletteTab||'main', plannerSpawnMode=state.plannerSpawnMode||'drag', plannerArenaSnap=state.plannerArenaSnap!==false, plannerIconTab=state.plannerIconTab||'encounter', plannerIconQuery='';
@@ -821,18 +823,85 @@ function bossStateRaw(id){
   state[id].scenes=state[id].scenes.map((s,i)=>normalizeScene(s,id,i));
   return state[id];
 }
-function bossState(id){
-  const s=bossStateRaw(id);
-  if(!s.timelineV3?.length) s.timelineV3=defaultTimeline(id);
-  if(!s.cooldowns) s.cooldowns=[];
-  return s;
+const DIFFICULTY_PLAN_KEYS=new Set(['scenes','timelineV3','raidPlanScenes','raidPlanTimelineV3','raidPlanImport']);
+function blankDifficultyScene(id){
+  return normalizeScene({name:'Пустая карта',note:'',tokens:[],effects:[],routes:{},map:{zoom:100,x:0,y:0,dark:4}},id,0);
 }
+function ensureDifficultyPlan(id,difficulty){
+  const root=bossStateRaw(id);
+  if(difficulty==='heroic')return root;
+  root.difficultyPlans=root.difficultyPlans||{};
+  if(!root.difficultyPlans[difficulty])root.difficultyPlans[difficulty]={_initialized:false,scenes:[blankDifficultyScene(id)],timelineV3:[]};
+  const p=root.difficultyPlans[difficulty];
+  if(!p.scenes?.length)p.scenes=[blankDifficultyScene(id)];
+  p.scenes=p.scenes.map((sc,i)=>normalizeScene(sc,id,i));
+  if(p.raidPlanScenes?.length)p.raidPlanScenes=p.raidPlanScenes.map((sc,i)=>normalizeScene(sc,id,i));
+  if(!Array.isArray(p.timelineV3))p.timelineV3=[];
+  if(p.raidPlanScenes?.length&&!Array.isArray(p.raidPlanTimelineV3))p.raidPlanTimelineV3=raidPlanTimelineForScenes(p.raidPlanScenes);
+  return p;
+}
+function bossState(id,difficulty=diff){
+  const root=bossStateRaw(id);
+  if(!root.timelineV3?.length)root.timelineV3=defaultTimeline(id);
+  if(!root.cooldowns)root.cooldowns=[];
+  if(difficulty==='heroic')return root;
+  const plan=ensureDifficultyPlan(id,difficulty);
+  return new Proxy(root,{
+    get(target,key){if(DIFFICULTY_PLAN_KEYS.has(key))return plan[key];if(key==='_difficultyPlan')return plan;return target[key]},
+    set(target,key,value){if(DIFFICULTY_PLAN_KEYS.has(key)){plan[key]=value;plan._initialized=true}else target[key]=value;return true},
+    deleteProperty(target,key){if(DIFFICULTY_PLAN_KEYS.has(key)){delete plan[key];return true}delete target[key];return true}
+  });
+}
+function difficultyPlanInitialized(id,difficulty){
+  if(difficulty==='heroic')return true;
+  return bossStateRaw(id).difficultyPlans?.[difficulty]?._initialized===true;
+}
+function markDifficultyInitialized(id,difficulty){
+  if(difficulty==='heroic')return;
+  ensureDifficultyPlan(id,difficulty)._initialized=true;
+}
+function difficultyPlanSnapshot(id,difficulty){
+  const bs=bossState(id,difficulty);
+  return {
+    _initialized:true,
+    scenes:deep(bs.scenes||[]),timelineV3:deep(bs.timelineV3||[]),
+    ...(bs.raidPlanScenes?.length?{raidPlanScenes:deep(bs.raidPlanScenes),raidPlanTimelineV3:deep(bs.raidPlanTimelineV3||[]),raidPlanImport:deep(bs.raidPlanImport||{})}:{})
+  };
+}
+function replaceDifficultyPlan(id,difficulty,plan){
+  const root=bossStateRaw(id),next=deep(plan||{});next._initialized=true;
+  if(difficulty==='heroic'){
+    root.scenes=(next.scenes?.length?next.scenes:[blankDifficultyScene(id)]).map((s,i)=>normalizeScene(s,id,i));
+    root.timelineV3=deep(next.timelineV3||[]);
+    if(next.raidPlanScenes?.length){root.raidPlanScenes=next.raidPlanScenes.map((s,i)=>normalizeScene(s,id,i));root.raidPlanTimelineV3=deep(next.raidPlanTimelineV3||raidPlanTimelineForScenes(root.raidPlanScenes));root.raidPlanImport=deep(next.raidPlanImport||{})}
+    else{delete root.raidPlanScenes;delete root.raidPlanTimelineV3;delete root.raidPlanImport}
+    return;
+  }
+  root.difficultyPlans=root.difficultyPlans||{};root.difficultyPlans[difficulty]=next;
+  ensureDifficultyPlan(id,difficulty);
+}
+function clearDifficultyPlan(id,difficulty){
+  replaceDifficultyPlan(id,difficulty,{_initialized:true,scenes:[blankDifficultyScene(id)],timelineV3:[]});
+}
+function scenarioSourceStored(id,difficulty=diff){
+  const byDiff=state._scenarioSourceByDifficulty?.[id]?.[difficulty];
+  if(byDiff)return byDiff;
+  if(difficulty==='heroic')return state._scenarioSourceByBoss?.[id]||'raidru';
+  return 'raidru';
+}
+function setScenarioSourceFor(id,source,difficulty=diff){
+  state._scenarioSourceByDifficulty=state._scenarioSourceByDifficulty||{};
+  state._scenarioSourceByDifficulty[id]=state._scenarioSourceByDifficulty[id]||{};
+  state._scenarioSourceByDifficulty[id][difficulty]=source==='raidplan'?'raidplan':'raidru';
+  if(difficulty==='heroic'){state._scenarioSourceByBoss=state._scenarioSourceByBoss||{};state._scenarioSourceByBoss[id]=source==='raidplan'?'raidplan':'raidru'}
+}
+function raidPlanBackupKey(id=current,difficulty=diff){return `${id}::${difficulty}`}
 function raidPlanTimelineForScenes(scenes){
   return (scenes||[]).map((sc,i)=>({id:uid(),time:i*35,label:sc.name||`RaidPlan · сцена ${i+1}`,type:'move',scene:i,note:sc.note||''}));
 }
-function scenarioSource(id=current){
-  const wanted=state._scenarioSourceByBoss?.[id]==='raidplan'?'raidplan':'raidru';
-  const bs=bossState(id);
+function scenarioSource(id=current,difficulty=diff){
+  const wanted=scenarioSourceStored(id,difficulty)==='raidplan'?'raidplan':'raidru';
+  const bs=bossState(id,difficulty);
   return wanted==='raidplan'&&bs.raidPlanScenes?.length?'raidplan':'raidru';
 }
 function scenarioState(id=current,source=scenarioSource(id)){
@@ -846,19 +915,19 @@ function scenarioState(id=current,source=scenarioSource(id)){
 }
 function scenarioTabsHtml(id=current){
   const bs=bossState(id),active=scenarioSource(id),hasRp=!!bs.raidPlanScenes?.length;
-  return `<div class="scenarioSourceCard"><div class="scenarioSourceHead"><div><small>Набор сцен</small><b>${active==='raidru'?'Основной сценарий RaidRU':'Импортированный сценарий RaidPlan'}</b></div>${hasRp?'<em>Импорт не меняет вкладку RaidRU</em>':''}</div><div class="scenarioSourceTabs"><button class="scenarioTab ${active==='raidru'?'on':''}" onclick="setScenarioSource('raidru')"><strong>RaidRU</strong><span>${bs.scenes.length} сцен · основной набор</span></button><button class="scenarioTab ${active==='raidplan'?'on':''}" ${hasRp?'':`disabled title="Сначала импортируй план из RaidPlan"`} onclick="setScenarioSource('raidplan')"><strong>RaidPlan</strong><span>${hasRp?`${bs.raidPlanScenes.length} сцен · импорт локально`:'ещё не импортирован'}</span></button></div></div>`;
+  return `<div class="scenarioSourceCard"><div class="scenarioSourceHead"><div><small>Набор сцен · ${difficultyLabels[diff]}</small><b>${active==='raidru'?'Основной сценарий RaidRU':'Импортированный сценарий RaidPlan'}</b></div>${hasRp?'<em>Импорт привязан к текущей сложности</em>':''}</div><div class="scenarioSourceTabs"><button class="scenarioTab ${active==='raidru'?'on':''}" onclick="setScenarioSource('raidru')"><strong>RaidRU</strong><span>${bs.scenes.length} сцен · ${difficultyLabels[diff]}</span></button><button class="scenarioTab ${active==='raidplan'?'on':''}" ${hasRp?'':`disabled title="Сначала импортируй план из RaidPlan"`} onclick="setScenarioSource('raidplan')"><strong>RaidPlan</strong><span>${hasRp?`${bs.raidPlanScenes.length} сцен · ${difficultyLabels[diff]}`:'ещё не импортирован'}</span></button></div></div>`;
 }
 function setScenarioSource(source){
   const bs=bossState(current);
   if(source==='raidplan'&&!bs.raidPlanScenes?.length){toast('Для этого босса ещё нет импортированных сцен RaidPlan');return}
   stopPlayback();source=source==='raidplan'?'raidplan':'raidru';
-  state._scenarioSourceByBoss=state._scenarioSourceByBoss||{};state._scenarioSourceByBoss[current]=source;sceneIndex=0;playerSceneIndex=0;routeTokenId=null;save();render();
+  setScenarioSourceFor(current,source,diff);sceneIndex=0;playerSceneIndex=0;routeTokenId=null;save();render();
 }
 function deleteRaidPlanScenarioSet(){
   const bs=bossState(current);if(!bs.raidPlanScenes?.length)return;
   if(!confirm('Удалить только импортированную вкладку RaidPlan? Сценарии RaidRU останутся без изменений.'))return;
   delete bs.raidPlanScenes;delete bs.raidPlanTimelineV3;delete bs.raidPlanImport;
-  if(state._scenarioSourceByBoss)state._scenarioSourceByBoss[current]='raidru';sceneIndex=0;playerSceneIndex=0;save();render();toast('Вкладка RaidPlan удалена. Сценарии RaidRU сохранены');
+  setScenarioSourceFor(current,'raidru',diff);sceneIndex=0;playerSceneIndex=0;save();render();toast(`Вкладка RaidPlan удалена для режима «${difficultyLabels[diff]}». Сценарии RaidRU сохранены`);
 }
 function parseTime(v){
   if(typeof v==='number')return v;
@@ -957,12 +1026,17 @@ function createPlanFromReplay(){
  bs.scenes=newScenes;bs.timelineV3=events.map((e,i)=>({...e,id:uid(),scene:i}));sceneIndex=0;save();toast(`Создано ${newScenes.length} редактируемых сцен из replay`);view='planner';render();
 }
 
-function buildShareUrl(){const data=deep(bossState(current));delete data.raidPlanScenes;delete data.raidPlanTimelineV3;delete data.raidPlanImport;const payload={v:6,boss:current,diff,role,data};return location.origin+location.pathname+'#share='+safeB64Encode(payload)}
-function restoreFromHash(){try{if(!location.hash.startsWith('#share='))return;const p=safeB64Decode(location.hash.slice(7));if(p?.boss&&p?.data){state[p.boss]=p.data;current=p.boss;diff=p.diff||diff;role=p.role||role;toast('Стратегия загружена из ссылки')}}catch(e){console.warn(e)}}
+function exportBossStateForDifficulty(id,difficulty=diff,includeRaidPlan=true){
+  const root=bossStateRaw(id),bs=bossState(id,difficulty),data={favorite:!!root.favorite,progress:+root.progress||0,note:root.note||'',cooldowns:deep(root.cooldowns||[]),scenes:deep(bs.scenes||[]),timelineV3:deep(bs.timelineV3||[])};
+  if(includeRaidPlan&&bs.raidPlanScenes?.length){data.raidPlanScenes=deep(bs.raidPlanScenes);data.raidPlanTimelineV3=deep(bs.raidPlanTimelineV3||[]);data.raidPlanImport=deep(bs.raidPlanImport||{})}
+  return data;
+}
+function buildShareUrl(){const data=exportBossStateForDifficulty(current,diff,false);const payload={v:7,boss:current,diff,role,data};return location.origin+location.pathname+'#share='+safeB64Encode(payload)}
+function restoreFromHash(){try{if(!location.hash.startsWith('#share='))return;const p=safeB64Decode(location.hash.slice(7));if(p?.boss&&p?.data){const d=p.diff||'heroic',root=bossStateRaw(p.boss);root.favorite=!!p.data.favorite;root.progress=+p.data.progress||0;root.note=p.data.note||root.note||'';if(d==='heroic'){root.scenes=deep(p.data.scenes||[]);root.timelineV3=deep(p.data.timelineV3||[])}else replaceDifficultyPlan(p.boss,d,{_initialized:true,scenes:deep(p.data.scenes||[]),timelineV3:deep(p.data.timelineV3||[])});current=p.boss;diff=d;role=p.role||role;setScenarioSourceFor(current,'raidru',diff);toast(`Стратегия загружена · ${difficultyLabels[diff]}`)}}catch(e){console.warn(e)}}
 function save(){state.current=current;state.role=role;state.diff=diff;state.view=view;state.priestMode=priestMode;state.showPaths=showPaths;state.plannerPaletteTab=plannerPaletteTab;state.plannerSpawnMode=plannerSpawnMode;state.plannerArenaSnap=plannerArenaSnap;state.plannerIconTab=plannerIconTab;localStorage.setItem('raidru-standalone',JSON.stringify(state))}
 function render(){
   save();const b=raid.find(x=>x.id===current),bs=bossState(current);
-  el('#app').innerHTML=`<div class="shell"><aside><div class="brand"><div class="mark">R</div><div><b>RaidRU</b><small>рейдовые тактики по-русски</small></div></div><div class="season"><small>Midnight · Сезон 2</small><b>Ядовитая бездна</b></div><input class="search" placeholder="Найти босса…" oninput="filterBoss(this.value)"><div class="bosses">${orderedRaid().map(x=>`<button data-name="${esc((x.name+' '+x.en).toLowerCase())}" class="${x.id===current?'on':''}" onclick="chooseBoss('${x.id}')"><i>${x.order}</i><span><b>${x.name}</b><small>Босс ${x.order}</small></span><em>${bossState(x.id).favorite?'★':''}</em></button>`).join('')}</div><div class="version">RaidRU 0.8.20 · точный рендер RaidPlan</div></aside><main><header>${[['dashboard','Рейд'],['guide','Тактика'],['player','План: просмотр'],['planner','Планировщик'],['timeline','Таймлайн'],['roster','Состав'],['notes','Заметки'],['glossary','Словарь']].map(x=>`<button class="${view===x[0]?'on':''}" onclick="setView('${x[0]}')">${x[1]}</button>`).join('')}<span></span><button class="priest ${priestMode?'on':''}" onclick="togglePriest()">♥ Холи-прист</button><button class="raidplanHeaderBtn" onclick="openRaidPlanImport()">⇄ RaidPlan</button><button onclick="sharePlan()">↗ Поделиться</button><button onclick="exportPlan()">⇩ Экспорт</button><label class="importBtn">⇧ Импорт<input type="file" accept="application/json,.json" onchange="importPlanFile(this.files[0])"></label></header>${view==='dashboard'?dashboardHero():`<section class="hero"><div><small>MIDNIGHT / ЯДОВИТАЯ БЕЗДНА / БОСС ${b.order}</small><div class="title"><h1>${b.name}</h1><button onclick="fav()">${bs.favorite?'★':'☆'}</button></div><p>${b.summary}</p></div><div class="heroRight"><div class="diff">${[['normal','Обычный'],['heroic','Героический'],['mythic','Эпохальный']].map(x=>`<button class="${diff===x[0]?'on':''}" onclick="setDiff('${x[0]}')">${x[1]}</button>`).join('')}</div><label>Освоение <b>${bs.progress}%</b><input type="range" min="0" max="100" step="10" value="${bs.progress}" oninput="setProgress(this.value)"></label></div></section>`}${content(b,bs)}<footer class="siteCredit">Карты и ресурсы для планирования: <a href="https://raidplan.io/" target="_blank" rel="noopener noreferrer">RaidPlan.io</a> · Карты по mapID Heroic Replay (2606/2607/2608/2609) и тайминги: Warcraft Logs/RPGLogs · Иконки планировщика: локальные ассеты RaidRU · Голосовые таймеры: NSRT Heroic BossTimelines · Рейдовые значки: игровые ресурсы сообщества</footer></main></div>`;
+  el('#app').innerHTML=`<div class="shell"><aside><div class="brand"><div class="mark">R</div><div><b>RaidRU</b><small>рейдовые тактики по-русски</small></div></div><div class="season"><small>Midnight · Сезон 2</small><b>Ядовитая бездна</b></div><input class="search" placeholder="Найти босса…" oninput="filterBoss(this.value)"><div class="bosses">${orderedRaid().map(x=>`<button data-name="${esc((x.name+' '+x.en).toLowerCase())}" class="${x.id===current?'on':''}" onclick="chooseBoss('${x.id}')"><i>${x.order}</i><span><b>${x.name}</b><small>Босс ${x.order}</small></span><em>${bossState(x.id).favorite?'★':''}</em></button>`).join('')}</div><div class="version">RaidRU 0.8.21 · планы по сложности</div></aside><main><header>${[['dashboard','Рейд'],['guide','Тактика'],['player','План: просмотр'],['planner','Планировщик'],['timeline','Таймлайн'],['roster','Состав'],['notes','Заметки'],['glossary','Словарь']].map(x=>`<button class="${view===x[0]?'on':''}" onclick="setView('${x[0]}')">${x[1]}</button>`).join('')}<span></span><button class="priest ${priestMode?'on':''}" onclick="togglePriest()">♥ Холи-прист</button><button class="raidplanHeaderBtn" onclick="openRaidPlanImport()">⇄ RaidPlan</button><button onclick="sharePlan()">↗ Поделиться</button><button onclick="exportPlan()">⇩ Экспорт</button><label class="importBtn">⇧ Импорт<input type="file" accept="application/json,.json" onchange="importPlanFile(this.files[0])"></label></header>${view==='dashboard'?dashboardHero():`<section class="hero"><div><small>MIDNIGHT / ЯДОВИТАЯ БЕЗДНА / БОСС ${b.order}</small><div class="title"><h1>${b.name}</h1><button onclick="fav()">${bs.favorite?'★':'☆'}</button></div><p>${b.summary}</p></div><div class="heroRight"><div class="diff">${[['normal','Обычный'],['heroic','Героический'],['mythic','Эпохальный']].map(x=>`<button class="${diff===x[0]?'on':''}" onclick="setDiff('${x[0]}')">${x[1]}</button>`).join('')}</div><label>Освоение <b>${bs.progress}%</b><input type="range" min="0" max="100" step="10" value="${bs.progress}" oninput="setProgress(this.value)"></label></div></section>`}${content(b,bs)}<footer class="siteCredit">Карты и ресурсы для планирования: <a href="https://raidplan.io/" target="_blank" rel="noopener noreferrer">RaidPlan.io</a> · Карты по mapID Heroic Replay (2606/2607/2608/2609) и тайминги: Warcraft Logs/RPGLogs · Иконки планировщика: локальные ассеты RaidRU · Голосовые таймеры: NSRT Heroic BossTimelines · Рейдовые значки: игровые ресурсы сообщества</footer></main></div>`;
   if(view==='planner') setupPlanner();
   if(view==='player') setupPlayer();
 }
@@ -1277,12 +1351,43 @@ function notes(b,bs){
   return `<section class="page notes"><div class="card wide"><h3>Личная / гильдейская заметка</h3><textarea id="customNote" oninput="saveNote(this.value)" placeholder="Назначения, хил-КД, метки…">${esc(bs.note)}</textarea></div>${voiceBlock}<div class="card wide"><h3>Обычная заметка для рейда / чата</h3><pre>${esc(ns)}</pre><button onclick="copyText(${JSON.stringify(ns)})">Копировать</button></div><div class="card checklist"><h3>Чеклист перед пулом</h3>${['Метки расставлены','Танки знают позиции','Хил-КД распределены','Soak/мини-группы назначены','Героизм согласован','Дебаффы видны на фреймах'].map(x=>`<label><input type="checkbox"> ${x}</label>`).join('')}</div></section>`;
 }
 function glossary(b){const arr=[...b.spells,...priest];return `<section class="page"><div class="table"><div class="thead"><b>Русский клиент</b><b>Английское название</b><b>Источник</b></div>${arr.map((x,i)=>`<div><b>${x[0]}</b><code>${x[1]}</code><span>${i<b.spells.length?'Босс':'Холи-прист'}</span></div>`).join('')}</div></section>`}
-function chooseBoss(id){stopPlayback();stopReplay();current=id;sceneIndex=0;playerSceneIndex=0;if(scenarioSource(id)==='raidplan'&&!bossState(id).raidPlanScenes?.length){state._scenarioSourceByBoss=state._scenarioSourceByBoss||{};state._scenarioSourceByBoss[id]='raidru'}render()} function setView(v){stopPlayback();stopReplay();view=v;render()} function setRole(v){role=v;render()} function setDiff(v){diff=v;render()} function togglePriest(){priestMode=!priestMode;render()} function fav(){const bs=bossState(current);bs.favorite=!bs.favorite;render()} function setProgress(v){bossState(current).progress=+v;save();render()} function saveNote(v){bossState(current).note=v;save()} function copyText(t){navigator.clipboard?.writeText(t);toast('Скопировано')}
+function chooseBoss(id){stopPlayback();stopReplay();current=id;sceneIndex=0;playerSceneIndex=0;if(scenarioSource(id,diff)==='raidplan'&&!bossState(id,diff).raidPlanScenes?.length)setScenarioSourceFor(id,'raidru',diff);render()}
+function setView(v){stopPlayback();stopReplay();view=v;render()}
+function setRole(v){role=v;render()}
+function closeDifficultySwitch(){document.getElementById('difficultySwitchModal')?.remove();pendingDifficultySwitch=null}
+function cancelDifficultySwitch(){closeDifficultySwitch();render()}
+function setDiff(target){
+  target=['normal','heroic','mythic'].includes(target)?target:'heroic';if(target===diff)return;
+  stopPlayback();stopReplay();
+  const from=diff,exists=difficultyPlanInitialized(current,target);pendingDifficultySwitch={from,to:target,exists};
+  document.getElementById('difficultySwitchModal')?.remove();
+  const wrap=document.createElement('div');wrap.id='difficultySwitchModal';wrap.className='raidplanModalBackdrop';
+  const targetName=difficultyLabels[target],fromName=difficultyLabels[from];
+  wrap.innerHTML=`<div class="difficultySwitchModal" role="dialog" aria-modal="true"><div class="difficultySwitchHead"><div><small>РЕЖИМ РЕЙДА</small><h2>${fromName} → ${targetName}</h2></div><button onclick="cancelDifficultySwitch()">×</button></div><p>Сцены каждого режима хранятся отдельно. Выбери, что открыть в режиме <b>${targetName}</b>.</p><div class="difficultyChoiceGrid">${exists?`<button class="primary" onclick="applyDifficultySwitch('existing')"><b>Открыть сохранённый</b><span>Вернуть ранее сохранённые сцены ${targetName}</span></button>`:''}<button onclick="applyDifficultySwitch('copy')"><b>Скопировать текущую карту</b><span>Перенести сцены ${fromName} в ${targetName}</span></button><button class="dangerChoice" onclick="applyDifficultySwitch('clear')"><b>Начать с чистой карты</b><span>${exists?'Удалит сохранённые сцены этого режима':'Создаст одну пустую сцену'}</span></button></div><button class="difficultyCancel" onclick="cancelDifficultySwitch()">Отмена</button></div>`;
+  wrap.addEventListener('click',e=>{if(e.target===wrap)cancelDifficultySwitch()});document.body.appendChild(wrap);
+}
+function applyDifficultySwitch(mode){
+  const q=pendingDifficultySwitch;if(!q)return;const {from,to,exists}=q;
+  if(mode==='copy'&&exists&&!confirm(`Заменить сохранённые сцены режима «${difficultyLabels[to]}» копией из режима «${difficultyLabels[from]}»?`))return;
+  if(mode==='clear'&&exists&&!confirm(`Очистить все сцены RaidRU и RaidPlan режима «${difficultyLabels[to]}»? Сцены других режимов не изменятся.`))return;
+  const sourceMode=scenarioSourceStored(current,from);
+  if(mode==='copy'){
+    replaceDifficultyPlan(current,to,difficultyPlanSnapshot(current,from));
+    const copied=bossState(current,to);setScenarioSourceFor(current,sourceMode==='raidplan'&&copied.raidPlanScenes?.length?'raidplan':'raidru',to);
+  }else if(mode==='clear'){
+    clearDifficultyPlan(current,to);setScenarioSourceFor(current,'raidru',to);
+  }else if(mode==='existing'){
+    markDifficultyInitialized(current,to);
+  }else return;
+  diff=to;sceneIndex=0;playerSceneIndex=0;routeTokenId=null;closeDifficultySwitch();save();render();
+  toast(`Открыт режим: ${difficultyLabels[diff]}`);
+}
+function togglePriest(){priestMode=!priestMode;render()} function fav(){const bs=bossState(current);bs.favorite=!bs.favorite;render()} function setProgress(v){bossState(current).progress=+v;save();render()} function saveNote(v){bossState(current).note=v;save()} function copyText(t){navigator.clipboard?.writeText(t);toast('Скопировано')}
 function filterBoss(q){document.querySelectorAll('.bosses button').forEach(x=>x.style.display=x.dataset.name.includes(q.toLowerCase())?'grid':'none')}
 function openRaidPlanImport(){
   closeRaidPlanImport();
   const wrap=document.createElement('div');wrap.id='raidPlanImportModal';wrap.className='raidplanModalBackdrop';
-  wrap.innerHTML=`<div class="raidplanModal raidplanSimpleModal" role="dialog" aria-modal="true" aria-labelledby="rpImportTitle"><div class="raidplanModalHead"><div><small>RAIDRU 0.8.20</small><h2 id="rpImportTitle">Импорт из RaidPlan</h2></div><button onclick="closeRaidPlanImport()">×</button></div><p class="raidplanIntro">Вставь ссылку на план. RaidRU сам загрузит его и создаст отдельный набор сцен <b>RaidPlan</b>. Основные сценарии RaidRU останутся без изменений.</p><div class="raidplanImportGrid"><label><span>Босс RaidRU</span><select id="rpBoss"><option value="" selected>Определить автоматически</option>${raid.map(b=>`<option value="${b.id}">${b.order}. ${esc(b.name)}</option>`).join('')}</select></label><div class="raidplanDestination"><span>Результат</span><b>Отдельная вкладка «RaidPlan»</b><small>Импорт хранится локально и не попадает в ссылку «Поделиться».</small></div></div><div class="raidplanUrlRow raidplanPrimaryImport"><input id="rpUrl" autocomplete="off" spellcheck="false" placeholder="https://raidplan.io/plan/…"><button id="rpImportBtn" class="primary" onclick="raidPlanImportFromUrl()">Импортировать</button></div><div id="rpStatus" class="raidplanStatus"><span>Поддерживаются сцены, роли, маркеры, подписи, зоны, линии, стрелки и другие основные объекты RaidPlan.</span></div>${state._raidPlanTabBackups?.[current]?`<div class="raidplanRestore"><button onclick="closeRaidPlanImport();restoreRaidPlanBackup()">↶ Вернуть предыдущий импорт RaidPlan</button></div>`:''}</div>`;
+  wrap.innerHTML=`<div class="raidplanModal raidplanSimpleModal" role="dialog" aria-modal="true" aria-labelledby="rpImportTitle"><div class="raidplanModalHead"><div><small>RAIDRU 0.8.21</small><h2 id="rpImportTitle">Импорт из RaidPlan</h2></div><button onclick="closeRaidPlanImport()">×</button></div><p class="raidplanIntro">Вставь ссылку на план. Импорт будет сохранён только для активного режима <b>${difficultyLabels[diff]}</b> и появится в отдельной вкладке <b>RaidPlan</b>. Сцены других сложностей останутся без изменений.</p><div class="raidplanImportGrid"><label><span>Босс RaidRU</span><select id="rpBoss"><option value="" selected>Определить автоматически</option>${raid.map(b=>`<option value="${b.id}">${b.order}. ${esc(b.name)}</option>`).join('')}</select></label><div class="raidplanDestination"><span>Режим рейда</span><b>${difficultyLabels[diff]}</b><small>RaidPlan будет привязан только к этой сложности.</small></div></div><div class="raidplanUrlRow raidplanPrimaryImport"><input id="rpUrl" autocomplete="off" spellcheck="false" placeholder="https://raidplan.io/plan/…"><button id="rpImportBtn" class="primary" onclick="raidPlanImportFromUrl()">Импортировать</button></div><div id="rpStatus" class="raidplanStatus"><span>Поддерживаются сцены, роли, маркеры, подписи, зоны, линии, стрелки и другие основные объекты RaidPlan.</span></div>${state._raidPlanTabBackups?.[raidPlanBackupKey()]?`<div class="raidplanRestore"><button onclick="closeRaidPlanImport();restoreRaidPlanBackup()">↶ Вернуть предыдущий импорт RaidPlan</button></div>`:''}</div>`;
   wrap.addEventListener('click',e=>{if(e.target===wrap)closeRaidPlanImport()});document.body.appendChild(wrap);setTimeout(()=>el('#rpUrl')?.focus(),0);
 }
 function closeRaidPlanImport(){document.getElementById('raidPlanImportModal')?.remove()}
@@ -1294,8 +1399,9 @@ async function raidPlanApplyRaw(raw){
     if(!window.RaidPlanImporter)throw new Error('Импортёр RaidPlan не загрузился. Обнови страницу и попробуй снова.');
     raidPlanImportStatus('Создаю сцены RaidPlan…','busy');
     const result=RaidPlanImporter.convert(raw,{bossId:raidPlanSelectedBoss()||undefined,currentBoss:current});
-    const target=bossState(result.bossId);
-    if(target.raidPlanScenes?.length&&!confirm(`Для босса «${raid.find(b=>b.id===result.bossId)?.name||result.bossId}» уже есть импорт RaidPlan. Обновить его? Сценарии RaidRU останутся без изменений.`)){raidPlanImportStatus('Импорт отменён.','info');return}
+    const target=bossState(result.bossId,diff);
+    if(target.raidPlanScenes?.length&&!confirm(`Для босса «${raid.find(b=>b.id===result.bossId)?.name||result.bossId}» уже есть импорт RaidPlan для режима «${difficultyLabels[diff]}». Обновить его? Остальные сложности останутся без изменений.`)){raidPlanImportStatus('Импорт отменён.','info');return}
+    markDifficultyInitialized(result.bossId,diff);
     const summary=RaidPlanImporter.applyConverted(result,'separate');
     closeRaidPlanImport();toast(`RaidPlan: импортировано ${result.report.steps} сцен`);setTimeout(()=>toast(summary),350);
   }catch(e){console.warn('RaidPlan import',e);raidPlanImportStatus(`<b>Не удалось импортировать план.</b><br><span>${esc(e?.message||'Проверь ссылку и попробуй ещё раз.')}</span>`,'error')}
@@ -1310,18 +1416,18 @@ async function raidPlanImportFromUrl(){
   }finally{const b=el('#rpImportBtn');if(b){b.disabled=false;b.textContent='Импортировать'}}
 }
 function restoreRaidPlanBackup(){
-  const b=state._raidPlanTabBackups?.[current];if(!b){toast('Предыдущей вкладки RaidPlan для этого босса нет');return}
+  const b=state._raidPlanTabBackups?.[raidPlanBackupKey()];if(!b){toast(`Предыдущего импорта RaidPlan для режима «${difficultyLabels[diff]}» нет`);return}
   if(!confirm('Вернуть предыдущий импорт RaidPlan? Сценарии RaidRU не изменятся.'))return;
-  const bs=bossState(current);bs.raidPlanScenes=deep(b.scenes||[]);bs.raidPlanTimelineV3=deep(b.timelineV3||raidPlanTimelineForScenes(bs.raidPlanScenes));bs.raidPlanImport=deep(b.importMeta||bs.raidPlanImport||{});
-  state._scenarioSourceByBoss=state._scenarioSourceByBoss||{};state._scenarioSourceByBoss[current]='raidplan';sceneIndex=0;playerSceneIndex=0;save();render();toast('Предыдущая вкладка RaidPlan восстановлена');
+  const bs=bossState(current,diff);markDifficultyInitialized(current,diff);bs.raidPlanScenes=deep(b.scenes||[]);bs.raidPlanTimelineV3=deep(b.timelineV3||raidPlanTimelineForScenes(bs.raidPlanScenes));bs.raidPlanImport=deep(b.importMeta||bs.raidPlanImport||{});
+  setScenarioSourceFor(current,'raidplan',diff);sceneIndex=0;playerSceneIndex=0;save();render();toast(`Предыдущая вкладка RaidPlan восстановлена · ${difficultyLabels[diff]}`);
 }
-function exportPlan(){const blob=new Blob([JSON.stringify({version:'0.8.20',boss:current,diff,role,data:bossState(current)},null,2)],{type:'application/json'}),a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=`raidru-${current}-v0820.json`;a.click();URL.revokeObjectURL(a.href);toast('Стратегия экспортирована')}
-function importPlanFile(file){if(!file)return;const r=new FileReader();r.onload=()=>{try{const p=JSON.parse(r.result);if(!p.boss||!p.data)throw new Error();state[p.boss]=p.data;current=p.boss;diff=p.diff||diff;role=p.role||role;bossState(current);save();toast('Стратегия импортирована');render()}catch(e){toast('Не удалось импортировать JSON')}};r.readAsText(file)}
+function exportPlan(){const blob=new Blob([JSON.stringify({version:'0.8.21',boss:current,diff,role,data:exportBossStateForDifficulty(current,diff,true)},null,2)],{type:'application/json'}),a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=`raidru-${current}-${diff}-v0821.json`;a.click();URL.revokeObjectURL(a.href);toast(`Стратегия экспортирована · ${difficultyLabels[diff]}`)}
+function importPlanFile(file){if(!file)return;const r=new FileReader();r.onload=()=>{try{const p=JSON.parse(r.result);if(!p.boss||!p.data)throw new Error();const d=p.diff||'heroic',root=bossStateRaw(p.boss);root.favorite=!!p.data.favorite;root.progress=+p.data.progress||0;root.note=p.data.note||root.note||'';const plan={_initialized:true,scenes:deep(p.data.scenes||[]),timelineV3:deep(p.data.timelineV3||[]),raidPlanScenes:deep(p.data.raidPlanScenes||[]),raidPlanTimelineV3:deep(p.data.raidPlanTimelineV3||[]),raidPlanImport:deep(p.data.raidPlanImport||{})};replaceDifficultyPlan(p.boss,d,plan);current=p.boss;diff=d;role=p.role||role;setScenarioSourceFor(current,plan.raidPlanScenes?.length?'raidplan':'raidru',diff);save();toast(`Стратегия импортирована · ${difficultyLabels[diff]}`);render()}catch(e){toast('Не удалось импортировать JSON')}};r.readAsText(file)}
 function sharePlan(){const u=buildShareUrl();navigator.clipboard?.writeText(u);history.replaceState(null,'',u);toast('Ссылка на стратегию скопирована')}
-function backupAll(){const blob=new Blob([JSON.stringify({version:'0.8.20',savedAt:new Date().toISOString(),state},null,2)],{type:'application/json'}),a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='raidru-backup-v0820.json';a.click();URL.revokeObjectURL(a.href);toast('Резервная копия скачана')}
+function backupAll(){const blob=new Blob([JSON.stringify({version:'0.8.21',savedAt:new Date().toISOString(),state},null,2)],{type:'application/json'}),a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='raidru-backup-v0821.json';a.click();URL.revokeObjectURL(a.href);toast('Резервная копия скачана')}
 function resetAllConfirm(){if(!confirm('Удалить локальные прогресс, планы, заметки и состав?'))return;localStorage.removeItem('raidru-standalone');location.hash='';location.reload()}
 function prevScene(){sceneIndex=Math.max(0,sceneIndex-1);render()} function nextScene(){sceneIndex=Math.min(scenarioState(current).scenes.length-1,sceneIndex+1);render()} function goScene(i){sceneIndex=i;render()}
-function loadBossPreset(){if(scenarioSource(current)==='raidplan'){toast('Шаблон босса доступен только во вкладке RaidRU');return}if(!confirm('Заменить текущие сцены и таймлайн готовым шаблоном босса?'))return;const bs=bossState(current);bs.scenes=bossPresetScenes(current).map((s,i)=>normalizeScene(s,current,i));bs.timelineV3=defaultTimeline(current);sceneIndex=0;save();toast('Шаблон босса и таймлайн загружены');render()}
+function loadBossPreset(){if(scenarioSource(current)==='raidplan'){toast('Шаблон босса доступен только во вкладке RaidRU');return}if(diff!=='heroic'){toast('Готовый RaidRU-шаблон сейчас проверен только для Героического режима. При переключении выбери «Скопировать текущую карту», если он нужен в другой сложности.');return}if(!confirm('Заменить текущие сцены и таймлайн готовым Heroic-шаблоном босса?'))return;const bs=bossState(current,'heroic');bs.scenes=bossPresetScenes(current).map((s,i)=>normalizeScene(s,current,i));bs.timelineV3=defaultTimeline(current);sceneIndex=0;save();toast('Heroic-шаблон босса и таймлайн загружены');render()}
 function addScene(){const bs=scenarioState(current),src=bs.scenes[sceneIndex];bs.scenes.push(normalizeScene(deep({...src,name:`Сцена ${bs.scenes.length+1}`}),current,bs.scenes.length));sceneIndex=bs.scenes.length-1;save();render()}
 function delScene(){const bs=scenarioState(current);if(bs.scenes.length<2)return;if(!confirm('Удалить сцену?'))return;bs.scenes.splice(sceneIndex,1);bs.timelineV3.forEach(e=>e.scene=Math.min(e.scene,bs.scenes.length-1));sceneIndex=Math.max(0,sceneIndex-1);save();render()}
 function resetScene(){scenarioState(current).scenes[sceneIndex]=defaultScene();save();render()}
@@ -1596,7 +1702,7 @@ function bindDrag(node,list,kind){
 function addTimelineEvent(){const bs=scenarioState(current);const prev=bs.timelineV3.at(-1);bs.timelineV3.push({id:uid(),time:(prev?.time||0)+30,label:'Новая механика',type:'move',scene:Math.min(sceneIndex,bs.scenes.length-1),note:''});save();render()}
 function editTimeline(i,k,v){const e=scenarioState(current).timelineV3[i];if(!e)return;if(k==='time'){const p=parseTime(v);if(Number.isFinite(p))e.time=p}else if(k==='scene')e.scene=+v;else e[k]=v;save();render()}
 function removeTimeline(i){scenarioState(current).timelineV3.splice(i,1);save();render()} function moveTimeline(i,d){const a=scenarioState(current).timelineV3,j=i+d;if(j<0||j>=a.length)return;[a[i],a[j]]=[a[j],a[i]];save();render()}
-function resetTimeline(){if(!confirm('Пересоздать таймлайн из текущей вкладки сцен?'))return;const bs=scenarioState(current);bs.timelineV3=scenarioSource(current)==='raidplan'?raidPlanTimelineForScenes(bs.scenes):defaultTimeline(current);save();render()}
+function resetTimeline(){if(!confirm('Пересоздать таймлайн из текущей вкладки сцен?'))return;const bs=scenarioState(current);bs.timelineV3=scenarioSource(current)==='raidplan'?raidPlanTimelineForScenes(bs.scenes):(diff==='heroic'?defaultTimeline(current):(bs.scenes||[]).map((sc,i)=>({id:uid(),time:i*35,label:sc.name||`Сцена ${i+1}`,type:'move',scene:i,note:sc.note||''})));save();render()}
 function setupPlayer(){requestAnimationFrame(()=>{const arena=el('#playerArena');arena?.querySelectorAll('.token,.effect').forEach(n=>n.classList.add('settled'))})}
 function playerPrev(){playerSceneIndex=Math.max(0,playerSceneIndex-1);render()} function playerNext(){playerSceneIndex=Math.min(scenarioState(current).scenes.length-1,playerSceneIndex+1);render()}
 function jumpEvent(i){const e=scenarioState(current).timelineV3[i];if(!e)return;animatePlayerTo(e.scene)}
@@ -1630,5 +1736,10 @@ function togglePlayback(){
 }
 function stopPlayback(){playerPlaying=false;(state._playTimers||[]).forEach(clearTimeout);state._playTimers=[];if(playbackTimer)clearTimeout(playbackTimer);playbackTimer=null}
 runStartupMigrations();
+// При обновлении старые данные остаются Heroic. Нормальный/Эпохальный создаются отдельно.
+if(diff!=='heroic'){
+  const p=ensureDifficultyPlan(current,diff);
+  if(p.raidPlanScenes?.length||p.scenes?.some(sc=>sc?.name!=='Пустая карта'||sc?.tokens?.length||sc?.effects?.length))p._initialized=true;
+}
 restoreFromHash();
 render();

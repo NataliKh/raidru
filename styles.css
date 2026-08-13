@@ -867,3 +867,12 @@
 /* 0.8.20 composite-object fidelity */
 .token.raidplanNative-icon{opacity:var(--rp-opacity,1)}
 .token.raidplanNative-icon .rpNativeAsset{max-width:100%;max-height:100%}
+
+/* 0.8.21 — difficulty-specific plans */
+.difficultySwitchModal{width:min(680px,94vw);background:#0e141b;border:1px solid #314151;border-radius:16px;box-shadow:0 26px 80px #000c;padding:18px}
+.difficultySwitchHead{display:flex;justify-content:space-between;align-items:flex-start;gap:16px;border-bottom:1px solid #222e39;padding-bottom:13px;margin-bottom:12px}
+.difficultySwitchHead small{display:block;color:#67d7a0;font-size:9px;letter-spacing:.13em}.difficultySwitchHead h2{margin:4px 0 0;font-size:20px}.difficultySwitchHead>button{width:34px;height:34px;border:1px solid #34414d;background:#141b23;color:#a9b6c4;border-radius:9px;font-size:20px}
+.difficultySwitchModal>p{color:#9aa8b6;line-height:1.55;margin:12px 0 15px}.difficultySwitchModal>p b{color:#dce8f1}
+.difficultyChoiceGrid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}.difficultyChoiceGrid button{display:flex;flex-direction:column;align-items:flex-start;gap:5px;min-height:82px;padding:13px 14px;border:1px solid #2c3a47;background:#121a22;color:#d8e2eb;border-radius:11px;text-align:left}.difficultyChoiceGrid button:hover{border-color:#456077;background:#16212c}.difficultyChoiceGrid button.primary{border-color:#3d7658;background:#14271e}.difficultyChoiceGrid button.dangerChoice{border-color:#5a3639;background:#211517}.difficultyChoiceGrid button b{font-size:13px}.difficultyChoiceGrid button span{font-size:10px;line-height:1.45;color:#7e91a2}.difficultyChoiceGrid button.primary span{color:#87b99b}.difficultyChoiceGrid button.dangerChoice span{color:#b98c91}
+.difficultyCancel{margin-top:12px;width:100%;border:1px solid #2b3742;background:#10161d;color:#8f9dab;border-radius:9px;padding:9px}
+@media(max-width:640px){.difficultyChoiceGrid{grid-template-columns:1fr}.difficultySwitchModal{padding:14px}}

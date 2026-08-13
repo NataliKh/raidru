@@ -1,11 +1,11 @@
-/* RaidRU v0.8.20 — RaidPlan import adapter
+/* RaidRU v0.8.21 — RaidPlan import adapter
  * Isolated from app.js on purpose: RaidPlan developer integration is not documented yet,
  * so transport/schema changes should stay in this file.
  */
 (function(){
   'use strict';
 
-  const VERSION='0.8.20';
+  const VERSION='0.8.21';
   const STEP_KEYS=['steps','scenes','pages','slides','frames'];
   const ITEM_KEYS=['objects','elements','items','components','drawings','entities','children','nodes'];
   const ROLE_WORDS={
@@ -489,28 +489,31 @@
   function applyConverted(result,mode='separate'){
     const bossId=result.bossId;
     if(typeof bossState!=='function')throw new Error('RaidRU state недоступен.');
-    const bs=bossState(bossId),now=new Date().toISOString();
-    // RaidRU-сцены намеренно не меняются. Повторный импорт резервирует только предыдущую RaidPlan-вкладку.
+    const activeDiff=typeof diff!=='undefined'?diff:'heroic';
+    const bs=bossState(bossId,activeDiff),now=new Date().toISOString();
+    if(typeof markDifficultyInitialized==='function')markDifficultyInitialized(bossId,activeDiff);
+    // RaidRU-сцены намеренно не меняются. Backup и импорт привязаны к активной сложности.
     state._raidPlanTabBackups=state._raidPlanTabBackups||{};
-    if(bs.raidPlanScenes?.length){state._raidPlanTabBackups[bossId]={createdAt:now,scenes:deep(bs.raidPlanScenes),timelineV3:deep(bs.raidPlanTimelineV3||[]),importMeta:deep(bs.raidPlanImport||{})}}
+    const backupKey=typeof raidPlanBackupKey==='function'?raidPlanBackupKey(bossId,activeDiff):`${bossId}::${activeDiff}`;
+    if(bs.raidPlanScenes?.length){state._raidPlanTabBackups[backupKey]={createdAt:now,difficulty:activeDiff,scenes:deep(bs.raidPlanScenes),timelineV3:deep(bs.raidPlanTimelineV3||[]),importMeta:deep(bs.raidPlanImport||{})}}
     const imported=result.scenes.map((s,i)=>normalizeScene(deep({...s,name:s.name.replace(/^RaidPlan\s*·?\s*/i,'')}),bossId,i));
     bs.raidPlanScenes=imported;
     bs.raidPlanTimelineV3=typeof raidPlanTimelineForScenes==='function'?raidPlanTimelineForScenes(imported):imported.map((s,i)=>({id:`rp-time-${i}`,time:i*35,label:s.name,type:'move',scene:i,note:s.note||''}));
-    bs.raidPlanImport={at:now,name:result.planName,report:result.report,mode:'separate-tab',sourceCode:result.rawRoot?.code||'',revision:result.rawRoot?.revision??null,renderer:'native-v3'};
-    state._scenarioSourceByBoss=state._scenarioSourceByBoss||{};state._scenarioSourceByBoss[bossId]='raidplan';
+    bs.raidPlanImport={at:now,name:result.planName,report:result.report,mode:'separate-tab',sourceCode:result.rawRoot?.code||'',revision:result.rawRoot?.revision??null,renderer:'native-v3',difficulty:activeDiff};
+    if(typeof setScenarioSourceFor==='function')setScenarioSourceFor(bossId,'raidplan',activeDiff);else{state._scenarioSourceByBoss=state._scenarioSourceByBoss||{};state._scenarioSourceByBoss[bossId]='raidplan';}
     if(mode!=='silent-refresh'){current=bossId;sceneIndex=0;playerSceneIndex=0;view='planner'}
     if(typeof save==='function')save();
     if(typeof render==='function')render();
-    return `${reportText(result.report)} Сохранено в отдельной вкладке RaidPlan; сценарии RaidRU не изменены.`;
+    return `${reportText(result.report)} Сохранено в отдельной вкладке RaidPlan для текущей сложности; сценарии RaidRU не изменены.`;
   }
 
   async function refreshCurrentIfLegacy(){
     try{
       if(typeof bossState!=='function'||typeof current==='undefined')return false;
-      const bs=bossState(current);if(!bs?.raidPlanScenes?.length||bs?.raidPlanImport?.renderer==='native-v3')return false;
+      const activeDiff=typeof diff!=='undefined'?diff:'heroic';const bs=bossState(current,activeDiff);if(!bs?.raidPlanScenes?.length||bs?.raidPlanImport?.renderer==='native-v3')return false;
       const name=text(bs?.raidPlanImport?.name||''),code=text(bs?.raidPlanImport?.sourceCode||'')||(name.match(/RaidPlan\s+([A-Za-z0-9_-]{8,64})/i)?.[1]||'');
       if(!code)return false;
-      const guard=`raidru-rp-refresh-${current}-${code}-0820`;if(typeof sessionStorage!=='undefined'&&sessionStorage.getItem(guard))return false;
+      const guard=`raidru-rp-refresh-${current}-${activeDiff}-${code}-0821`;if(typeof sessionStorage!=='undefined'&&sessionStorage.getItem(guard))return false;
       if(typeof sessionStorage!=='undefined')sessionStorage.setItem(guard,'1');
       const raw=await fetchUrl(code),result=convert(raw,{bossId:current,currentBoss:current});applyConverted(result,'silent-refresh');return true;
     }catch(e){console.warn('RaidPlan legacy refresh skipped',e);return false}
