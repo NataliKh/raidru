@@ -876,3 +876,12 @@
 .difficultyChoiceGrid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}.difficultyChoiceGrid button{display:flex;flex-direction:column;align-items:flex-start;gap:5px;min-height:82px;padding:13px 14px;border:1px solid #2c3a47;background:#121a22;color:#d8e2eb;border-radius:11px;text-align:left}.difficultyChoiceGrid button:hover{border-color:#456077;background:#16212c}.difficultyChoiceGrid button.primary{border-color:#3d7658;background:#14271e}.difficultyChoiceGrid button.dangerChoice{border-color:#5a3639;background:#211517}.difficultyChoiceGrid button b{font-size:13px}.difficultyChoiceGrid button span{font-size:10px;line-height:1.45;color:#7e91a2}.difficultyChoiceGrid button.primary span{color:#87b99b}.difficultyChoiceGrid button.dangerChoice span{color:#b98c91}
 .difficultyCancel{margin-top:12px;width:100%;border:1px solid #2b3742;background:#10161d;color:#8f9dab;border-radius:9px;padding:9px}
 @media(max-width:640px){.difficultyChoiceGrid{grid-template-columns:1fr}.difficultySwitchModal{padding:14px}}
+
+/* 0.8.22 — RaidPlan v4 fidelity / cross-layer ordering */
+.raidplanArenaNative .effects,.raidplanArenaNative .tokens{z-index:auto}
+.raidplanArenaNative .effect.raidplanNativeEffect,.raidplanArenaNative .token.raidplanNative{position:absolute}
+.rpNativeCard{width:100%;height:100%;min-width:120px;min-height:64px;box-sizing:border-box;overflow:hidden;background:rgba(4,8,13,.96);border:1px solid #33414e;border-radius:4px;color:#f6d53c;box-shadow:0 5px 14px #000b;text-align:left;font-size:max(8px,.72cqw);line-height:1.28}
+.rpNativeCardHead{display:flex;align-items:flex-start;gap:.45cqw;padding:.42cqw .5cqw;border-bottom:1px solid #28343f;color:#f3f5f7}
+.rpNativeCardHead img{width:max(22px,2.25cqw);height:max(22px,2.25cqw);object-fit:cover;flex:0 0 auto;border-radius:2px}
+.rpNativeCardHead b{display:block;font-size:max(9px,.86cqw);line-height:1.18}.rpNativeCardHead small{display:block;color:#dfe6ec;font-size:max(7px,.58cqw);margin-top:.12cqw}
+.rpNativeCardBody{padding:.42cqw .5cqw;color:#f4d537;white-space:pre-wrap;overflow:hidden}

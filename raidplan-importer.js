@@ -1,11 +1,11 @@
-/* RaidRU v0.8.21 — RaidPlan import adapter
+/* RaidRU v0.8.22 — RaidPlan import adapter
  * Isolated from app.js on purpose: RaidPlan developer integration is not documented yet,
  * so transport/schema changes should stay in this file.
  */
 (function(){
   'use strict';
 
-  const VERSION='0.8.21';
+  const VERSION='0.8.22';
   const STEP_KEYS=['steps','scenes','pages','slides','frames'];
   const ITEM_KEYS=['objects','elements','items','components','drawings','entities','children','nodes'];
   const ROLE_WORDS={
@@ -125,7 +125,7 @@
     return{w,h};
   }
   function readRotation(o){
-    let r=finite(deepPick(o,[['rotation'],['rot'],['angle'],['meta','angle'],['degrees'],['direction']]))||0;
+    let r=finite(deepPick(o,[['rotation'],['rot'],['angle'],['meta','rotation'],['meta','rot'],['meta','angle'],['degrees'],['direction']]))||0;
     if(Math.abs(r)<=Math.PI*2+.02&&Math.abs(r)>.001)r=r*180/Math.PI;
     return r;
   }
@@ -305,17 +305,34 @@
   function nativeMeta(o,tf,subtype,extra={}){
     const wh=nativeSize(o,tf),font=finite(o?.attr?.fontSize),cw=tf?.canvas?.w||1200;
     const opacity=finite(o?.attr?.opacity??o?.opacity??o?.meta?.opacity);
-    const z=finite(o?.meta?.zIndex??o?.meta?.z??o?.zIndex??o?.z);
-    return{kind:'raidplan',native:true,subtype,source:'RaidPlan',sourceType:raidPlanNodeType(o),w:wh.w,h:wh.h,fontCqw:font!=null?font/cw*100:null,angle:readRotation(o),opacity:opacity!=null?clamp(opacity,0,1):null,z,...extra};
+    const sourceOrder=finite(extra.sourceOrder)??0;
+    const explicitZ=finite(o?.meta?.zIndex??o?.meta?.z??o?.zIndex??o?.z);
+    let rawAttr={};try{rawAttr=JSON.parse(JSON.stringify(o?.attr||{}))}catch(_){}
+    return{kind:'raidplan',native:true,subtype,source:'RaidPlan',sourceType:raidPlanNodeType(o),w:wh.w,h:wh.h,fontCqw:font!=null?font/cw*100:null,angle:readRotation(o),opacity:opacity!=null?clamp(opacity,0,1):null,z:explicitZ??sourceOrder,sourceOrder,rawAttr,...extra};
   }
-  function roleAssetMeta(o,tf,role){
-    const asset=text(o?.attr?.asset||'');return nativeMeta(o,tf,'role',{role,asset,assetUrl:cdnAsset(asset)});
+  function richField(v){
+    if(typeof v==='string'||typeof v==='number')return preserveText(v);
+    if(Array.isArray(v))return v.map(richField).filter(Boolean).join('\n');
+    if(obj(v)){for(const k of ['text','value','label','name','title','description','body']){const t=richField(v[k]);if(t)return t}}
+    return '';
   }
-  function markerAssetMeta(o,tf,key){
-    const asset=text(o?.attr?.asset||'');return nativeMeta(o,tf,'marker',{markerKey:key,asset,assetUrl:cdnAsset(asset)});
+  function iconCardMeta(o,tf,label,sourceOrder){
+    const a=o?.attr||{},wh=nativeSize(o,tf),asset=text(a.asset||a.assetUrl||'');
+    const cardTitle=richField(a.tooltipTitle||a.spellName||a.abilityName||a.lname||a.title||a.name||a.label)||preserveText(label);
+    const cardBody=richField(a.tooltipText||a.tooltip||a.description||a.details||a.body||a.helpText||a.longText);
+    const cardMeta=richField(a.range||a.castTime||a.cooldown||a.subtext||a.metaText);
+    const type=raidPlanNodeType(o),looksAbility=/spell|ability|status|effect|aura|tooltip|encounter.?icon/.test(`${type} ${text(a.kind)} ${text(a.category)} ${asset}`.toLowerCase());
+    const large=(wh.w??0)>=11||(wh.h??0)>=11;
+    return{cardTitle,cardBody,cardMeta,renderAsCard:!!(large&&looksAbility&&(cardTitle||cardBody)),sourceOrder};
+  }
+  function roleAssetMeta(o,tf,role,sourceOrder=0){
+    const asset=text(o?.attr?.asset||'');return nativeMeta(o,tf,'role',{role,asset,assetUrl:cdnAsset(asset),sourceOrder});
+  }
+  function markerAssetMeta(o,tf,key,sourceOrder=0){
+    const asset=text(o?.attr?.asset||'');return nativeMeta(o,tf,'marker',{markerKey:key,asset,assetUrl:cdnAsset(asset),sourceOrder});
   }
   function convertItem(o,ctx){
-    const {tf,bossId,sceneName,report}=ctx,nodeType=raidPlanNodeType(o),s=typeString(o),label=objectLabel(o)||'RaidPlan',p=pointFor(o,tf,bossId,sceneName);
+    const {tf,bossId,sceneName,report}=ctx,sourceOrder=Number.isFinite(+ctx.order)?+ctx.order:0,nodeType=raidPlanNodeType(o),s=typeString(o),label=objectLabel(o)||'RaidPlan',p=pointFor(o,tf,bossId,sceneName);
     if(nodeType==='arena')return null;
     if(!p){report.skipped++;return null}
 
@@ -324,7 +341,7 @@
     if(nodeType==='itext'){
       const raw=preserveText(o?.attr?.text||label),meta=nativeMeta(o,tf,'text',{
         text:raw,fill:text(o?.attr?.fill||'#ffffff'),backgroundColor:o?.attr?.backgroundColor||null,
-        textAlign:text(o?.attr?.textAlign||'left'),verticalAlign:text(o?.attr?.verticalAlign||'top'),styles:Array.isArray(o?.attr?.styles)?o.attr.styles:[]
+        textAlign:text(o?.attr?.textAlign||'left'),verticalAlign:text(o?.attr?.verticalAlign||'top'),styles:Array.isArray(o?.attr?.styles)?o.attr.styles:[],sourceOrder
       });
       report.text++;report.tokens++;
       return{kind:'token',value:[`rp-${report.seq++}`,raw,'text',+p.x.toFixed(2),+p.y.toFixed(2),meta]};
@@ -334,16 +351,16 @@
     // even though both use markerStyle="square".
     const asset=text(o?.attr?.asset||'');
     if(nodeType==='marker'&&/game\/wow\/role\//i.test(asset)){
-      const role=roleType(o)||'ranged',rt=role,meta=roleAssetMeta(o,tf,role);report.tokens++;
+      const role=roleType(o)||'ranged',rt=role,meta=roleAssetMeta(o,tf,role,sourceOrder);report.tokens++;
       return{kind:'token',value:[`rp-${report.seq++}`,({tank:'Танк',healer:'Хил',melee:'Мили',ranged:'РДД'}[role]||'Игрок'),rt,+p.x.toFixed(2),+p.y.toFixed(2),meta]};
     }
     const mkey=markerKey(o);
-    if(nodeType==='marker'&&mkey){report.tokens++;return{kind:'token',value:[`rp-${report.seq++}`,markerLabel(mkey),'marker',+p.x.toFixed(2),+p.y.toFixed(2),markerAssetMeta(o,tf,mkey)]}}
+    if(nodeType==='marker'&&mkey){report.tokens++;return{kind:'token',value:[`rp-${report.seq++}`,markerLabel(mkey),'marker',+p.x.toFixed(2),+p.y.toFixed(2),markerAssetMeta(o,tf,mkey,sourceOrder)]}}
 
     // 3) Mob portraits are rendered from RaidPlan displayId with original size/ring.
     if(nodeType==='mob'){
       const display=text(o?.attr?.displayId||''),rawName=preserveText(o?.attr?.lname||label)||'Существо';
-      const meta=nativeMeta(o,tf,'mob',{displayId:display,assetUrl:display?`https://cdn.raidplan.io/wow/portrait/${display}.png`:'',ringColor:text(o?.attr?.ringColor||'#d7180b'),ringSize:finite(o?.attr?.ringSize)??0,noDir:!!o?.attr?.noDir,noTip:!!o?.attr?.noTip});
+      const meta=nativeMeta(o,tf,'mob',{displayId:display,assetUrl:display?`https://cdn.raidplan.io/wow/portrait/${display}.png`:'',ringColor:text(o?.attr?.ringColor||'#d7180b'),ringSize:finite(o?.attr?.ringSize)??0,noDir:!!o?.attr?.noDir,noTip:!!o?.attr?.noTip,sourceOrder});
       const it=mobEncounter(o,bossId,rawName);if(it){meta.encounterKey=it.key;meta.category=it.category;}
       report.tokens++;return{kind:'token',value:[`rp-${report.seq++}`,rawName,it?.category==='boss'?'boss':'encounter',+p.x.toFixed(2),+p.y.toFixed(2),meta]};
     }
@@ -356,7 +373,7 @@
 
     // Generic legacy text/labels.
     if(/(^|\s)(text|label|note|annotation|caption)(\s|$)/.test(s)||(!pick(o,['type','kind','objectType','shape','category'])&&label)){
-      const raw=preserveText(label);report.text++;report.tokens++;return{kind:'token',value:[`rp-${report.seq++}`,raw,'text',+p.x.toFixed(2),+p.y.toFixed(2),nativeMeta(o,tf,'text',{text:raw})]};
+      const raw=preserveText(label);report.text++;report.tokens++;return{kind:'token',value:[`rp-${report.seq++}`,raw,'text',+p.x.toFixed(2),+p.y.toFixed(2),nativeMeta(o,tf,'text',{text:raw,sourceOrder})]};
     }
 
     let et='';
@@ -372,7 +389,7 @@
       const mapped=poly.map(x=>tf.map(x.x,x.y)),xs=mapped.map(x=>x.x),ys=mapped.map(x=>x.y);
       report.approximated++;report.effects++;
       const shapeLabel=preserveText(objectLabel(o));
-      return{kind:'effect',value:{id:`rpfx-${report.seq++}`,type:'zone',x:+((Math.min(...xs)+Math.max(...xs))/2).toFixed(2),y:+((Math.min(...ys)+Math.max(...ys))/2).toFixed(2),w:+clamp(Math.max(...xs)-Math.min(...xs),.5,99).toFixed(2),h:+clamp(Math.max(...ys)-Math.min(...ys),.5,99).toFixed(2),rot:readRotation(o),label:'',raidPlan:{native:true,hideLabel:true,shapeKind:'polygon',shapeLabel,fill:o?.attr?.fill||null,stroke:o?.attr?.stroke||null,strokeWidth:finite(o?.attr?.strokeWidth),opacity:finite(o?.attr?.opacity)}}};
+      return{kind:'effect',value:{id:`rpfx-${report.seq++}`,type:'zone',x:+((Math.min(...xs)+Math.max(...xs))/2).toFixed(2),y:+((Math.min(...ys)+Math.max(...ys))/2).toFixed(2),w:+clamp(Math.max(...xs)-Math.min(...xs),.5,99).toFixed(2),h:+clamp(Math.max(...ys)-Math.min(...ys),.5,99).toFixed(2),rot:readRotation(o),label:'',raidPlan:{native:true,hideLabel:true,shapeKind:'polygon',shapeLabel,fill:o?.attr?.fill||null,stroke:o?.attr?.stroke||null,strokeWidth:finite(o?.attr?.strokeWidth),opacity:finite(o?.attr?.opacity),z:finite(o?.meta?.zIndex??o?.meta?.z??o?.zIndex??o?.z)??sourceOrder,sourceOrder}}};
     }
     if(et){
       let geom=(nodeType==='line')?fabricLineGeometry(o,tf):((et==='line'||et==='arrow')?lineFromEndpoints(o,tf,bossId,sceneName):null);
@@ -386,12 +403,12 @@
       if(nodeType==='path'||/tether|group|pin|locked/.test(s))report.approximated++;
       const shapeLabel=et==='zone'?preserveText(objectLabel(o)):'';
       const font=finite(o?.attr?.fontSize),cw=tf?.canvas?.w||1200;
-      return{kind:'effect',value:{id:`rpfx-${report.seq++}`,type:et,x:+clamp(geom.x,-10,110).toFixed(2),y:+clamp(geom.y,-10,110).toFixed(2),w:+geom.w.toFixed(2),h:+geom.h.toFixed(2),rot:+(geom.rot||0).toFixed(2),label:'',raidPlan:{native:true,hideLabel:true,nodeType,shapeKind:et==='zone'?shapeKind:null,shapeLabel,shapeFontCqw:font!=null?font/cw*100:null,labelFill:text(o?.attr?.textFill||o?.attr?.fontColor||o?.attr?.color||'#ffffff'),stroke:text(o?.attr?.stroke||'transparent'),fill:o?.attr?.fill||null,strokeWidth:strokeWidth??null,opacity:finite(o?.attr?.opacity),rx:finite(o?.attr?.rx??o?.attr?.radius),startType:text(o?.attr?.startType||'none'),endType:text(o?.attr?.endType||'none')}}};
+      return{kind:'effect',value:{id:`rpfx-${report.seq++}`,type:et,x:+clamp(geom.x,-10,110).toFixed(2),y:+clamp(geom.y,-10,110).toFixed(2),w:+geom.w.toFixed(2),h:+geom.h.toFixed(2),rot:+(geom.rot||0).toFixed(2),label:'',raidPlan:{native:true,hideLabel:true,nodeType,shapeKind:et==='zone'?shapeKind:null,shapeLabel,shapeFontCqw:font!=null?font/cw*100:null,labelFill:text(o?.attr?.textFill||o?.attr?.fontColor||o?.attr?.color||'#ffffff'),stroke:text(o?.attr?.stroke||'transparent'),fill:o?.attr?.fill||null,strokeWidth:strokeWidth??null,opacity:finite(o?.attr?.opacity),rx:finite(o?.attr?.rx??o?.attr?.radius),startType:text(o?.attr?.startType||'none'),endType:text(o?.attr?.endType||'none'),z:finite(o?.meta?.zIndex??o?.meta?.z??o?.zIndex??o?.z)??sourceOrder,sourceOrder}}};
     }
 
     if(/boss|enemy|npc|ability|spell|icon|sticker|encounter|object/.test(s)){
       const asset2=text(o?.attr?.asset||o?.attr?.assetUrl||'');
-      if(asset2){report.tokens++;return{kind:'token',value:[`rp-${report.seq++}`,label,'text',+p.x.toFixed(2),+p.y.toFixed(2),nativeMeta(o,tf,'icon',{assetUrl:cdnAsset(asset2),objectFit:text(o?.attr?.objectFit||'contain'),lname:preserveText(o?.attr?.lname||''),rawLabel:preserveText(label)})]}}
+      if(asset2){report.tokens++;return{kind:'token',value:[`rp-${report.seq++}`,label,'text',+p.x.toFixed(2),+p.y.toFixed(2),nativeMeta(o,tf,'icon',{assetUrl:cdnAsset(asset2),objectFit:text(o?.attr?.objectFit||'contain'),lname:preserveText(o?.attr?.lname||''),rawLabel:preserveText(label),...iconCardMeta(o,tf,label,sourceOrder)})]}}
       const it=nearestEncounter(label,bossId);
       if(it){report.tokens++;return{kind:'token',value:[`rp-${report.seq++}`,it.name,'encounter',+p.x.toFixed(2),+p.y.toFixed(2),{kind:'encounter',key:it.key,boss:it.boss||bossId,category:it.category,icon:it.icon,name:it.name,aliases:it.aliases||'',source:'raidplan'}]}}
     }
@@ -428,7 +445,7 @@
     const scenes=steps.map((step,i)=>{
       const name=stepName(step,i),items=flattenItems(step),tf=coordTransform(items,step,plan,bossId);report.modes[tf.mode]=(report.modes[tf.mode]||0)+1;
       const scene={name,note:stepNote(plan,i)||'',duration:8,map:{zoom:100,x:0,y:0,dark:0},tokens:[],effects:[],routes:{},raidPlan:{step:i+1,coordMode:tf.mode,background:raidPlanBackground(step),canvas:tf.canvas||canvasSize(step,plan),sourceCode:plan.code||'',revision:plan.revision??null}};
-      for(const o of items){const c=convertItem(o,{tf,bossId,sceneName:name,report});if(!c)continue;if(c.kind==='token')scene.tokens.push(c.value);else scene.effects.push(c.value)}
+      for(let order=0;order<items.length;order++){const o=items[order],c=convertItem(o,{tf,bossId,sceneName:name,report,order});if(!c)continue;if(c.kind==='token')scene.tokens.push(c.value);else scene.effects.push(c.value)}
       if(!scene.tokens.length&&!scene.effects.length){scene.tokens.push([`rp-${report.seq++}`,'Пустая сцена RaidPlan','text',50,50,{kind:'raidplan',subtype:'text',source:'RaidPlan'}]);report.tokens++}
       try{return typeof normalizeScene==='function'?normalizeScene(scene,bossId,i):scene}catch(_){return scene}
     });
@@ -486,36 +503,35 @@
     return `${r.steps} сцен · ${r.tokens} объектов/игроков · ${r.effects} зон/линий · ${r.skipped} пропущено${r.approximated?` · ${r.approximated} приближённо`:''}. Координаты: ${coord}.`;
   }
 
-  function applyConverted(result,mode='separate'){
+  function applyConverted(result,mode='separate',options={}){
     const bossId=result.bossId;
     if(typeof bossState!=='function')throw new Error('RaidRU state недоступен.');
-    const activeDiff=typeof diff!=='undefined'?diff:'heroic';
+    const activeDiff=['normal','heroic','mythic'].includes(options.difficulty)?options.difficulty:(['normal','heroic','mythic'].includes(result.difficulty)?result.difficulty:(typeof diff!=='undefined'?diff:'heroic'));
     const bs=bossState(bossId,activeDiff),now=new Date().toISOString();
     if(typeof markDifficultyInitialized==='function')markDifficultyInitialized(bossId,activeDiff);
-    // RaidRU-сцены намеренно не меняются. Backup и импорт привязаны к активной сложности.
     state._raidPlanTabBackups=state._raidPlanTabBackups||{};
     const backupKey=typeof raidPlanBackupKey==='function'?raidPlanBackupKey(bossId,activeDiff):`${bossId}::${activeDiff}`;
     if(bs.raidPlanScenes?.length){state._raidPlanTabBackups[backupKey]={createdAt:now,difficulty:activeDiff,scenes:deep(bs.raidPlanScenes),timelineV3:deep(bs.raidPlanTimelineV3||[]),importMeta:deep(bs.raidPlanImport||{})}}
-    const imported=result.scenes.map((s,i)=>normalizeScene(deep({...s,name:s.name.replace(/^RaidPlan\s*·?\s*/i,'')}),bossId,i));
+    const imported=result.scenes.map((scene,i)=>normalizeScene(deep({...scene,name:scene.name.replace(/^RaidPlan\s*·?\s*/i,'')}),bossId,i));
     bs.raidPlanScenes=imported;
-    bs.raidPlanTimelineV3=typeof raidPlanTimelineForScenes==='function'?raidPlanTimelineForScenes(imported):imported.map((s,i)=>({id:`rp-time-${i}`,time:i*35,label:s.name,type:'move',scene:i,note:s.note||''}));
-    bs.raidPlanImport={at:now,name:result.planName,report:result.report,mode:'separate-tab',sourceCode:result.rawRoot?.code||'',revision:result.rawRoot?.revision??null,renderer:'native-v3',difficulty:activeDiff};
-    if(typeof setScenarioSourceFor==='function')setScenarioSourceFor(bossId,'raidplan',activeDiff);else{state._scenarioSourceByBoss=state._scenarioSourceByBoss||{};state._scenarioSourceByBoss[bossId]='raidplan';}
-    if(mode!=='silent-refresh'){current=bossId;sceneIndex=0;playerSceneIndex=0;view='planner'}
+    bs.raidPlanTimelineV3=typeof raidPlanTimelineForScenes==='function'?raidPlanTimelineForScenes(imported):imported.map((scene,i)=>({id:`rp-time-${i}`,time:i*35,label:scene.name,type:'move',scene:i,note:scene.note||''}));
+    bs.raidPlanImport={at:now,name:result.planName,report:result.report,mode:'separate-tab',sourceCode:result.rawRoot?.code||'',revision:result.rawRoot?.revision??null,renderer:'native-v4',difficulty:activeDiff};
+    if(typeof setScenarioSourceFor==='function')setScenarioSourceFor(bossId,'raidplan',activeDiff);else{state._scenarioSourceByBoss=state._scenarioSourceByBoss||{};state._scenarioSourceByBoss[bossId]='raidplan'}
+    if(mode!=='silent-refresh'){current=bossId;if(typeof diff!=='undefined')diff=activeDiff;sceneIndex=0;playerSceneIndex=0;view='planner'}
     if(typeof save==='function')save();
     if(typeof render==='function')render();
-    return `${reportText(result.report)} Сохранено в отдельной вкладке RaidPlan для текущей сложности; сценарии RaidRU не изменены.`;
+    return `${reportText(result.report)} Сохранено в RaidPlan · ${activeDiff}; сценарии RaidRU не изменены.`;
   }
 
   async function refreshCurrentIfLegacy(){
     try{
       if(typeof bossState!=='function'||typeof current==='undefined')return false;
-      const activeDiff=typeof diff!=='undefined'?diff:'heroic';const bs=bossState(current,activeDiff);if(!bs?.raidPlanScenes?.length||bs?.raidPlanImport?.renderer==='native-v3')return false;
+      const activeDiff=typeof diff!=='undefined'?diff:'heroic';const bs=bossState(current,activeDiff);if(!bs?.raidPlanScenes?.length||bs?.raidPlanImport?.renderer==='native-v4')return false;
       const name=text(bs?.raidPlanImport?.name||''),code=text(bs?.raidPlanImport?.sourceCode||'')||(name.match(/RaidPlan\s+([A-Za-z0-9_-]{8,64})/i)?.[1]||'');
       if(!code)return false;
-      const guard=`raidru-rp-refresh-${current}-${activeDiff}-${code}-0821`;if(typeof sessionStorage!=='undefined'&&sessionStorage.getItem(guard))return false;
+      const guard=`raidru-rp-refresh-${current}-${activeDiff}-${code}-0822`;if(typeof sessionStorage!=='undefined'&&sessionStorage.getItem(guard))return false;
       if(typeof sessionStorage!=='undefined')sessionStorage.setItem(guard,'1');
-      const raw=await fetchUrl(code),result=convert(raw,{bossId:current,currentBoss:current});applyConverted(result,'silent-refresh');return true;
+      const raw=await fetchUrl(code),result=convert(raw,{bossId:current,currentBoss:current});applyConverted(result,'silent-refresh',{difficulty:activeDiff});return true;
     }catch(e){console.warn('RaidPlan legacy refresh skipped',e);return false}
   }
 
