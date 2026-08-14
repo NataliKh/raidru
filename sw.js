@@ -1,10 +1,10 @@
-const CACHE='raidru-v0831-raidplan-svg-path-safe';
+const CACHE='raidru-v0832-raidplan-path-command-bounds';
 const ASSETS=[
 './',
 './index.html',
-'./styles.css?v=0.8.31',
-'./app.js?v=0.8.31',
-'./raidplan-importer.js?v=0.8.31',
+'./styles.css?v=0.8.32',
+'./app.js?v=0.8.32',
+'./raidplan-importer.js?v=0.8.32',
 './tools/raidplan-browser-export.js',
 './manifest.webmanifest',
 './icon.svg',
