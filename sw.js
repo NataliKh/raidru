@@ -1,10 +1,10 @@
-const CACHE='raidru-v0832-raidplan-path-command-bounds';
+const CACHE='raidru-v0833-vector-arrow-stroke-safe';
 const ASSETS=[
 './',
 './index.html',
-'./styles.css?v=0.8.32',
-'./app.js?v=0.8.32',
-'./raidplan-importer.js?v=0.8.32',
+'./styles.css?v=0.8.33',
+'./app.js?v=0.8.33',
+'./raidplan-importer.js?v=0.8.33',
 './tools/raidplan-browser-export.js',
 './manifest.webmanifest',
 './icon.svg',

@@ -1,11 +1,11 @@
-/* RaidRU v0.8.32 — RaidPlan import adapter
+/* RaidRU v0.8.33 — RaidPlan import adapter
  * Isolated from app.js on purpose: RaidPlan developer integration is not documented yet,
  * so transport/schema changes should stay in this file.
  */
 (function(){
   'use strict';
 
-  const VERSION='0.8.32';
+  const VERSION='0.8.33';
   const STEP_KEYS=['steps','scenes','pages','slides','frames'];
   const ITEM_KEYS=['objects','elements','items','components','drawings','entities','children','nodes'];
   const ROLE_WORDS={
@@ -474,14 +474,25 @@
     const pad=Math.max(1,strokeWidth*1.75);
     minX-=pad;minY-=pad;vw+=pad*2;vh+=pad*2;
 
+    // RaidPlan freehand drawings are Path nodes.  Some revisions store the
+    // brush colour in `fill` even though visually the object is a stroke.
+    // Rendering that value as SVG fill closes an open path and creates the
+    // large white circles/capsules seen after import.  Treat Path as
+    // stroke-only; if stroke is missing, use the source fill as brush colour.
+    const sourceFill=text(visualValue(o,['fill'])||'');
+    const sourceStroke=text(visualValue(o,['stroke'])||'');
+    const brushStroke=sourceStroke&&!transparentColor(sourceStroke)
+      ?sourceStroke
+      :(sourceFill&&!transparentColor(sourceFill)?sourceFill:'#ffffff');
     return{
       d,viewBox:[minX,minY,vw,vh],
-      fill:text(visualValue(o,['fill'])||'none'),
-      stroke:text(visualValue(o,['stroke'])||'#ffffff'),
+      fill:'none',
+      stroke:brushStroke,
+      sourceFill:sourceFill||null,
       strokeWidth,
       lineCap:text(visualValue(o,['strokeLineCap','lineCap'])||'round'),
       lineJoin:text(visualValue(o,['strokeLineJoin','lineJoin'])||'round'),
-      boundsSource:'path-commands'
+      boundsSource:'path-commands-stroke-only'
     };
   }
   function nearestEncounter(label,bossId){
@@ -866,7 +877,7 @@
     const imported=result.scenes.map((scene,i)=>normalizeScene(deep({...scene,name:scene.name.replace(/^RaidPlan\s*·?\s*/i,'')}),bossId,i));
     bs.raidPlanScenes=imported;
     bs.raidPlanTimelineV3=typeof raidPlanTimelineForScenes==='function'?raidPlanTimelineForScenes(imported):imported.map((scene,i)=>({id:`rp-time-${i}`,time:i*35,label:scene.name,type:'move',scene:i,note:scene.note||''}));
-    bs.raidPlanImport={at:now,name:result.planName,report:result.report,mode:'separate-tab',sourceCode:result.rawRoot?.code||'',revision:result.rawRoot?.revision??null,renderer:'native-v13-path-command-bounds',difficulty:activeDiff,sceneStats:imported.map(sc=>({tokens:(sc.tokens||[]).length,effects:(sc.effects||[]).length}))};
+    bs.raidPlanImport={at:now,name:result.planName,report:result.report,mode:'separate-tab',sourceCode:result.rawRoot?.code||'',revision:result.rawRoot?.revision??null,renderer:'native-v14-vector-arrow-stroke-safe',difficulty:activeDiff,sceneStats:imported.map(sc=>({tokens:(sc.tokens||[]).length,effects:(sc.effects||[]).length}))};
     if(typeof setScenarioSourceFor==='function')setScenarioSourceFor(bossId,'raidplan',activeDiff);else{state._scenarioSourceByBoss=state._scenarioSourceByBoss||{};state._scenarioSourceByBoss[bossId]='raidplan'}
     if(mode!=='silent-refresh'){current=bossId;if(typeof diff!=='undefined')diff=activeDiff;sceneIndex=0;playerSceneIndex=0;view='planner'}
     if(typeof save==='function')save();
@@ -877,10 +888,10 @@
   async function refreshCurrentIfLegacy(){
     try{
       if(typeof bossState!=='function'||typeof current==='undefined')return false;
-      const activeDiff=typeof diff!=='undefined'?diff:'heroic';const bs=bossState(current,activeDiff);if(!bs?.raidPlanScenes?.length||bs?.raidPlanImport?.renderer==='native-v13-path-command-bounds')return false;
+      const activeDiff=typeof diff!=='undefined'?diff:'heroic';const bs=bossState(current,activeDiff);if(!bs?.raidPlanScenes?.length||bs?.raidPlanImport?.renderer==='native-v14-vector-arrow-stroke-safe')return false;
       const name=text(bs?.raidPlanImport?.name||''),code=text(bs?.raidPlanImport?.sourceCode||'')||(name.match(/RaidPlan\s+([A-Za-z0-9_-]{8,64})/i)?.[1]||'');
       if(!code)return false;
-      const guard=`raidru-rp-refresh-${current}-${activeDiff}-${code}-0831`;if(typeof sessionStorage!=='undefined'&&sessionStorage.getItem(guard))return false;
+      const guard=`raidru-rp-refresh-${current}-${activeDiff}-${code}-0833`;if(typeof sessionStorage!=='undefined'&&sessionStorage.getItem(guard))return false;
       if(typeof sessionStorage!=='undefined')sessionStorage.setItem(guard,'1');
       const raw=await fetchUrl(code),result=convert(raw,{bossId:current,currentBoss:current});applyConverted(result,'silent-refresh',{difficulty:activeDiff});return true;
     }catch(e){console.warn('RaidPlan legacy refresh skipped',e);return false}
