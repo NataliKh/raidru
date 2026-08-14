@@ -1,10 +1,10 @@
-const CACHE='raidru-v0830-raidplan-map-backed-arena-safe';
+const CACHE='raidru-v0831-raidplan-svg-path-safe';
 const ASSETS=[
 './',
 './index.html',
-'./styles.css?v=0.8.30',
-'./app.js?v=0.8.30',
-'./raidplan-importer.js?v=0.8.30',
+'./styles.css?v=0.8.31',
+'./app.js?v=0.8.31',
+'./raidplan-importer.js?v=0.8.31',
 './tools/raidplan-browser-export.js',
 './manifest.webmanifest',
 './icon.svg',
