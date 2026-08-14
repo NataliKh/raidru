@@ -1,11 +1,11 @@
-/* RaidRU v0.8.28 — RaidPlan import adapter
+/* RaidRU v0.8.30 — RaidPlan import adapter
  * Isolated from app.js on purpose: RaidPlan developer integration is not documented yet,
  * so transport/schema changes should stay in this file.
  */
 (function(){
   'use strict';
 
-  const VERSION='0.8.29';
+  const VERSION='0.8.30';
   const STEP_KEYS=['steps','scenes','pages','slides','frames'];
   const ITEM_KEYS=['objects','elements','items','components','drawings','entities','children','nodes'];
   const ROLE_WORDS={
@@ -80,6 +80,14 @@
   // RaidPlan keeps hidden/editor helper nodes in the payload. The planner itself
   // does not paint them, so RaidRU must not turn them into encounter mechanics.
   function hiddenRaidPlanNode(o){
+    // RaidRU 0.8.30 visibility filter:
+    // opacity=0 and zero scale are non-painted Fabric/RaidPlan nodes.
+    const globalOpacity=deepAlpha(o,'opacity');
+    if(globalOpacity!==null&&globalOpacity<=0.0001)return true;
+    const scalarScale=finite(deepPick(o,[['meta','scale'],['scale']]));
+    const scaleX=finite(deepPick(o,[['meta','scale','x'],['scale','x'],['meta','scaleX'],['scaleX']]));
+    const scaleY=finite(deepPick(o,[['meta','scale','y'],['scale','y'],['meta','scaleY'],['scaleY']]));
+    if(scalarScale===0||scaleX===0||scaleY===0)return true;
     const roots=[o?.meta,o?.attr,o?.data,o];
     for(const r of roots){
       if(flagTrue(r?.hidden)||flagTrue(r?.isHidden)||flagTrue(r?.disabled))return true;
@@ -447,7 +455,6 @@
     // A RaidPlan step may deliberately use a blank/custom arena.  Do not invent a
     // boss-map URL for it; scene 9 in the Mythic test plan uses exactly this layout.
     if(/^(?:none|blank|transparent|custom|empty|off)$/i.test(map)||/(?:^|[-_ ])(?:none|blank|custom|empty)(?:$|[-_ ])/.test(mode))return '';
-    if(arenaHasCustomVisual(arena)&&!map)return '';
     if(raid&&boss){const suffix=map&&map!=='default'?`-${map}`:'';return `https://cdn.raidplan.io/raid/${raid}/map/${boss}${suffix}.jpg`}
     return '';
   }
@@ -652,6 +659,11 @@
 
   function arenaVisualEffect(step,tf,report){
     const arena=raidPlanArena(step);if(!arena||hiddenRaidPlanNode(arena)||!arenaHasCustomVisual(arena))return null;
+    // RaidRU 0.8.30 map-backed arena suppression:
+    // RaidPlan uses the arena node as backing geometry/mask. If a real map is
+    // available, do not turn that internal geometry into a visible RaidRU zone.
+    const mapBackground=raidPlanBackground(step);
+    if(mapBackground){report.suppressedArenaVisuals=(report.suppressedArenaVisuals||0)+1;return null;}
     const a=arena.attr||{},shape=arenaShapeKind(arena)||'rect',wh=nativeSize(arena,tf),alpha=shapeAlpha(arena);
     let w=wh.w,h=wh.h;
     const radius=finite(a.radius??a.r??arena?.radius);
@@ -667,7 +679,7 @@
 
   function convert(raw,opts={}){
     const plan=findPlanRoot(raw),steps=findSteps(plan),bossId=opts.bossId||bossFromRaw(plan)||bossFromRaw(raw)||opts.currentBoss||'nekzali';
-    const report={version:VERSION,bossId,steps:steps.length,tokens:0,effects:0,text:0,skipped:0,hidden:0,suppressedBackdropFills:0,arenaVisuals:0,approximated:0,unsupported:[],modes:{},seq:1};
+    const report={version:VERSION,bossId,steps:steps.length,tokens:0,effects:0,text:0,skipped:0,hidden:0,suppressedBackdropFills:0,suppressedArenaVisuals:0,arenaVisuals:0,approximated:0,unsupported:[],modes:{},seq:1};
     if(!steps.length)throw new Error('В данных RaidPlan не найден массив steps/scenes/pages.');
     const scenes=steps.map((step,i)=>{
       const name=stepName(step,i),items=flattenItems(step),tf=coordTransform(items,step,plan,bossId);report.modes[tf.mode]=(report.modes[tf.mode]||0)+1;
@@ -743,7 +755,7 @@
     const imported=result.scenes.map((scene,i)=>normalizeScene(deep({...scene,name:scene.name.replace(/^RaidPlan\s*·?\s*/i,'')}),bossId,i));
     bs.raidPlanScenes=imported;
     bs.raidPlanTimelineV3=typeof raidPlanTimelineForScenes==='function'?raidPlanTimelineForScenes(imported):imported.map((scene,i)=>({id:`rp-time-${i}`,time:i*35,label:scene.name,type:'move',scene:i,note:scene.note||''}));
-    bs.raidPlanImport={at:now,name:result.planName,report:result.report,mode:'separate-tab',sourceCode:result.rawRoot?.code||'',revision:result.rawRoot?.revision??null,renderer:'native-v10-strict-visible-v2',difficulty:activeDiff,sceneStats:imported.map(sc=>({tokens:(sc.tokens||[]).length,effects:(sc.effects||[]).length}))};
+    bs.raidPlanImport={at:now,name:result.planName,report:result.report,mode:'separate-tab',sourceCode:result.rawRoot?.code||'',revision:result.rawRoot?.revision??null,renderer:'native-v11-map-backed-arena-safe',difficulty:activeDiff,sceneStats:imported.map(sc=>({tokens:(sc.tokens||[]).length,effects:(sc.effects||[]).length}))};
     if(typeof setScenarioSourceFor==='function')setScenarioSourceFor(bossId,'raidplan',activeDiff);else{state._scenarioSourceByBoss=state._scenarioSourceByBoss||{};state._scenarioSourceByBoss[bossId]='raidplan'}
     if(mode!=='silent-refresh'){current=bossId;if(typeof diff!=='undefined')diff=activeDiff;sceneIndex=0;playerSceneIndex=0;view='planner'}
     if(typeof save==='function')save();
@@ -754,10 +766,10 @@
   async function refreshCurrentIfLegacy(){
     try{
       if(typeof bossState!=='function'||typeof current==='undefined')return false;
-      const activeDiff=typeof diff!=='undefined'?diff:'heroic';const bs=bossState(current,activeDiff);if(!bs?.raidPlanScenes?.length||bs?.raidPlanImport?.renderer==='native-v10-strict-visible-v2')return false;
+      const activeDiff=typeof diff!=='undefined'?diff:'heroic';const bs=bossState(current,activeDiff);if(!bs?.raidPlanScenes?.length||bs?.raidPlanImport?.renderer==='native-v11-map-backed-arena-safe')return false;
       const name=text(bs?.raidPlanImport?.name||''),code=text(bs?.raidPlanImport?.sourceCode||'')||(name.match(/RaidPlan\s+([A-Za-z0-9_-]{8,64})/i)?.[1]||'');
       if(!code)return false;
-      const guard=`raidru-rp-refresh-${current}-${activeDiff}-${code}-0829`;if(typeof sessionStorage!=='undefined'&&sessionStorage.getItem(guard))return false;
+      const guard=`raidru-rp-refresh-${current}-${activeDiff}-${code}-0830`;if(typeof sessionStorage!=='undefined'&&sessionStorage.getItem(guard))return false;
       if(typeof sessionStorage!=='undefined')sessionStorage.setItem(guard,'1');
       const raw=await fetchUrl(code),result=convert(raw,{bossId:current,currentBoss:current});applyConverted(result,'silent-refresh',{difficulty:activeDiff});return true;
     }catch(e){console.warn('RaidPlan legacy refresh skipped',e);return false}
