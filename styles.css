@@ -913,3 +913,8 @@
 }
 .arenaMap-raidplan-native.raidPlanMapMissing{background:#050608!important}
 .effect.raidplanNativeEffect[style*="z-index:1"]{pointer-events:none}
+
+
+/* 0.8.29 — strict RaidPlan v2 fidelity: never invent paint for source shapes */
+.raidplanArenaNative .effect.raidplanNativeZone{background:var(--rp-fill,transparent)!important;border-color:var(--rp-stroke,transparent)!important}
+.raidplanArenaNative .effect.raidplanNativeLine,.raidplanArenaNative .effect.raidplanNativeArrow{box-shadow:none!important}

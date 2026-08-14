@@ -1,4 +1,14 @@
-# RaidRU v0.8.28
+# RaidRU v0.8.29
+
+## RaidPlan strict visible import
+
+- RaidPlan v2 больше не классифицируется по словам внутри подписей.
+- Неизвестные/служебные v2 nodes не рисуются.
+- Фигуры импортируются только при явной видимой заливке/обводке или собственной подписи.
+- Убраны широкие fallback-эвристики `object/area/ring/role`, создававшие лишние объекты.
+- Для IText приоритет отдан реальному `attr.width/height`, чтобы не ломать переносы.
+- Custom arena читает fill/stroke также из style/data/meta.
+
 
 ## RaidPlan scene 9 fidelity fix
 

@@ -5,7 +5,7 @@
 (function(){
   'use strict';
 
-  const VERSION='0.8.28';
+  const VERSION='0.8.29';
   const STEP_KEYS=['steps','scenes','pages','slides','frames'];
   const ITEM_KEYS=['objects','elements','items','components','drawings','entities','children','nodes'];
   const ROLE_WORDS={
@@ -95,6 +95,39 @@
     if(!c||c==='transparent'||c==='none')return true;
     if(/^rgba\([^)]*,\s*0(?:\.0+)?\s*\)$/.test(c))return true;
     if(/^#(?:[0-9a-f]{6}00|[0-9a-f]{3}0)$/.test(c))return true;
+    return false;
+  }
+  function visualValue(o,keys){
+    const roots=[o?.attr,o?.style,o?.data,o?.meta,o];
+    for(const r of roots)for(const k of keys){if(r&&r[k]!=null)return r[k]}
+    return null;
+  }
+  function hasVisiblePaint(o){
+    const fill=visualValue(o,['fill','backgroundColor','bgColor']);
+    const stroke=visualValue(o,['stroke','borderColor','outlineColor']);
+    const fa=deepAlpha(o,'fill'),sa=deepAlpha(o,'stroke'),oa=deepAlpha(o,'opacity');
+    const fillVisible=fill!=null&&!transparentColor(fill)&&(fa==null||fa>0)&&(oa==null||oa>0);
+    const strokeVisible=stroke!=null&&!transparentColor(stroke)&&(sa==null||sa>0)&&(oa==null||oa>0);
+    return fillVisible||strokeVisible;
+  }
+  function strictV2ShapeType(nodeType,o){
+    const nt=text(nodeType).toLowerCase();
+    if(['circle','ellipse','rect','rectangle','square','polygon'].includes(nt))return 'zone';
+    if(nt==='line')return /drawn|arrow/i.test(text(visualValue(o,['endType'])))?'arrow':'line';
+    if(nt==='path')return 'line';
+    if(['cone','wedge','sector'].includes(nt))return 'cone';
+    return '';
+  }
+  function strictV2NodeAllowed(o){
+    const nt=raidPlanNodeType(o),asset=text(visualValue(o,['asset','assetUrl'])||'');
+    if(['arena','itext','marker','mob'].includes(nt))return true;
+    if(['circle','ellipse','rect','rectangle','square','polygon'].includes(nt))return hasVisiblePaint(o)||!!objectLabel(o);
+    if(nt==='line'||nt==='path')return hasVisiblePaint(o)||/drawn|arrow/i.test(text(visualValue(o,['endType'])));
+    if(['cone','wedge','sector'].includes(nt))return hasVisiblePaint(o);
+    if(['player','character','member','assignment','slot','role','class','job'].includes(nt))return true;
+    if(['icon','ability','spell','status','effect','aura','sticker','encountericon','encounter_icon','encounter-icon','tooltip'].includes(nt))return !!asset;
+    // Unknown v2 nodes are intentionally NOT rendered. RaidPlan keeps editor/helper
+    // records in the same nodes array; permissive fallback is the main source of extras.
     return false;
   }
   function nearWhiteColor(v){
@@ -381,27 +414,29 @@
   }
 
   function nativeSize(o,tf){
-    // RaidPlan/Fabric objects may keep their base geometry either in meta.size or
-    // directly in attr.width/attr.height.  The latter is common for text boxes.
-    // Missing attr geometry was the reason large labels wrapped into narrow columns.
-    const w=finite(deepPick(o,[['meta','size','w'],['meta','size','width'],['size','w'],['size','width'],['attr','width'],['attr','w'],['attr','size','width'],['attr','size','w'],['width'],['w']]));
-    const h=finite(deepPick(o,[['meta','size','h'],['meta','size','height'],['size','h'],['size','height'],['attr','height'],['attr','h'],['attr','size','height'],['attr','size','h'],['height'],['h']]));
+    // Fabric IText stores its actual wrapping box in attr.width/height. meta.size can
+    // be a control/bounding size and was making text blocks much narrower than RaidPlan.
+    const isText=raidPlanNodeType(o)==='itext';
+    const wPaths=isText
+      ?[['attr','width'],['attr','w'],['attr','size','width'],['attr','size','w'],['meta','size','w'],['meta','size','width'],['size','w'],['size','width'],['width'],['w']]
+      :[['meta','size','w'],['meta','size','width'],['size','w'],['size','width'],['attr','width'],['attr','w'],['attr','size','width'],['attr','size','w'],['width'],['w']];
+    const hPaths=isText
+      ?[['attr','height'],['attr','h'],['attr','size','height'],['attr','size','h'],['meta','size','h'],['meta','size','height'],['size','h'],['size','height'],['height'],['h']]
+      :[['meta','size','h'],['meta','size','height'],['size','h'],['size','height'],['attr','height'],['attr','h'],['attr','size','height'],['attr','size','h'],['height'],['h']];
+    const w=finite(deepPick(o,wPaths)),h=finite(deepPick(o,hPaths));
     const {sx,sy}=nativeScale(o);
-    return{
-      w:w!=null?Math.max(.08,w*sx*(tf.scaleX||1)):null,
-      h:h!=null?Math.max(.08,h*sy*(tf.scaleY||1)):null
-    };
+    return{w:w!=null?Math.max(.08,w*sx*(tf.scaleX||1)):null,h:h!=null?Math.max(.08,h*sy*(tf.scaleY||1)):null};
   }
   function raidPlanArena(step){return step?.__raidplanV2?arr(step.nodes).find(n=>raidPlanNodeType(n)==='arena')||null:null}
   function arenaShapeKind(arena){
-    const a=arena?.attr||{},probe=[a.shape,a.arenaShape,a.kind,a.variant,a.geometry,a.mask,a.clipShape].filter(Boolean).join(' ').toLowerCase();
+    const probe=['shape','arenaShape','kind','variant','geometry','mask','clipShape'].map(k=>visualValue(arena,[k])).filter(Boolean).join(' ').toLowerCase();
     if(/circle|round/.test(probe))return 'circle';
     if(/ellipse|oval/.test(probe))return 'ellipse';
     if(/rect|square|box/.test(probe))return 'rect';
     return '';
   }
   function arenaHasCustomVisual(arena){
-    const a=arena?.attr||{},shape=arenaShapeKind(arena),fill=a.fill??a.backgroundColor??a.bgColor??a.color,stroke=a.stroke??a.borderColor??a.outlineColor;
+    const shape=arenaShapeKind(arena),fill=visualValue(arena,['fill','backgroundColor','bgColor','color']),stroke=visualValue(arena,['stroke','borderColor','outlineColor']);
     return !!(shape&&(text(fill).trim()||text(stroke).trim()));
   }
   function raidPlanBackground(step){
@@ -497,9 +532,10 @@
     const asset=text(o?.attr?.asset||'');return nativeMeta(o,tf,'marker',{markerKey:key,asset,assetUrl:cdnAsset(asset),sourceOrder});
   }
   function convertItem(o,ctx){
-    const {tf,bossId,sceneName,report}=ctx,sourceOrder=Number.isFinite(+ctx.order)?+ctx.order:0,nodeType=raidPlanNodeType(o),s=typeString(o),label=objectLabel(o)||'RaidPlan',p=pointFor(o,tf,bossId,sceneName);
+    const {tf,bossId,sceneName,report}=ctx,sourceOrder=Number.isFinite(+ctx.order)?+ctx.order:0,nodeType=raidPlanNodeType(o),s=typeString(o),label=objectLabel(o)||'RaidPlan',p=pointFor(o,tf,bossId,sceneName),strictV2=!!ctx.strictV2;
     if(nodeType==='arena')return null;
     if(hiddenRaidPlanNode(o)){report.hidden=(report.hidden||0)+1;return null}
+    if(strictV2&&!strictV2NodeAllowed(o)){report.skipped++;report.unsupported.push(`filtered:${nodeType||'unknown'}`);return null}
     if(!p){report.skipped++;return null}
 
     // 1) Text is text. Do this BEFORE any role/marker heuristics: instructions often
@@ -534,23 +570,24 @@
     }
 
     const role=roleType(o),cmeta=classMeta(o,label,role);
-    if(role||cmeta||/(player|character|member|assignment|slot|role|class|job)/.test(s)){
+    if(role||cmeta||(!strictV2&&/(player|character|member|assignment|slot|role|class|job)/.test(s))||strictV2&&['player','character','member','assignment','slot','role','class','job'].includes(nodeType)){
       const rt=tokenType(role,cmeta),roleLabel=label&&label!=='RaidPlan'?label:({tank:'TANK',healer:'HEAL',melee:'MELEE',ranged:'RANGED'}[rt]||'Игрок');report.tokens++;
       return{kind:'token',value:[`rp-${report.seq++}`,roleLabel,rt,+p.x.toFixed(2),+p.y.toFixed(2),cmeta||{kind:'raidplan',subtype:'player',source:'RaidPlan'}]};
     }
 
     // Generic legacy text/labels.
-    if(/(^|\s)(text|label|note|annotation|caption)(\s|$)/.test(s)||(!pick(o,['type','kind','objectType','shape','category'])&&label)){
+    if(!strictV2&&(/(^|\s)(text|label|note|annotation|caption)(\s|$)/.test(s)||(!pick(o,['type','kind','objectType','shape','category'])&&label))){
       const raw=preserveText(label);report.text++;report.tokens++;return{kind:'token',value:[`rp-${report.seq++}`,raw,'text',+p.x.toFixed(2),+p.y.toFixed(2),nativeMeta(o,tf,'text',{text:raw,sourceOrder})]};
     }
 
     let et='';
-    if(/cone|wedge|sector/.test(s))et='cone';
+    if(strictV2)et=strictV2ShapeType(nodeType,o);
+    else if(/cone|wedge|sector/.test(s))et='cone';
     else if(/arrow/.test(s)||nodeType==='line'&&/drawn|arrow/.test(text(o?.attr?.endType).toLowerCase()))et='arrow';
     else if(nodeType==='line'||nodeType==='path'||/tether|line|beam|link/.test(s))et='line';
     else if(/soak|stack|safe/.test(s))et='soak';
     else if(['circle','ellipse','rect','rectangle','square'].includes(nodeType)||/circle|ellipse|aoe|zone|area|ring|donut|rect|rectangle|square/.test(s))et='zone';
-    const shapeKind=['rect','rectangle','square'].includes(nodeType)||/\b(rect|rectangle|square)\b/.test(s)?'rect':(nodeType==='ellipse'||/\bellipse\b/.test(s)?'ellipse':(nodeType==='circle'||/\bcircle\b/.test(s)?'circle':'zone'));
+    const shapeKind=['rect','rectangle','square'].includes(nodeType)||(!strictV2&&/\b(rect|rectangle|square)\b/.test(s))?'rect':(nodeType==='ellipse'||(!strictV2&&/\bellipse\b/.test(s))?'ellipse':(nodeType==='circle'||(!strictV2&&/\bcircle\b/.test(s))?'circle':'zone'));
 
     const poly=(nodeType==='line'||nodeType==='path')?[]:pointsOf(o);
     if(poly.length>=3){
@@ -577,7 +614,7 @@
       return{kind:'effect',value:{id:`rpfx-${report.seq++}`,type:et,x:+clamp(geom.x,-10,110).toFixed(2),y:+clamp(geom.y,-10,110).toFixed(2),w:+geom.w.toFixed(2),h:+geom.h.toFixed(2),rot:+(geom.rot||0).toFixed(2),label:'',raidPlan:{native:true,hideLabel:true,nodeType,shapeKind:et==='zone'?shapeKind:null,shapeLabel,shapeFontCqw:font!=null?font/cw*100:null,labelFill:text(o?.attr?.textFill||o?.attr?.fontColor||o?.attr?.color||'#ffffff'),stroke:text(o?.attr?.stroke||'transparent'),fill:suppressFill?'transparent':(o?.attr?.fill||null),strokeWidth:strokeWidth??null,opacity:alpha.opacity,fillOpacity:alpha.fillOpacity,strokeOpacity:alpha.strokeOpacity,suppressedBackdropFill:suppressFill,rx:finite(o?.attr?.rx??o?.attr?.radius),startType:text(o?.attr?.startType||'none'),endType:text(o?.attr?.endType||'none'),z:finite(o?.meta?.zIndex??o?.meta?.z??o?.zIndex??o?.z)??sourceOrder,sourceOrder}}};
     }
 
-    if(/boss|enemy|npc|ability|spell|icon|sticker|encounter|object/.test(s)){
+    if((strictV2&&['icon','ability','spell','status','effect','aura','sticker','encountericon','encounter_icon','encounter-icon','tooltip'].includes(nodeType))||(!strictV2&&/boss|enemy|npc|ability|spell|icon|sticker|encounter|object/.test(s))){
       const asset2=text(o?.attr?.asset||o?.attr?.assetUrl||'');
       if(asset2){
         const card=iconCardMeta(o,tf,label,sourceOrder),meta=nativeMeta(o,tf,'icon',{assetUrl:cdnAsset(asset2),objectFit:text(o?.attr?.objectFit||'contain'),lname:preserveText(o?.attr?.lname||''),rawLabel:preserveText(label),...card});
@@ -621,9 +658,9 @@
     if(radius!=null){const {sx,sy}=nativeScale(arena);if(w==null)w=radius*2*sx*(tf.scaleX||1);if(h==null)h=radius*2*sy*(tf.scaleY||1)}
     if(w==null||h==null)return null;
     const raw=readXY(arena),q=raw.x!=null&&raw.y!=null?tf.map(raw.x,raw.y):{x:50,y:50};
-    const fill=a.fill??a.backgroundColor??a.bgColor??a.color??'transparent';
-    const stroke=a.stroke??a.borderColor??a.outlineColor??'transparent';
-    const strokeWidth=finite(a.strokeWidth??a.borderWidth??a.outlineWidth);
+    const fill=visualValue(arena,['fill','backgroundColor','bgColor','color'])??'transparent';
+    const stroke=visualValue(arena,['stroke','borderColor','outlineColor'])??'transparent';
+    const strokeWidth=finite(visualValue(arena,['strokeWidth','borderWidth','outlineWidth']));
     report.effects++;report.arenaVisuals=(report.arenaVisuals||0)+1;
     return{id:`rpfx-${report.seq++}`,type:'zone',x:+clamp(q.x,-10,110).toFixed(2),y:+clamp(q.y,-10,110).toFixed(2),w:+clamp(Math.abs(w),.08,99).toFixed(2),h:+clamp(Math.abs(h),.08,99).toFixed(2),rot:+readRotation(arena).toFixed(2),label:'',raidPlan:{native:true,hideLabel:true,arenaVisual:true,shapeKind:shape,shapeLabel:'',stroke:text(stroke),fill:fill,strokeWidth:strokeWidth??null,opacity:alpha.opacity,fillOpacity:alpha.fillOpacity,strokeOpacity:alpha.strokeOpacity,z:-100,sourceOrder:-100}};
   }
@@ -636,7 +673,7 @@
       const name=stepName(step,i),items=flattenItems(step),tf=coordTransform(items,step,plan,bossId);report.modes[tf.mode]=(report.modes[tf.mode]||0)+1;
       const scene={name,note:stepNote(plan,i)||'',duration:8,map:{zoom:100,x:0,y:0,dark:0},tokens:[],effects:[],routes:{},raidPlan:{step:i+1,coordMode:tf.mode,background:raidPlanBackground(step),canvas:tf.canvas||canvasSize(step,plan),sourceCode:plan.code||'',revision:plan.revision??null}};
       const arenaFx=arenaVisualEffect(step,tf,report);if(arenaFx)scene.effects.push(arenaFx);
-      for(let order=0;order<items.length;order++){const o=items[order],c=convertItem(o,{tf,bossId,sceneName:name,report,order});if(!c)continue;if(c.kind==='token')scene.tokens.push(c.value);else scene.effects.push(c.value)}
+      for(let order=0;order<items.length;order++){const o=items[order],c=convertItem(o,{tf,bossId,sceneName:name,report,order,strictV2:!!step.__raidplanV2});if(!c)continue;if(c.kind==='token')scene.tokens.push(c.value);else scene.effects.push(c.value)}
       if(!scene.tokens.length&&!scene.effects.length){scene.tokens.push([`rp-${report.seq++}`,'Пустая сцена RaidPlan','text',50,50,{kind:'raidplan',subtype:'text',source:'RaidPlan'}]);report.tokens++}
       try{return typeof normalizeScene==='function'?normalizeScene(scene,bossId,i):scene}catch(_){return scene}
     });
@@ -706,7 +743,7 @@
     const imported=result.scenes.map((scene,i)=>normalizeScene(deep({...scene,name:scene.name.replace(/^RaidPlan\s*·?\s*/i,'')}),bossId,i));
     bs.raidPlanScenes=imported;
     bs.raidPlanTimelineV3=typeof raidPlanTimelineForScenes==='function'?raidPlanTimelineForScenes(imported):imported.map((scene,i)=>({id:`rp-time-${i}`,time:i*35,label:scene.name,type:'move',scene:i,note:scene.note||''}));
-    bs.raidPlanImport={at:now,name:result.planName,report:result.report,mode:'separate-tab',sourceCode:result.rawRoot?.code||'',revision:result.rawRoot?.revision??null,renderer:'native-v9-custom-arena-text-scale',difficulty:activeDiff,sceneStats:imported.map(sc=>({tokens:(sc.tokens||[]).length,effects:(sc.effects||[]).length}))};
+    bs.raidPlanImport={at:now,name:result.planName,report:result.report,mode:'separate-tab',sourceCode:result.rawRoot?.code||'',revision:result.rawRoot?.revision??null,renderer:'native-v10-strict-visible-v2',difficulty:activeDiff,sceneStats:imported.map(sc=>({tokens:(sc.tokens||[]).length,effects:(sc.effects||[]).length}))};
     if(typeof setScenarioSourceFor==='function')setScenarioSourceFor(bossId,'raidplan',activeDiff);else{state._scenarioSourceByBoss=state._scenarioSourceByBoss||{};state._scenarioSourceByBoss[bossId]='raidplan'}
     if(mode!=='silent-refresh'){current=bossId;if(typeof diff!=='undefined')diff=activeDiff;sceneIndex=0;playerSceneIndex=0;view='planner'}
     if(typeof save==='function')save();
@@ -717,10 +754,10 @@
   async function refreshCurrentIfLegacy(){
     try{
       if(typeof bossState!=='function'||typeof current==='undefined')return false;
-      const activeDiff=typeof diff!=='undefined'?diff:'heroic';const bs=bossState(current,activeDiff);if(!bs?.raidPlanScenes?.length||bs?.raidPlanImport?.renderer==='native-v9-custom-arena-text-scale')return false;
+      const activeDiff=typeof diff!=='undefined'?diff:'heroic';const bs=bossState(current,activeDiff);if(!bs?.raidPlanScenes?.length||bs?.raidPlanImport?.renderer==='native-v10-strict-visible-v2')return false;
       const name=text(bs?.raidPlanImport?.name||''),code=text(bs?.raidPlanImport?.sourceCode||'')||(name.match(/RaidPlan\s+([A-Za-z0-9_-]{8,64})/i)?.[1]||'');
       if(!code)return false;
-      const guard=`raidru-rp-refresh-${current}-${activeDiff}-${code}-0828`;if(typeof sessionStorage!=='undefined'&&sessionStorage.getItem(guard))return false;
+      const guard=`raidru-rp-refresh-${current}-${activeDiff}-${code}-0829`;if(typeof sessionStorage!=='undefined'&&sessionStorage.getItem(guard))return false;
       if(typeof sessionStorage!=='undefined')sessionStorage.setItem(guard,'1');
       const raw=await fetchUrl(code),result=convert(raw,{bossId:current,currentBoss:current});applyConverted(result,'silent-refresh',{difficulty:activeDiff});return true;
     }catch(e){console.warn('RaidPlan legacy refresh skipped',e);return false}
