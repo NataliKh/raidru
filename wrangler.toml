@@ -4,7 +4,7 @@ compatibility_date = "2026-08-15"
 workers_dev = true
 
 [vars]
-# 2.0.4: soft threshold only changes page size / sampling. It never creates a timer.
+# 2.0.5: numeric fight URLs use one GraphQL request per user action; full mode remains opt-in.
 WCL_SOFT_LIMIT = "0.85"
 # Artificial pauses are allowed only when the hourly API budget is effectively empty.
 # A real upstream 429 still creates a strict Retry-After lock.

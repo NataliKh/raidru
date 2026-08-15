@@ -3,7 +3,7 @@ const worker=fs.readFileSync('src/index.js','utf8'),client=fs.readFileSync('wcl-
 assert(worker.includes("'/wcl/report'"),'worker must expose /wcl/report');
 assert(worker.includes("'/wcl/replay'"),'worker must expose /wcl/replay');
 assert(worker.includes('rateLimitData'),'worker must inspect WCL rateLimitData');
-assert(worker.includes('wcl_budget_guard'),'worker must have a quota guard');
+assert(worker.includes('wcl_quota_empty'),'worker must distinguish truly exhausted quota');
 assert(worker.includes('wcl/backoff/'),'worker must persist backoff state');
 assert(worker.includes('wcl/page-v203/'),'worker must cache resumable event pages');
 assert(worker.includes("status: 202"),'worker must pause instead of hammering WCL');
@@ -16,10 +16,14 @@ assert(wrangler.includes('WCL_SOFT_LIMIT = "0.85"'),'adaptive soft threshold mus
 assert(worker.includes('includeResources: true'),'resource snapshots must be requested for replay coordinates');
 assert(worker.includes('WCL_EVENT_PAGE_LIMIT'),'event page size must be bounded');
 assert(worker.includes('progressCacheName'),'worker must checkpoint partial replay progress');
-assert(worker.includes('await getQuota(env)'),'worker must obtain quota before replay batch');
+assert(worker.includes('RaidRUOneShot'),'numeric fight fast path must combine metadata and events in one query');
+assert(worker.includes('buildReplayOneShot'),'one-shot replay builder missing');
+assert(worker.includes("if (directFightId && requestedMode !== 'full')"),'numeric fight must route to one-shot fast path');
 assert(worker.includes('dataType: Casts'),'fast sampler must use casts-only event stream');
 assert(worker.includes('status: 206'),'worker must be able to return a usable partial replay');
-assert(wrangler.includes('WCL_HARD_LIMIT = "0.97"'),'hard limit guard must stay below WCL ceiling');
+assert(wrangler.includes('WCL_HARD_LIMIT = "0.999"'),'hard limit must only stop at effectively empty budget');
+assert(worker.includes('adaptiveEventLimit'),'worker must downshift page size instead of creating an artificial timer');
+assert(!worker.includes("setBackoff(code, fight.id, retry, 'wcl_budget_guard'"),'synthetic budget guard must not create backoff');
 assert(!worker.includes('setTimeout')&&!worker.includes('retryWcl'),'worker must not automatically retry WCL 429');
 
 console.log('WCL Safe Import 2.0 static checks: OK');

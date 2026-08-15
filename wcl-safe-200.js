@@ -2,7 +2,7 @@
  * Direct Warcraft Logs URL -> cached, quota-aware Worker replay.
  */
 (() => {
-  const VERSION='2.0.4-wcl-continuous';
+  const VERSION='2.0.5-wcl-one-shot';
   const API=(window.RAIDRU_WCL_API||'https://raidru-raidplan.raidru-wcl.workers.dev').replace(/\/$/,'');
   let ui={state:'idle',message:'',quota:null,report:null,url:'',fight:null,code:null,loops:0,partial:false,quality:null};
 
@@ -79,7 +79,7 @@
       const r=replayState();r.url=ui.url||inputValue();r.source='wcl-url';r.data=enrichReplay(normalizeReplayPayload(raw));r.mapId=replayPrimaryMapId(r.data);r.mapSource=r.mapId?'wcl':'fallback';replayClock=0;autoCalibrateReplay();save();ui.quota=raw.quota||ui.quota;
       const isPartial=!!raw.partial,quality=raw.quality||raw?.source?.fetchMode||'fast';
       const coverage=Math.round((raw?.stats?.actorCoverage||0)*100);
-      const cacheText=raw.cache==='hit'||raw.cache==='legacy-hit'?'Из кэша — WCL API не потрачен.':(isPartial?'Часть боя уже доступна.':'Replay загружен и закэширован.');
+      const cacheText=raw.message||(raw.cache==='hit'||raw.cache==='legacy-hit'?'Из кэша — WCL API не потрачен.':(isPartial?'Часть боя уже доступна.':'Replay загружен и закэширован.'));
       const qualityText=isPartial?'частичный':(quality==='full'?'полный':'быстрый');
       setUi(isPartial?'partial':'done',`${cacheText} ${qualityText} Replay · ${r.data.actors?.length||0} игроков · ${(r.data.positions?.length||0).toLocaleString('ru-RU')} точек${coverage?` · охват ${coverage}%`:''}${r.mapId?` · WCL mapID ${r.mapId}`:''}.`,{fight,code,partial:isPartial,quality});render();return;
     }
@@ -99,18 +99,18 @@
   function wclPickFight200(code,fight){document.querySelector('#wclFightPicker200')?.remove();const base=ui.url||`https://www.warcraftlogs.com/reports/${code}`;ui.url=base.replace(/([?&])fight=[^&#]*/i,'$1fight='+fight)+(base.includes('fight=')?'':(base.includes('?')?'&':'?')+'fight='+fight);loadWclFight200(code,fight)}
 
   function statusHtml(){
-    if(!ui.message&&!ui.quota)return '<span class="wclStatusText200">По умолчанию RaidRU берёт лёгкую выборку кастов с координатами. Полный поток событий не нужен для обычного рейд-плана.</span>';
+    if(!ui.message&&!ui.quota)return '<span class="wclStatusText200">Обычный импорт: один GraphQL-запрос к WCL за шаг, без отдельных запросов отчёта и квоты. Готовый бой затем берётся из кэша.</span>';
     return `<div class="wclStatus200 ${ui.state}"><i></i><span>${esc(ui.message||'')}</span>${ui.quota?`<small>${esc(qText(ui.quota))}</small>`:''}</div>`;
   }
   function decorateReplay200(){
     if(typeof view==='undefined'||view!=='replay')return;const card=document.querySelector('.replayImport.card');if(!card)return;
     const d=replayState().data,currentUrl=ui.url||replayState().url||'';
-    card.innerHTML=`<div class="wclImportHead200"><div><small>RAIDRU 2.0.4 · WCL CONTINUOUS IMPORT</small><h3>Warcraft Logs → Replay</h3><p>Ссылка на бой должна давать рабочий Replay сразу. При низком остатке API points RaidRU уменьшает размер следующей порции, а не ставит искусственный таймер.</p></div><span class="wclSafeBadge200">⚡ быстрый WCL</span></div><div class="wclUrlRow200"><input id="wclUrl200" value="${esc(currentUrl)}" placeholder="https://www.warcraftlogs.com/reports/…?fight=10" onkeydown="if(event.key==='Enter')loadWclReplay200()"><button class="primary" onclick="loadWclReplay200()">${ui.state==='paused'||ui.state==='partial'?'↻ Продолжить':'▶ Загрузить бой'}</button></div>${statusHtml()}<div class="replayButtons wclSecondary200"><button onclick="loadDemoReplay()">Демо из плана</button><label class="importBtn">Диагностика: replay JSON<input type="file" accept="application/json,.json" onchange="importReplayJson(this.files[0])"></label>${d?'<button onclick="exportReplayJson()">Экспорт replay JSON</button><button class="rehearse" onclick="createPlanFromReplay()">✦ Создать WCL-черновик</button>':''}${d&&ui.code&&ui.fight&&!ui.partial&&ui.quality!=='full'?`<button title="Не обязательно. Запрашивает более тяжёлый поток WCL." onclick="loadWclFight200('${esc(ui.code)}','${esc(ui.fight)}','full')">Высокая точность</button>`:''}</div>`;
+    card.innerHTML=`<div class="wclImportHead200"><div><small>RAIDRU 2.0.4 · WCL CONTINUOUS IMPORT</small><h3>Warcraft Logs → Replay</h3><p>Обычная загрузка делает максимум один WCL GraphQL-запрос за нажатие. Если бой не уместился, Replay уже доступен, а «Продолжить» догружает следующую порцию отдельно.</p></div><span class="wclSafeBadge200">⚡ 1 запрос / шаг</span></div><div class="wclUrlRow200"><input id="wclUrl200" value="${esc(currentUrl)}" placeholder="https://www.warcraftlogs.com/reports/…?fight=10" onkeydown="if(event.key==='Enter')loadWclReplay200()"><button class="primary" onclick="loadWclReplay200()">${ui.state==='paused'||ui.state==='partial'?'↻ Продолжить':'▶ Загрузить бой'}</button></div>${statusHtml()}<div class="replayButtons wclSecondary200"><button onclick="loadDemoReplay()">Демо из плана</button><label class="importBtn">Диагностика: replay JSON<input type="file" accept="application/json,.json" onchange="importReplayJson(this.files[0])"></label>${d?'<button onclick="exportReplayJson()">Экспорт replay JSON</button><button class="rehearse" onclick="createPlanFromReplay()">✦ Создать WCL-черновик</button>':''}${d&&ui.code&&ui.fight&&!ui.partial&&ui.quality!=='full'?`<button title="Не обязательно. Запрашивает более тяжёлый поток WCL." onclick="loadWclFight200('${esc(ui.code)}','${esc(ui.fight)}','full')">Высокая точность</button>`:''}</div>`;
     const empty=document.querySelector('.emptyReplay');if(empty&&!d)empty.innerHTML='<b>Вставь ссылку Warcraft Logs выше</b><p>Если в ссылке нет <code>fight=</code>, RaidRU покажет список пулов из отчёта.</p>';
   }
 
   const coreRender200=render;
-  render=function(){coreRender200();decorateReplay200();const version=document.querySelector('aside .version');if(version)version.textContent='RaidRU 2.0.4 preview · WCL Continuous'};
+  render=function(){coreRender200();decorateReplay200();const version=document.querySelector('aside .version');if(version)version.textContent='RaidRU 2.0.5 preview · WCL One-Shot'};
   loadWclReplay=loadWclReplay200;
   Object.assign(window,{loadWclReplay200,wclPickFight200,loadWclFight200});
   render();

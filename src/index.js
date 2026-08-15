@@ -151,7 +151,7 @@ async function wclToken(env) {
       'Authorization': `Basic ${basic}`,
       'Content-Type': 'application/x-www-form-urlencoded',
       'Accept': 'application/json',
-      'User-Agent': 'RaidRU/2.0.4 WCL Continuous Import'
+      'User-Agent': 'RaidRU/2.0.5 WCL One-Shot Import'
     },
     body: 'grant_type=client_credentials'
   });
@@ -178,7 +178,7 @@ async function wclGraphql(env, query, variables = {}) {
       'Authorization': `Bearer ${token}`,
       'Content-Type': 'application/json',
       'Accept': 'application/json',
-      'User-Agent': 'RaidRU/2.0.4 WCL Continuous Import'
+      'User-Agent': 'RaidRU/2.0.5 WCL One-Shot Import'
     },
     body: JSON.stringify({ query, variables })
   });
@@ -228,6 +228,34 @@ query RaidRUEvents($code: String!, $start: Float!, $end: Float!, $limit: Int!) {
   reportData {
     report(code: $code) {
       events(${filter} fightIDs: [${fightId}], startTime: $start, endTime: $end, limit: $limit, includeResources: true) {
+        data
+        nextPageTimestamp
+      }
+    }
+  }
+}`;
+}
+
+// 2.0.5 fast path: a normal URL containing an explicit numeric fight ID is
+// intentionally resolved with ONE WCL GraphQL request per user action. The same
+// query returns report metadata, actors, the selected fight and one page of casts
+// with resource coordinates. This removes the old report + quota + events triple
+// request that could burn a small hourly budget before Replay was even usable.
+function oneShotReplayQuery(fightId, mode = 'casts', hasStart = false) {
+  const filter = mode === 'casts' ? 'dataType: Casts,' : '';
+  const startArg = hasStart ? 'startTime: $start,' : '';
+  return `
+query RaidRUOneShot($code: String!, $limit: Int!${hasStart ? ', $start: Float!' : ''}) {
+  rateLimitData { limitPerHour pointsSpentThisHour pointsResetIn }
+  reportData {
+    report(code: $code) {
+      code title startTime endTime
+      fights {
+        id encounterID originalEncounterID name difficulty kill startTime endTime inProgress size
+        maps { id }
+      }
+      masterData { actors { id name type subType } }
+      events(${filter} fightIDs: [${fightId}], ${startArg} limit: $limit, includeResources: true) {
         data
         nextPageTimestamp
       }
@@ -583,7 +611,120 @@ function partialOrPause(meta, fight, progress, quota, { reason = 'wcl_quota_empt
   };
 }
 
+
+async function buildReplayOneShot(env, code, fightId, requestedMode = 'smart') {
+  const finalName = `wcl/replay-v205/fast/${code}/${fightId}`;
+  const finalHit = await cacheGet(finalName);
+  if (finalHit) return { status: 200, body: { ...finalHit, cache: 'hit' } };
+
+  // Reuse any already-completed replay from older builds before touching WCL.
+  for (const legacyName of [
+    `wcl/replay-v203/fast/${code}/${fightId}`,
+    `wcl/replay/${code}/${fightId}`
+  ]) {
+    const legacy = await cacheGet(legacyName);
+    if (legacy && !legacy.partial) return { status: 200, body: { ...legacy, cache: 'legacy-hit', quality: legacy.quality || 'fast' } };
+  }
+
+  // Read the checkpoint directly. New 2.0.5 checkpoints carry metadata snapshots,
+  // so continuation never needs a separate report/quota preflight request.
+  let progress = null;
+  const rawProgress = await cacheGet(progressCacheName(code, fightId));
+  if (rawProgress) progress = rawProgress;
+
+  let cachedMeta = await cacheGet(`wcl/report/${code}`);
+  let cachedFight = cachedMeta ? selectFight(cachedMeta, String(fightId)) : null;
+  if (!cachedMeta && progress?.reportSnapshot) cachedMeta = progress.reportSnapshot;
+  if (!cachedFight && progress?.fightSnapshot) cachedFight = progress.fightSnapshot;
+
+  const backoff = await backoffState(code, fightId);
+  if (backoff?.until > Date.now() && backoff.reason === 'wcl_rate_limited') {
+    const retryAfter = Math.ceil((backoff.until - Date.now()) / 1000);
+    if (cachedMeta && cachedFight && progress) {
+      return partialOrPause(cachedMeta, cachedFight, progress, backoff.quota || null, {
+        reason: 'wcl_rate_limited', retryAfter, fetchMode: 'casts',
+        message: 'Warcraft Logs сам вернул 429. До Retry-After RaidRU не делает ни одного нового WCL-запроса; сохранённая часть боя остаётся доступна.'
+      });
+    }
+    return { status: 202, body: { error: 'wcl_rate_limited', retryAfter, quota: backoff.quota || null, cachedProgress: !!progress } };
+  }
+
+  const cursor = numeric(progress?.cursor);
+  const hasStart = cursor != null;
+  const limit = eventPageLimit(env, 'casts');
+  let data;
+  try {
+    const variables = { code, limit };
+    if (hasStart) variables.start = cursor;
+    data = await wclGraphql(env, oneShotReplayQuery(fightId, 'casts', hasStart), variables);
+  } catch (e) {
+    if (e instanceof WclRateError || e?.code === 'wcl_rate_limited') {
+      const b = await setBackoff(code, fightId, e.retryAfter, 'wcl_rate_limited', null);
+      if (cachedMeta && cachedFight && progress) {
+        return partialOrPause(cachedMeta, cachedFight, progress, null, {
+          reason: 'wcl_rate_limited', retryAfter: b.retryAfter, fetchMode: 'casts',
+          message: 'WCL вернул настоящий 429. RaidRU остановился после одной попытки и сохранил уже полученный Replay.'
+        });
+      }
+      return { status: 202, body: { error: 'wcl_rate_limited', retryAfter: b.retryAfter, cachedProgress: !!progress } };
+    }
+    throw e;
+  }
+
+  const quota = rememberQuota(data?.rateLimitData);
+  const reportRaw = data?.reportData?.report;
+  if (!reportRaw) { const e = new Error('WCL_REPORT_NOT_FOUND'); e.code = 'wcl_report_not_found'; throw e; }
+  const meta = publicReport(reportRaw, data.rateLimitData, 'miss');
+  const fight = selectFight(meta, String(fightId));
+  if (!fight) return { status: 404, body: { error: 'fight_not_found', fights: meta.fights } };
+  await cachePut(`wcl/report/${code}`, meta, fight.inProgress ? REPORT_TTL : COMPLETE_FIGHT_TTL);
+
+  const raw = reportRaw.events;
+  if (!raw || !Array.isArray(raw.data)) { const e = new Error('WCL_EVENTS_EMPTY'); e.code = 'wcl_events_unavailable'; throw e; }
+  const compact = compactWclPage(raw.data, meta, fight);
+  const positions = Array.isArray(progress?.positions) ? [...progress.positions] : [];
+  const casts = Array.isArray(progress?.casts) ? [...progress.casts] : [];
+  positions.push(...compact.positions);
+  casts.push(...compact.casts);
+  const pages = (Number(progress?.pages) || 0) + 1;
+  const fetchedPages = (Number(progress?.fetchedPages) || 0) + 1;
+  const cachedPages = Number(progress?.cachedPages) || 0;
+  const rawEvents = (Number(progress?.rawEvents) || 0) + (compact.scanned || 0);
+  const next = numeric(raw.nextPageTimestamp);
+  const complete = next == null || (hasStart && next <= cursor) || next > fight.endTime;
+  const nextProgress = {
+    cursor: complete ? null : next,
+    positions, casts, rawEvents, pages, fetchedPages, cachedPages,
+    lastCost: 0, fetchMode: 'casts',
+    fightStart: fight.startTime, fightEnd: fight.endTime,
+    reportSnapshot: meta, fightSnapshot: fight
+  };
+
+  if (!complete) {
+    await saveProgress(code, fight, nextProgress);
+    const body = replayBodyFromProgress(meta, fight, nextProgress, quota, { partial: true, fetchMode: 'casts', resumeAfter: 0, cache: 'miss' });
+    body.pauseReason = 'one_shot_page';
+    body.message = 'Быстрая часть Replay готова. RaidRU сделал ровно один WCL-запрос. Если нужен хвост боя, нажми «Продолжить» — это будет ещё один запрос, а не автоматический цикл.';
+    body.stats.oneShot = true;
+    return { status: 206, body };
+  }
+
+  const body = replayBodyFromProgress(meta, fight, nextProgress, quota, { partial: false, fetchMode: 'casts', cache: 'miss' });
+  body.message = 'Replay получен одним WCL GraphQL-запросом и закэширован.';
+  body.stats.oneShot = true;
+  body.stats.eventPageLimit = limit;
+  const ttl = fight.inProgress ? LIVE_FIGHT_TTL : COMPLETE_FIGHT_TTL;
+  await cachePut(finalName, body, ttl);
+  await cachePut(`wcl/replay-v203/fast/${code}/${fightId}`, body, ttl);
+  await cacheDelete(progressCacheName(code, fightId));
+  return { status: 200, body };
+}
+
 async function buildReplay(env, code, fightParam, requestedMode = 'smart') {
+  const directFightId = safeInt(fightParam);
+  if (directFightId && requestedMode !== 'full') {
+    return buildReplayOneShot(env, code, directFightId, requestedMode);
+  }
   const modeKey = requestedMode === 'full' ? 'full' : 'fast';
   const finalName = `wcl/replay-v203/${modeKey}/${code}/${fightParam}`;
   const cachedFinal = await cacheGet(finalName);
@@ -760,11 +901,11 @@ export default {
     if (origin && !ALLOWED_ORIGINS.has(origin)) return new Response(JSON.stringify({ error: 'origin_not_allowed', origin, allowed: [...ALLOWED_ORIGINS] }), { status: 403, headers: { 'Content-Type': 'application/json; charset=utf-8', ...cors(origin, { echo: true }), 'X-RaidRU-Origin': origin } });
 
     if (url.pathname === '/wcl/ping') {
-      return json({ ok: true, service: 'raidru-edge', version: '2.0.4-wcl-continuous', origin: origin || null, wclConfigured: wclConfigured(env) }, 200, origin, { 'X-RaidRU-WCL-Safe': '1' });
+      return json({ ok: true, service: 'raidru-edge', version: '2.0.5-wcl-one-shot', origin: origin || null, wclConfigured: wclConfigured(env) }, 200, origin, { 'X-RaidRU-WCL-Safe': '1' });
     }
 
     if (url.pathname === '/health') {
-      return json({ ok: true, service: 'raidru-edge', version: '2.0.4-wcl-continuous', wclConfigured: wclConfigured(env), features: ['raidplan', 'wcl-report', 'wcl-continuous-replay', 'adaptive-page-size', 'fast-casts-sampler', 'partial-replay', '429-lock-only', 'resume-cache'] }, 200, origin);
+      return json({ ok: true, service: 'raidru-edge', version: '2.0.5-wcl-one-shot', wclConfigured: wclConfigured(env), features: ['raidplan', 'wcl-report', 'wcl-one-shot-replay', 'single-query-fast-path', 'fast-casts-sampler', 'partial-replay', '429-lock-only', 'resume-cache'] }, 200, origin);
     }
 
     if (url.pathname === '/raidplan' && request.method === 'GET') {
