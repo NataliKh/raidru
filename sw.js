@@ -1,10 +1,11 @@
-const CACHE='raidru-v0837-v2-canvas-line-endpoints';
+const CACHE='raidru-v095-raid-workspace';
 const ASSETS=[
 './',
 './index.html',
-'./styles.css?v=0.8.37',
-'./app.js?v=0.8.37',
-'./raidplan-importer.js?v=0.8.37',
+'./styles.css?v=0.9.5',
+'./app.js?v=0.9.5',
+'./raidplan-importer.js?v=0.9.5',
+'./workspace-095.js?v=0.9.5',
 './tools/raidplan-browser-export.js',
 './manifest.webmanifest',
 './icon.svg',
