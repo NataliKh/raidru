@@ -4,13 +4,14 @@ compatibility_date = "2026-08-15"
 workers_dev = true
 
 [vars]
-# 2.0.3: soft threshold only switches to the cheap sampler; it no longer blocks import.
+# 2.0.4: soft threshold only changes page size / sampling. It never creates a timer.
 WCL_SOFT_LIMIT = "0.85"
-# Hard stop remains below the real WCL hourly ceiling to avoid 429.
-WCL_HARD_LIMIT = "0.97"
-# Keep only a small emergency reserve. The old 20% reserve made the app unusable too early.
-WCL_MIN_RESERVE = "50"
-# Fewer browser round-trips and fewer standalone quota checks.
+# Artificial pauses are allowed only when the hourly API budget is effectively empty.
+# A real upstream 429 still creates a strict Retry-After lock.
+WCL_HARD_LIMIT = "0.999"
+# Tiny emergency margin; adaptive page sizing does the real protection.
+WCL_MIN_RESERVE = "2"
+# One browser action can process several cached/small pages without extra UI clicks.
 WCL_MAX_PAGES_PER_REQUEST = "16"
-# WCL officially allows 100-10000 events; fast sampler uses the upper bound.
+# Normal fast page size. Worker automatically reduces it to 500/1000/2000/5000 when quota is tight.
 WCL_EVENT_PAGE_LIMIT = "10000"

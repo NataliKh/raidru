@@ -151,7 +151,7 @@ async function wclToken(env) {
       'Authorization': `Basic ${basic}`,
       'Content-Type': 'application/x-www-form-urlencoded',
       'Accept': 'application/json',
-      'User-Agent': 'RaidRU/2.0.3 WCL Adaptive Import'
+      'User-Agent': 'RaidRU/2.0.4 WCL Continuous Import'
     },
     body: 'grant_type=client_credentials'
   });
@@ -178,7 +178,7 @@ async function wclGraphql(env, query, variables = {}) {
       'Authorization': `Bearer ${token}`,
       'Content-Type': 'application/json',
       'Accept': 'application/json',
-      'User-Agent': 'RaidRU/2.0.3 WCL Adaptive Import'
+      'User-Agent': 'RaidRU/2.0.4 WCL Continuous Import'
     },
     body: JSON.stringify({ query, variables })
   });
@@ -250,14 +250,17 @@ function softLimit(env) {
 }
 
 function hardLimit(env) {
+  // 2.0.4 does not turn a still-usable WCL budget into an artificial 20-40 minute lock.
+  // The hard threshold only means "there is effectively no budget left".
   const n = Number(env?.WCL_HARD_LIMIT);
-  return Number.isFinite(n) && n >= 0.90 && n <= 0.995 ? n : 0.97;
+  return Number.isFinite(n) && n >= 0.98 && n <= 0.9999 ? n : 0.999;
 }
 
 function minReserve(env, limit) {
+  // Keep only a tiny safety margin. Page size is reduced dynamically as quota gets tight.
   const configured = Number(env?.WCL_MIN_RESERVE);
-  const base = Number.isFinite(configured) && configured >= 25 ? configured : 50;
-  return Math.max(base, Math.ceil((limit || 0) * 0.05));
+  const base = Number.isFinite(configured) && configured >= 1 ? configured : 2;
+  return Math.max(base, Math.ceil((limit || 0) * 0.002));
 }
 
 function maxPages(env) {
@@ -278,7 +281,36 @@ function quotaUnsafe(q, env, estimatedNext = 0) {
   if (!q || !q.limitPerHour) return false;
   const reserve = minReserve(env, q.limitPerHour);
   const predicted = Math.max(0, Number(estimatedNext) || 0);
-  return q.usedRatio >= hardLimit(env) || q.remaining <= reserve + predicted;
+  // Only stop when the real remaining budget cannot plausibly fit another request.
+  // At 90-98% usage we downshift the event page instead of disabling the feature.
+  return q.usedRatio >= hardLimit(env) || q.remaining <= Math.max(reserve, predicted);
+}
+
+function adaptiveEventLimit(q, lastCost, env, mode = 'casts') {
+  const base = eventPageLimit(env, mode);
+  q = normalizeQuota(q);
+  if (!q || !q.limitPerHour) return base;
+  const remaining = Math.max(0, q.remaining);
+  const reserve = minReserve(env, q.limitPerHour);
+  if (remaining <= reserve) return 0;
+
+  // Quota-based ceiling: as the budget gets tight the worker can only shrink,
+  // never accidentally grow the next page after measuring a cheap request.
+  let quotaCeiling = base;
+  if (q.usedRatio >= 0.99) quotaCeiling = Math.min(base, 500);
+  else if (q.usedRatio >= 0.97) quotaCeiling = Math.min(base, 1000);
+  else if (q.usedRatio >= 0.94) quotaCeiling = Math.min(base, 2000);
+  else if (q.usedRatio >= 0.90) quotaCeiling = Math.min(base, 5000);
+  if (!(Number(lastCost) > 0)) return quotaCeiling;
+
+  // Once we know the actual WCL point cost of a page, scale the next page to the
+  // available budget instead of waiting for the hourly reset.
+  const available = Math.max(1, remaining - reserve);
+  const measured = Math.max(1, Number(lastCost) || 1);
+  const ratio = Math.min(1, available / (measured * 1.35));
+  if (ratio >= 0.9) return quotaCeiling;
+  const stepped = Math.floor((base * Math.max(0.05, ratio)) / 100) * 100;
+  return Math.max(500, Math.min(quotaCeiling, stepped || 500));
 }
 
 function chooseFetchMode(q, env, requested = 'smart') {
@@ -420,24 +452,25 @@ function replayBounds(points) {
   return Number.isFinite(minX) ? { minX, maxX, minY, maxY } : null;
 }
 
-async function fetchCompactPage(env, meta, fight, start, previousQuota, mode = 'casts') {
+async function fetchCompactPage(env, meta, fight, start, previousQuota, mode = 'casts', limitOverride = null) {
   const cacheName = pageCacheName(meta.code, fight.id, start, mode);
   const cached = await cacheGet(cacheName);
   if (cached) return { page: cached, quota: previousQuota, cache: 'hit', cost: 0, mode };
 
   const before = normalizeQuota(previousQuota) || await getQuota(env);
+  const pageLimit = Number(limitOverride) > 0 ? Math.max(500, Math.min(10000, Math.floor(Number(limitOverride)))) : eventPageLimit(env, mode);
   if (quotaUnsafe(before, env, 0)) {
-    const e = new Error('WCL_BUDGET_GUARD'); e.code = 'wcl_budget_guard'; e.quota = before; throw e;
+    const e = new Error('WCL_QUOTA_EMPTY'); e.code = 'wcl_quota_empty'; e.quota = before; throw e;
   }
 
   let data;
   try {
-    data = await wclGraphql(env, eventsQuery(fight.id, mode), { code: meta.code, start, end: fight.endTime, limit: eventPageLimit(env, mode) });
+    data = await wclGraphql(env, eventsQuery(fight.id, mode), { code: meta.code, start, end: fight.endTime, limit: pageLimit });
   } catch (e) {
     // If a future WCL schema ever rejects Casts, fall back once to the generic
     // event stream instead of making direct-link import unusable.
     if (mode === 'casts' && e?.code === 'wcl_graphql_error') {
-      data = await wclGraphql(env, eventsQuery(fight.id, 'all'), { code: meta.code, start, end: fight.endTime, limit: eventPageLimit(env, 'all') });
+      data = await wclGraphql(env, eventsQuery(fight.id, 'all'), { code: meta.code, start, end: fight.endTime, limit: Math.min(pageLimit, eventPageLimit(env, 'all')) });
       mode = 'all';
     } else throw e;
   }
@@ -445,11 +478,11 @@ async function fetchCompactPage(env, meta, fight, start, previousQuota, mode = '
   const raw = data?.reportData?.report?.events;
   if (!raw || !Array.isArray(raw.data)) { const e = new Error('WCL_EVENTS_EMPTY'); e.code = 'wcl_events_unavailable'; throw e; }
   const compact = compactWclPage(raw.data, meta, fight);
-  const page = { ...compact, start, nextPageTimestamp: numeric(raw.nextPageTimestamp), fetchedAt: Date.now(), mode };
+  const page = { ...compact, start, nextPageTimestamp: numeric(raw.nextPageTimestamp), fetchedAt: Date.now(), mode, eventLimit: pageLimit };
   const ttl = fight.inProgress ? LIVE_FIGHT_TTL : COMPLETE_FIGHT_TTL;
   await cachePut(pageCacheName(meta.code, fight.id, start, mode), page, ttl);
   const cost = before && after && after.pointsSpentThisHour >= before.pointsSpentThisHour ? after.pointsSpentThisHour - before.pointsSpentThisHour : 0;
-  return { page, quota: after, cache: 'miss', cost, mode };
+  return { page, quota: after, cache: 'miss', cost, mode, eventLimit: pageLimit };
 }
 
 async function backoffState(code, fightId) {
@@ -528,7 +561,7 @@ function replayBodyFromProgress(meta, fight, progress, quota, { partial = false,
   };
 }
 
-function partialOrPause(meta, fight, progress, quota, { reason = 'wcl_budget_guard', retryAfter = BACKOFF_TTL_FALLBACK, fetchMode = 'casts', message = '' } = {}) {
+function partialOrPause(meta, fight, progress, quota, { reason = 'wcl_quota_empty', retryAfter = BACKOFF_TTL_FALLBACK, fetchMode = 'casts', message = '' } = {}) {
   const hasUsefulData = (progress?.positions?.length || 0) >= 2 || (progress?.casts?.length || 0) >= 1;
   if (hasUsefulData) {
     const body = replayBodyFromProgress(meta, fight, progress, quota, { partial: true, fetchMode, resumeAfter: retryAfter });
@@ -595,24 +628,18 @@ async function buildReplay(env, code, fightParam, requestedMode = 'smart') {
     else if (progress.fetchMode === 'casts') fetchMode = 'casts';
   }
 
-  // Only a real upstream 429 creates a strict time lock. A budget guard from
-  // 2.0.2 was intentionally conservative and is ignored if the new hard reserve
-  // says a cheap fast request still fits.
+  // Strict time locks are reserved for a real upstream WCL 429 only.
+  // Synthetic budget locks from 2.0.2/2.0.3 are deleted unconditionally so an old
+  // "wait 27 minutes" cache entry can never make the new importer unusable.
   const backoff = await backoffState(code, fight.id);
-  if (backoff?.until > Date.now()) {
+  if (backoff?.until > Date.now() && backoff.reason === 'wcl_rate_limited') {
     const retryAfter = Math.ceil((backoff.until - Date.now()) / 1000);
-    if (backoff.reason === 'wcl_rate_limited') {
-      return partialOrPause(meta, fight, progress, backoff.quota || quota, {
-        reason: 'wcl_rate_limited', retryAfter, fetchMode,
-        message: 'Warcraft Logs реально вернул 429. Уже полученная часть боя доступна, догрузка продолжится после Retry-After.'
-      });
-    }
-    if (quotaUnsafe(quota, env, Math.max(1, Number(progress.lastCost) || 1))) {
-      return partialOrPause(meta, fight, progress, quota, {
-        reason: 'wcl_budget_guard', retryAfter, fetchMode,
-        message: 'Осталось слишком мало реального резерва даже для быстрого запроса. Уже полученная часть боя доступна.'
-      });
-    }
+    return partialOrPause(meta, fight, progress, backoff.quota || quota, {
+      reason: 'wcl_rate_limited', retryAfter, fetchMode,
+      message: 'Warcraft Logs сам вернул 429. RaidRU не повторяет запрос до Retry-After, но уже полученная часть боя доступна.'
+    });
+  }
+  if (backoff && backoff.reason !== 'wcl_rate_limited') {
     await cacheDelete(`wcl/backoff/${code}/${fight.id}`);
   }
 
@@ -633,21 +660,21 @@ async function buildReplay(env, code, fightParam, requestedMode = 'smart') {
     if (seenCursor.has(String(cursor))) { complete = true; break; }
     seenCursor.add(String(cursor));
 
-    // The hard guard is predictive, not a blanket "70% = unusable" switch.
-    if (quotaUnsafe(quota, env, Math.ceil(Math.max(1, lastCost) * 1.5))) {
+    // 2.0.4 continuously shrinks the next WCL page as the hourly budget gets low.
+    // We only stop pre-emptively when there are effectively no points left.
+    const nextEventLimit = adaptiveEventLimit(quota, lastCost, env, fetchMode);
+    if (nextEventLimit <= 0 || quotaUnsafe(quota, env, 0)) {
       progress = { cursor, positions, casts, rawEvents, pages, fetchedPages, cachedPages, lastCost, fetchMode };
       await saveProgress(code, fight, progress);
-      const retry = quota?.pointsResetIn || BACKOFF_TTL_FALLBACK;
-      const b = await setBackoff(code, fight.id, retry, 'wcl_budget_guard', quota);
       return partialOrPause(meta, fight, progress, quota, {
-        reason: 'wcl_budget_guard', retryAfter: b.retryAfter, fetchMode,
-        message: 'RaidRU сохранил и открыл частичный Replay. Полную точность можно догрузить после сброса квоты.'
+        reason: 'wcl_quota_empty', retryAfter: quota?.pointsResetIn || BACKOFF_TTL_FALLBACK, fetchMode,
+        message: 'У WCL почти не осталось реальных API points. Искусственной блокировки RaidRU нет: продолжение станет доступно сразу после появления бюджета.'
       });
     }
 
     let got;
     try {
-      got = await fetchCompactPage(env, meta, fight, cursor, quota, fetchMode);
+      got = await fetchCompactPage(env, meta, fight, cursor, quota, fetchMode, nextEventLimit);
     } catch (e) {
       progress = { cursor, positions, casts, rawEvents, pages, fetchedPages, cachedPages, lastCost, fetchMode };
       await saveProgress(code, fight, progress);
@@ -658,12 +685,11 @@ async function buildReplay(env, code, fightParam, requestedMode = 'smart') {
           message: 'WCL вернул 429. RaidRU не повторяет запросы; уже полученная часть боя доступна.'
         });
       }
-      if (e?.code === 'wcl_budget_guard') {
+      if (e?.code === 'wcl_quota_empty') {
         const q = normalizeQuota(e.quota) || normalizeQuota(quota);
-        const b = await setBackoff(code, fight.id, q?.pointsResetIn || BACKOFF_TTL_FALLBACK, 'wcl_budget_guard', q);
         return partialOrPause(meta, fight, progress, q, {
-          reason: 'wcl_budget_guard', retryAfter: b.retryAfter, fetchMode,
-          message: 'Остаток квоты ниже защищённого резерва. Уже полученный Replay остаётся доступным.'
+          reason: 'wcl_quota_empty', retryAfter: q?.pointsResetIn || BACKOFF_TTL_FALLBACK, fetchMode,
+          message: 'WCL API points практически закончились. RaidRU не создаёт искусственный backoff и не теряет уже загруженные данные.'
         });
       }
       throw e;
@@ -734,11 +760,11 @@ export default {
     if (origin && !ALLOWED_ORIGINS.has(origin)) return new Response(JSON.stringify({ error: 'origin_not_allowed', origin, allowed: [...ALLOWED_ORIGINS] }), { status: 403, headers: { 'Content-Type': 'application/json; charset=utf-8', ...cors(origin, { echo: true }), 'X-RaidRU-Origin': origin } });
 
     if (url.pathname === '/wcl/ping') {
-      return json({ ok: true, service: 'raidru-edge', version: '2.0.3-wcl-adaptive', origin: origin || null, wclConfigured: wclConfigured(env) }, 200, origin, { 'X-RaidRU-WCL-Safe': '1' });
+      return json({ ok: true, service: 'raidru-edge', version: '2.0.4-wcl-continuous', origin: origin || null, wclConfigured: wclConfigured(env) }, 200, origin, { 'X-RaidRU-WCL-Safe': '1' });
     }
 
     if (url.pathname === '/health') {
-      return json({ ok: true, service: 'raidru-edge', version: '2.0.3-wcl-adaptive', wclConfigured: wclConfigured(env), features: ['raidplan', 'wcl-report', 'wcl-adaptive-replay', 'fast-casts-sampler', 'partial-replay', 'quota-guard', 'resume-cache'] }, 200, origin);
+      return json({ ok: true, service: 'raidru-edge', version: '2.0.4-wcl-continuous', wclConfigured: wclConfigured(env), features: ['raidplan', 'wcl-report', 'wcl-continuous-replay', 'adaptive-page-size', 'fast-casts-sampler', 'partial-replay', '429-lock-only', 'resume-cache'] }, 200, origin);
     }
 
     if (url.pathname === '/raidplan' && request.method === 'GET') {
@@ -755,7 +781,10 @@ export default {
       try {
         const result = await withInflight(key, async () => {
           const backoff = await backoffState(code, null);
-          if (backoff?.until > Date.now()) return { status: 202, body: { error: backoff.reason, retryAfter: Math.ceil((backoff.until - Date.now()) / 1000), quota: backoff.quota } };
+          if (backoff?.until > Date.now() && backoff.reason === 'wcl_rate_limited') {
+            return { status: 202, body: { error: backoff.reason, retryAfter: Math.ceil((backoff.until - Date.now()) / 1000), quota: backoff.quota } };
+          }
+          if (backoff && backoff.reason !== 'wcl_rate_limited') await cacheDelete(`wcl/backoff/${code}/report`);
           try { return { status: 200, body: await getReport(env, code) }; }
           catch (e) {
             if (e instanceof WclRateError) { const b = await setBackoff(code, null, e.retryAfter, 'wcl_rate_limited', null); return { status: 202, body: { error: 'wcl_rate_limited', retryAfter: b.retryAfter } }; }

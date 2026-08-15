@@ -2,7 +2,7 @@
  * Direct Warcraft Logs URL -> cached, quota-aware Worker replay.
  */
 (() => {
-  const VERSION='2.0.3-wcl-adaptive';
+  const VERSION='2.0.4-wcl-continuous';
   const API=(window.RAIDRU_WCL_API||'https://raidru-raidplan.raidru-wcl.workers.dev').replace(/\/$/,'');
   let ui={state:'idle',message:'',quota:null,report:null,url:'',fight:null,code:null,loops:0,partial:false,quality:null};
 
@@ -47,7 +47,7 @@
     setUi('loading','Проверяю отчёт и безопасный лимит WCL…',{url:inputValue()});
     const res=await apiJson(`/wcl/report?code=${encodeURIComponent(parsed.code)}`);
     if(res.networkError){setUi('error',`${res.body?.message||'Не удалось связаться с Worker'} API: ${res.url}`);return null}
-    if(res.status===202){const b=res.body||{};setUi('paused',`RaidRU остановился до лимита WCL. Повтори через ${waitText(b.retryAfter)}.`,{quota:b.quota});return null}
+    if(res.status===202){const b=res.body||{};const msg=b.error==='wcl_rate_limited'?`Warcraft Logs вернул 429. Повтори через ${waitText(b.retryAfter)}.`:'WCL API points сейчас исчерпаны почти полностью. Это не искусственный таймер RaidRU.';setUi('paused',msg,{quota:b.quota});return null}
     if(!res.ok){const b=res.body||{};setUi('error',b.error==='wcl_not_configured'?'На Worker ещё не заданы WCL_CLIENT_ID / WCL_CLIENT_SECRET.':`Не удалось открыть отчёт: ${b.message||b.error||res.status}`);return null}
     ui.report=res.body;ui.quota=res.body.quota||ui.quota;return res.body;
   }
@@ -62,7 +62,16 @@
         ui.quota=b.quota||ui.quota;setUi('loading',`Собрано страниц: ${b.pages||0} (из WCL: ${b.fetchedPages||0}). Продолжаю с контрольной точки…`,{quota:ui.quota});await new Promise(r=>setTimeout(r,450));continue;
       }
       if(res.status===202){
-        ui.quota=b.quota||ui.quota;setUi('paused',`RaidRU остановил WCL заранее, чтобы не получить блокировку. Уже загруженное сохранено. Продолжить через ${waitText(b.retryAfter)}.`,{quota:ui.quota});return;
+        ui.quota=b.quota||ui.quota;
+        if(b.error==='wcl_rate_limited'){
+          setUi('paused',`Warcraft Logs сам вернул 429. RaidRU не делает повторных запросов. Продолжить через ${waitText(b.retryAfter)}.`,{quota:ui.quota});
+        }else if(b.error==='wcl_quota_empty'){
+          const q=ui.quota,tail=q&&q.limitPerHour?` Сейчас ${Math.round(q.remaining||0)} points из ${Math.round(q.limitPerHour)}.`:'';
+          setUi('paused',`У WCL практически закончились реальные API points.${tail} Это не блокировка RaidRU — уже загруженное остаётся доступно.`,{quota:ui.quota});
+        }else{
+          setUi('paused',b.message||`WCL временно не может продолжить. Повтори через ${waitText(b.retryAfter)}.`,{quota:ui.quota});
+        }
+        return;
       }
       if(!res.ok){setUi('error',b.error==='wcl_not_configured'?'Нужно один раз добавить WCL OAuth secrets в Cloudflare Worker.':`WCL: ${b.message||b.error||'ошибка загрузки'}`);return}
       const raw=b,detected=bossFromWcl(raw?.source?.bossId||raw?.fight?.bossId);
@@ -96,12 +105,12 @@
   function decorateReplay200(){
     if(typeof view==='undefined'||view!=='replay')return;const card=document.querySelector('.replayImport.card');if(!card)return;
     const d=replayState().data,currentUrl=ui.url||replayState().url||'';
-    card.innerHTML=`<div class="wclImportHead200"><div><small>RAIDRU 2.0.3 · WCL ADAPTIVE IMPORT</small><h3>Warcraft Logs → Replay</h3><p>Ссылка на бой должна давать рабочий Replay сразу. При высокой квоте RaidRU снижает детализацию, а не выключает импорт.</p></div><span class="wclSafeBadge200">⚡ быстрый WCL</span></div><div class="wclUrlRow200"><input id="wclUrl200" value="${esc(currentUrl)}" placeholder="https://www.warcraftlogs.com/reports/…?fight=10" onkeydown="if(event.key==='Enter')loadWclReplay200()"><button class="primary" onclick="loadWclReplay200()">${ui.state==='paused'||ui.state==='partial'?'↻ Продолжить':'▶ Загрузить бой'}</button></div>${statusHtml()}<div class="replayButtons wclSecondary200"><button onclick="loadDemoReplay()">Демо из плана</button><label class="importBtn">Диагностика: replay JSON<input type="file" accept="application/json,.json" onchange="importReplayJson(this.files[0])"></label>${d?'<button onclick="exportReplayJson()">Экспорт replay JSON</button><button class="rehearse" onclick="createPlanFromReplay()">✦ Создать WCL-черновик</button>':''}${d&&ui.code&&ui.fight&&!ui.partial&&ui.quality!=='full'?`<button title="Не обязательно. Запрашивает более тяжёлый поток WCL." onclick="loadWclFight200('${esc(ui.code)}','${esc(ui.fight)}','full')">Высокая точность</button>`:''}</div>`;
+    card.innerHTML=`<div class="wclImportHead200"><div><small>RAIDRU 2.0.4 · WCL CONTINUOUS IMPORT</small><h3>Warcraft Logs → Replay</h3><p>Ссылка на бой должна давать рабочий Replay сразу. При низком остатке API points RaidRU уменьшает размер следующей порции, а не ставит искусственный таймер.</p></div><span class="wclSafeBadge200">⚡ быстрый WCL</span></div><div class="wclUrlRow200"><input id="wclUrl200" value="${esc(currentUrl)}" placeholder="https://www.warcraftlogs.com/reports/…?fight=10" onkeydown="if(event.key==='Enter')loadWclReplay200()"><button class="primary" onclick="loadWclReplay200()">${ui.state==='paused'||ui.state==='partial'?'↻ Продолжить':'▶ Загрузить бой'}</button></div>${statusHtml()}<div class="replayButtons wclSecondary200"><button onclick="loadDemoReplay()">Демо из плана</button><label class="importBtn">Диагностика: replay JSON<input type="file" accept="application/json,.json" onchange="importReplayJson(this.files[0])"></label>${d?'<button onclick="exportReplayJson()">Экспорт replay JSON</button><button class="rehearse" onclick="createPlanFromReplay()">✦ Создать WCL-черновик</button>':''}${d&&ui.code&&ui.fight&&!ui.partial&&ui.quality!=='full'?`<button title="Не обязательно. Запрашивает более тяжёлый поток WCL." onclick="loadWclFight200('${esc(ui.code)}','${esc(ui.fight)}','full')">Высокая точность</button>`:''}</div>`;
     const empty=document.querySelector('.emptyReplay');if(empty&&!d)empty.innerHTML='<b>Вставь ссылку Warcraft Logs выше</b><p>Если в ссылке нет <code>fight=</code>, RaidRU покажет список пулов из отчёта.</p>';
   }
 
   const coreRender200=render;
-  render=function(){coreRender200();decorateReplay200();const version=document.querySelector('aside .version');if(version)version.textContent='RaidRU 2.0.3 preview · WCL Adaptive'};
+  render=function(){coreRender200();decorateReplay200();const version=document.querySelector('aside .version');if(version)version.textContent='RaidRU 2.0.4 preview · WCL Continuous'};
   loadWclReplay=loadWclReplay200;
   Object.assign(window,{loadWclReplay200,wclPickFight200,loadWclFight200});
   render();

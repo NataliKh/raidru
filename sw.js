@@ -1,15 +1,15 @@
-const CACHE='raidru-v203-wcl-adaptive';
+const CACHE='raidru-v204-wcl-continuous';
 const ASSETS=[
 './',
 './index.html',
-'./styles.css?v=2.0.3-wcl-adaptive',
-'./app.js?v=2.0.3-wcl-adaptive',
+'./styles.css?v=2.0.4-wcl-continuous',
+'./app.js?v=2.0.4-wcl-continuous',
 './raidplan-importer.js?v=1.0.0',
 './workspace-095.js?v=1.0.0',
 './raid-ready-100.js?v=1.0.0',
 './ui-101.js?v=1.0.1',
 './tools/raidplan-browser-export.js',
-'./wcl-safe-200.js?v=2.0.3-wcl-adaptive',
+'./wcl-safe-200.js?v=2.0.4-wcl-continuous',
 './manifest.webmanifest',
 './icon.svg',
 './assets/maps/2606-map.webp',
