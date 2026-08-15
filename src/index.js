@@ -19,12 +19,16 @@ const BACKOFF_TTL_FALLBACK = 60 * 60;
 let tokenMemo = { token: '', expiresAt: 0 };
 const inFlight = new Map();
 
-function cors(origin) {
-  const allowed = ALLOWED_ORIGINS.has(origin) ? origin : 'https://natalikh.github.io';
+function cors(origin, { echo = false } = {}) {
+  // Public GET API, but only the RaidRU site is allowed to consume WCL quota.
+  // For a denied origin we can still echo it on the 403 response so the browser
+  // exposes the useful JSON error instead of collapsing it into TypeError: Failed to fetch.
+  const allowed = ALLOWED_ORIGINS.has(origin) ? origin : (echo && origin ? origin : 'https://natalikh.github.io');
   return {
     'Access-Control-Allow-Origin': allowed,
     'Access-Control-Allow-Methods': 'GET,OPTIONS',
     'Access-Control-Allow-Headers': 'Accept,Content-Type',
+    'Access-Control-Expose-Headers': 'X-RaidRU-WCL-Safe,X-RaidRU-Origin',
     'Access-Control-Max-Age': '86400',
     'Vary': 'Origin'
   };
@@ -571,10 +575,14 @@ export default {
   async fetch(request, env, ctx) {
     const url = new URL(request.url), origin = request.headers.get('Origin') || '';
     if (request.method === 'OPTIONS') return new Response(null, { status: 204, headers: cors(origin) });
-    if (origin && !ALLOWED_ORIGINS.has(origin)) return json({ error: 'origin_not_allowed' }, 403, origin);
+    if (origin && !ALLOWED_ORIGINS.has(origin)) return new Response(JSON.stringify({ error: 'origin_not_allowed', origin, allowed: [...ALLOWED_ORIGINS] }), { status: 403, headers: { 'Content-Type': 'application/json; charset=utf-8', ...cors(origin, { echo: true }), 'X-RaidRU-Origin': origin } });
+
+    if (url.pathname === '/wcl/ping') {
+      return json({ ok: true, service: 'raidru-edge', version: '2.0.1-wcl-transport', origin: origin || null, wclConfigured: wclConfigured(env) }, 200, origin, { 'X-RaidRU-WCL-Safe': '1' });
+    }
 
     if (url.pathname === '/health') {
-      return json({ ok: true, service: 'raidru-edge', version: '2.0.0-wcl-safe', wclConfigured: wclConfigured(env), features: ['raidplan', 'wcl-report', 'wcl-safe-replay', 'quota-guard', 'resume-cache'] }, 200, origin);
+      return json({ ok: true, service: 'raidru-edge', version: '2.0.1-wcl-transport', wclConfigured: wclConfigured(env), features: ['raidplan', 'wcl-report', 'wcl-safe-replay', 'quota-guard', 'resume-cache'] }, 200, origin);
     }
 
     if (url.pathname === '/raidplan' && request.method === 'GET') {

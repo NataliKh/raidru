@@ -2,7 +2,7 @@
  * Direct Warcraft Logs URL -> cached, quota-aware Worker replay.
  */
 (() => {
-  const VERSION='2.0.0-wcl-safe';
+  const VERSION='2.0.1-wcl-transport';
   const API=(window.RAIDRU_WCL_API||'https://raidru-raidplan.raidru-wcl.workers.dev').replace(/\/$/,'');
   let ui={state:'idle',message:'',quota:null,report:null,url:'',fight:null,loops:0};
 
@@ -22,8 +22,15 @@
   function bossFromWcl(id){id=+id||0;try{const hit=Object.entries(NSRT_VOICE_PROFILES||{}).find(([,p])=>+p.encounterId===id||(+p.encounterId+50000)===id||(+p.encounterId)===(id-50000));return hit?.[0]||null}catch(_){return null}}
 
   async function apiJson(path){
-    const r=await fetch(`${API}${path}`,{headers:{Accept:'application/json'},cache:'no-store'});let body={};try{body=await r.json()}catch(_){}
-    return {status:r.status,ok:r.ok,body};
+    const url=`${API}${path}`;
+    try{
+      const r=await fetch(url,{method:'GET',mode:'cors',credentials:'omit',headers:{Accept:'application/json'},cache:'no-store'});
+      let body={};
+      try{body=await r.json()}catch(_){body={error:'invalid_json',message:`Worker вернул не JSON (${r.status}).`}}
+      return {status:r.status,ok:r.ok,body,url};
+    }catch(err){
+      return {status:0,ok:false,url,networkError:true,body:{error:'worker_fetch_failed',message:`Не удалось связаться с RaidRU Worker из ${location.origin}. Проверь /health и CORS.`,detail:String(err?.message||err)}};
+    }
   }
   function setUi(state,message,extra={}){ui={...ui,...extra,state,message};decorateReplay200()}
   function inputValue(){return document.querySelector('#wclUrl200')?.value?.trim()||ui.url||replayState()?.url||''}
@@ -39,6 +46,7 @@
   async function loadReport200(parsed){
     setUi('loading','Проверяю отчёт и безопасный лимит WCL…',{url:inputValue()});
     const res=await apiJson(`/wcl/report?code=${encodeURIComponent(parsed.code)}`);
+    if(res.networkError){setUi('error',`${res.body?.message||'Не удалось связаться с Worker'} API: ${res.url}`);return null}
     if(res.status===202){const b=res.body||{};setUi('paused',`RaidRU остановился до лимита WCL. Повтори через ${waitText(b.retryAfter)}.`,{quota:b.quota});return null}
     if(!res.ok){const b=res.body||{};setUi('error',b.error==='wcl_not_configured'?'На Worker ещё не заданы WCL_CLIENT_ID / WCL_CLIENT_SECRET.':`Не удалось открыть отчёт: ${b.message||b.error||res.status}`);return null}
     ui.report=res.body;ui.quota=res.body.quota||ui.quota;return res.body;
@@ -49,6 +57,7 @@
     while(attempts++<12){
       setUi('loading',attempts===1?'Загружаю Replay через безопасный кэш…':'Продолжаю загрузку из сохранённых страниц…',{fight});
       const res=await apiJson(`/wcl/replay?code=${encodeURIComponent(code)}&fight=${encodeURIComponent(fight)}`),b=res.body||{};
+      if(res.networkError){setUi('error',`${b.message||'Не удалось связаться с Worker'} API: ${res.url}`);return}
       if(res.status===202&&b.error==='batch_yield'){
         ui.quota=b.quota||ui.quota;setUi('loading',`Собрано страниц: ${b.pages||0} (из WCL: ${b.fetchedPages||0}). Продолжаю с контрольной точки…`,{quota:ui.quota});await new Promise(r=>setTimeout(r,450));continue;
       }
