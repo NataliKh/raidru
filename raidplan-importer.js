@@ -1,11 +1,11 @@
-/* RaidRU v0.8.34 — RaidPlan import adapter
+/* RaidRU v0.8.35 — RaidPlan import adapter
  * Isolated from app.js on purpose: RaidPlan developer integration is not documented yet,
  * so transport/schema changes should stay in this file.
  */
 (function(){
   'use strict';
 
-  const VERSION='0.8.34';
+  const VERSION='0.8.35';
   const STEP_KEYS=['steps','scenes','pages','slides','frames'];
   const ITEM_KEYS=['objects','elements','items','components','drawings','entities','children','nodes'];
   const ROLE_WORDS={
@@ -386,124 +386,145 @@
     }
     return ps.map(p=>Array.isArray(p)?{x:finite(p[0]),y:finite(p[1])}:readXY(p)).filter(p=>p.x!=null&&p.y!=null);
   }
+  function flatRaidPlanPathPoints(o){
+    const raw=deepPick(o,[['attr','points'],['points'],['data','points'],['meta','points']]);
+    if(!Array.isArray(raw)||raw.length<4||raw.length%2!==0)return null;
+    const nums=raw.map(finite);if(nums.some(v=>v==null))return null;
+    const out=[];for(let i=0;i<nums.length;i+=2)out.push([Number(nums[i]),Number(nums[i+1])]);
+    return out;
+  }
+  function degenerateRaidPlanPath(o){
+    const pts=flatRaidPlanPathPoints(o);if(!pts?.length)return false;
+    const xs=pts.map(p=>p[0]),ys=pts.map(p=>p[1]);
+    return Math.max(...xs)-Math.min(...xs)<0.01&&Math.max(...ys)-Math.min(...ys)<0.01;
+  }
   function raidPlanSvgPath(o){
+    const flatPoints=flatRaidPlanPathPoints(o);
     const raw=deepPick(o,[['attr','path'],['path'],['data','path'],['meta','path'],['attr','d'],['d'],['data','d']]);
-    if(raw==null)return null;
 
-    let d='',cmds=[];
-    if(typeof raw==='string'){
-      d=raw.trim();
-    }else if(Array.isArray(raw)){
-      const chunks=[];
-      for(const cmd of raw){
-        if(Array.isArray(cmd)&&cmd.length&&typeof cmd[0]==='string'){
-          const op=String(cmd[0]).trim();
-          if(!/^[a-z]$/i.test(op))continue;
-          const nums=cmd.slice(1).map(Number).filter(Number.isFinite);
-          cmds.push([op,...nums]);
-          chunks.push([op,...nums].join(' '));
+    let d='',cmds=[],coordPairs=[],pointUnitScale=1,boundsSource='path-commands';
+
+    if(flatPoints?.length){
+      // RaidPlan v2 freehand drawings are exported as attr.points.
+      // The point coordinates live in a high-resolution brush coordinate space,
+      // while meta.pos/meta.size/meta.scale describe the final Fabric object.
+      // Preserve the raw point shape inside the SVG, then position/scale the
+      // whole SVG using the Fabric meta box.
+      d=`M ${flatPoints[0][0]} ${flatPoints[0][1]}`+
+        flatPoints.slice(1).map(p=>` L ${p[0]} ${p[1]}`).join('');
+      coordPairs=flatPoints.slice();
+      boundsSource='raidplan-flat-points';
+
+      const xs=coordPairs.map(p=>p[0]),ys=coordPairs.map(p=>p[1]);
+      const rawW=Math.max(0,Math.max(...xs)-Math.min(...xs));
+      const rawH=Math.max(0,Math.max(...ys)-Math.min(...ys));
+      const baseW=finite(deepPick(o,[['meta','size','w'],['meta','size','width']]));
+      const baseH=finite(deepPick(o,[['meta','size','h'],['meta','size','height']]));
+      const ratios=[];
+      if(baseW!=null&&baseW>0.0001&&rawW>0.0001)ratios.push(rawW/baseW);
+      if(baseH!=null&&baseH>0.0001&&rawH>0.0001)ratios.push(rawH/baseH);
+      if(ratios.length){
+        ratios.sort((a,b)=>a-b);
+        pointUnitScale=ratios.length===1?ratios[0]:(ratios[0]+ratios[ratios.length-1])/2;
+        pointUnitScale=clamp(pointUnitScale,0.1,100);
+      }
+    }else{
+      if(raw==null)return null;
+
+      if(typeof raw==='string'){
+        d=raw.trim();
+      }else if(Array.isArray(raw)){
+        const chunks=[];
+        for(const cmd of raw){
+          if(Array.isArray(cmd)&&cmd.length&&typeof cmd[0]==='string'){
+            const op=String(cmd[0]).trim();
+            if(!/^[a-z]$/i.test(op))continue;
+            const nums=cmd.slice(1).map(Number).filter(Number.isFinite);
+            cmds.push([op,...nums]);
+            chunks.push([op,...nums].join(' '));
+          }
+        }
+        d=chunks.join(' ');
+      }
+
+      if(!d||!/[a-z]/i.test(d))return null;
+
+      if(cmds.length){
+        let cx=0,cy=0,sx=0,sy=0;
+        const push=(x,y)=>{if(Number.isFinite(x)&&Number.isFinite(y))coordPairs.push([x,y])};
+        for(const cmd of cmds){
+          const op=String(cmd[0]),u=op.toUpperCase(),rel=op!==u,a=cmd.slice(1);
+          const absPair=(x,y)=>[rel?cx+x:x,rel?cy+y:y];
+          if(u==='M'||u==='L'||u==='T'){
+            for(let i=0;i+1<a.length;i+=2){const q=absPair(a[i],a[i+1]);cx=q[0];cy=q[1];if(u==='M'&&i===0){sx=cx;sy=cy}push(cx,cy)}
+          }else if(u==='H'){
+            for(const x of a){cx=rel?cx+x:x;push(cx,cy)}
+          }else if(u==='V'){
+            for(const y of a){cy=rel?cy+y:y;push(cx,cy)}
+          }else if(u==='Q'||u==='S'){
+            for(let i=0;i+3<a.length;i+=4){const c=absPair(a[i],a[i+1]),q=absPair(a[i+2],a[i+3]);push(c[0],c[1]);push(q[0],q[1]);cx=q[0];cy=q[1]}
+          }else if(u==='C'){
+            for(let i=0;i+5<a.length;i+=6){const c1=absPair(a[i],a[i+1]),c2=absPair(a[i+2],a[i+3]),q=absPair(a[i+4],a[i+5]);push(c1[0],c1[1]);push(c2[0],c2[1]);push(q[0],q[1]);cx=q[0];cy=q[1]}
+          }else if(u==='A'){
+            for(let i=0;i+6<a.length;i+=7){const q=absPair(a[i+5],a[i+6]);push(q[0],q[1]);cx=q[0];cy=q[1]}
+          }else if(u==='Z'){
+            cx=sx;cy=sy;push(cx,cy);
+          }
         }
       }
-      d=chunks.join(' ');
-    }
-    if(!d||!/[a-z]/i.test(d))return null;
 
-    const strokeWidth=finite(visualValue(o,['strokeWidth']))??3;
-    const coordPairs=[];
-
-    // RaidPlan/Fabric pathOffset is not reliable across planner revisions:
-    // in some exported plans the pathOffset/width box is from the pre-transform
-    // object while the path commands are already normalized.  Using it as the
-    // SVG viewBox makes a valid path render completely outside the visible box.
-    // Build bounds from the actual SVG command coordinates instead.
-    if(cmds.length){
-      let cx=0,cy=0,sx=0,sy=0;
-      const push=(x,y)=>{if(Number.isFinite(x)&&Number.isFinite(y))coordPairs.push([x,y])};
-      for(const cmd of cmds){
-        const op=String(cmd[0]),u=op.toUpperCase(),rel=op!==u,a=cmd.slice(1);
-        const absPair=(x,y)=>[rel?cx+x:x,rel?cy+y:y];
-        if(u==='M'||u==='L'||u==='T'){
-          for(let i=0;i+1<a.length;i+=2){const q=absPair(a[i],a[i+1]);cx=q[0];cy=q[1];if(u==='M'&&i===0){sx=cx;sy=cy}push(cx,cy)}
-        }else if(u==='H'){
-          for(const x of a){cx=rel?cx+x:x;push(cx,cy)}
-        }else if(u==='V'){
-          for(const y of a){cy=rel?cy+y:y;push(cx,cy)}
-        }else if(u==='Q'||u==='S'){
-          for(let i=0;i+3<a.length;i+=4){
-            const c=absPair(a[i],a[i+1]),q=absPair(a[i+2],a[i+3]);
-            push(c[0],c[1]);push(q[0],q[1]);cx=q[0];cy=q[1];
-          }
-        }else if(u==='C'){
-          for(let i=0;i+5<a.length;i+=6){
-            const c1=absPair(a[i],a[i+1]),c2=absPair(a[i+2],a[i+3]),q=absPair(a[i+4],a[i+5]);
-            push(c1[0],c1[1]);push(c2[0],c2[1]);push(q[0],q[1]);cx=q[0];cy=q[1];
-          }
-        }else if(u==='A'){
-          for(let i=0;i+6<a.length;i+=7){
-            // rx/ry/rotation/flags are not points; only the arc endpoint belongs
-            // in the coordinate bounds. Padding below keeps the stroke visible.
-            const q=absPair(a[i+5],a[i+6]);push(q[0],q[1]);cx=q[0];cy=q[1];
-          }
-        }else if(u==='Z'){
-          cx=sx;cy=sy;push(cx,cy);
+      if(!coordPairs.length){
+        const segments=[...d.matchAll(/([MLTQCSHVACZmltqcshvacz])([^MLTQCSHVACZmltqcshvacz]*)/g)];
+        let cx=0,cy=0,sx=0,sy=0;
+        const push=(x,y)=>{if(Number.isFinite(x)&&Number.isFinite(y))coordPairs.push([x,y])};
+        for(const seg of segments){
+          const op=seg[1],u=op.toUpperCase(),rel=op!==u;
+          const a=(seg[2].match(/-?(?:\d+\.?\d*|\.\d+)(?:e[-+]?\d+)?/ig)||[]).map(Number);
+          const absPair=(x,y)=>[rel?cx+x:x,rel?cy+y:y];
+          if(u==='M'||u==='L'||u==='T'){
+            for(let i=0;i+1<a.length;i+=2){const q=absPair(a[i],a[i+1]);cx=q[0];cy=q[1];if(u==='M'&&i===0){sx=cx;sy=cy}push(cx,cy)}
+          }else if(u==='H'){
+            for(const x of a){cx=rel?cx+x:x;push(cx,cy)}
+          }else if(u==='V'){
+            for(const y of a){cy=rel?cy+y:y;push(cx,cy)}
+          }else if(u==='Q'||u==='S'){
+            for(let i=0;i+3<a.length;i+=4){const c=absPair(a[i],a[i+1]),q=absPair(a[i+2],a[i+3]);push(c[0],c[1]);push(q[0],q[1]);cx=q[0];cy=q[1]}
+          }else if(u==='C'){
+            for(let i=0;i+5<a.length;i+=6){const c1=absPair(a[i],a[i+1]),c2=absPair(a[i+2],a[i+3]),q=absPair(a[i+4],a[i+5]);push(c1[0],c1[1]);push(c2[0],c2[1]);push(q[0],q[1]);cx=q[0];cy=q[1]}
+          }else if(u==='A'){
+            for(let i=0;i+6<a.length;i+=7){const q=absPair(a[i+5],a[i+6]);push(q[0],q[1]);cx=q[0];cy=q[1]}
+          }else if(u==='Z'){cx=sx;cy=sy;push(cx,cy)}
         }
-      }
-    }
-
-    // String-path fallback. RaidPlan hand-drawn arrows are normally arrays, but
-    // this still gives a visible result for simple M/L/Q/C string paths.
-    if(!coordPairs.length){
-      const segments=[...d.matchAll(/([MLTQCSHVACZmltqcshvacz])([^MLTQCSHVACZmltqcshvacz]*)/g)];
-      let cx=0,cy=0,sx=0,sy=0;
-      const push=(x,y)=>{if(Number.isFinite(x)&&Number.isFinite(y))coordPairs.push([x,y])};
-      for(const seg of segments){
-        const op=seg[1],u=op.toUpperCase(),rel=op!==u;
-        const a=(seg[2].match(/-?(?:\d+\.?\d*|\.\d+)(?:e[-+]?\d+)?/ig)||[]).map(Number);
-        const absPair=(x,y)=>[rel?cx+x:x,rel?cy+y:y];
-        if(u==='M'||u==='L'||u==='T'){
-          for(let i=0;i+1<a.length;i+=2){const q=absPair(a[i],a[i+1]);cx=q[0];cy=q[1];if(u==='M'&&i===0){sx=cx;sy=cy}push(cx,cy)}
-        }else if(u==='H'){
-          for(const x of a){cx=rel?cx+x:x;push(cx,cy)}
-        }else if(u==='V'){
-          for(const y of a){cy=rel?cy+y:y;push(cx,cy)}
-        }else if(u==='Q'||u==='S'){
-          for(let i=0;i+3<a.length;i+=4){const c=absPair(a[i],a[i+1]),q=absPair(a[i+2],a[i+3]);push(c[0],c[1]);push(q[0],q[1]);cx=q[0];cy=q[1]}
-        }else if(u==='C'){
-          for(let i=0;i+5<a.length;i+=6){const c1=absPair(a[i],a[i+1]),c2=absPair(a[i+2],a[i+3]),q=absPair(a[i+4],a[i+5]);push(c1[0],c1[1]);push(c2[0],c2[1]);push(q[0],q[1]);cx=q[0];cy=q[1]}
-        }else if(u==='A'){
-          for(let i=0;i+6<a.length;i+=7){const q=absPair(a[i+5],a[i+6]);push(q[0],q[1]);cx=q[0];cy=q[1]}
-        }else if(u==='Z'){cx=sx;cy=sy;push(cx,cy)}
       }
     }
 
     if(!coordPairs.length)return null;
+
     const xs=coordPairs.map(p=>p[0]),ys=coordPairs.map(p=>p[1]);
-    let minX=Math.min(...xs),maxX=Math.max(...xs),minY=Math.min(...ys),maxY=Math.max(...ys);
-    let vw=Math.max(.001,maxX-minX),vh=Math.max(.001,maxY-minY);
+    const minX=Math.min(...xs),maxX=Math.max(...xs),minY=Math.min(...ys),maxY=Math.max(...ys);
+    const vw=Math.max(.001,maxX-minX),vh=Math.max(.001,maxY-minY);
+    if(vw<.01&&vh<.01)return null;
 
-    // Add local SVG padding so thick white freehand strokes are not clipped.
-    const pad=Math.max(1,strokeWidth*1.75);
-    minX-=pad;minY-=pad;vw+=pad*2;vh+=pad*2;
-
-    // RaidPlan freehand drawings are Path nodes.  Some revisions store the
-    // brush colour in `fill` even though visually the object is a stroke.
-    // Rendering that value as SVG fill closes an open path and creates the
-    // large white circles/capsules seen after import.  Treat Path as
-    // stroke-only; if stroke is missing, use the source fill as brush colour.
+    const sourceStrokeWidth=finite(visualValue(o,['strokeWidth']))??3;
+    const strokeWidth=sourceStrokeWidth*pointUnitScale;
     const sourceFill=text(visualValue(o,['fill'])||'');
     const sourceStroke=text(visualValue(o,['stroke'])||'');
     const brushStroke=sourceStroke&&!transparentColor(sourceStroke)
       ?sourceStroke
       :(sourceFill&&!transparentColor(sourceFill)?sourceFill:'#ffffff');
+
     return{
-      d,viewBox:[minX,minY,vw,vh],
+      d,
+      viewBox:[minX,minY,vw,vh],
       fill:'none',
       stroke:brushStroke,
       sourceFill:sourceFill||null,
       strokeWidth,
+      sourceStrokeWidth,
+      pointUnitScale,
       lineCap:text(visualValue(o,['strokeLineCap','lineCap'])||'round'),
       lineJoin:text(visualValue(o,['strokeLineJoin','lineJoin'])||'round'),
-      boundsSource:'path-commands-stroke-only'
+      boundsSource
     };
   }
   function nearestEncounter(label,bossId){
@@ -683,6 +704,7 @@
   function convertItem(o,ctx){
     const {tf,bossId,sceneName,report}=ctx,sourceOrder=Number.isFinite(+ctx.order)?+ctx.order:0,nodeType=raidPlanNodeType(o),s=typeString(o),label=objectLabel(o)||'RaidPlan',p=pointFor(o,tf,bossId,sceneName),strictV2=!!ctx.strictV2;
     if(nodeType==='arena')return null;
+    if(nodeType==='path'&&degenerateRaidPlanPath(o)){report.hidden=(report.hidden||0)+1;report.degeneratePaths=(report.degeneratePaths||0)+1;return null}
     if(hiddenRaidPlanNode(o)){report.hidden=(report.hidden||0)+1;return null}
     if(strictV2&&!strictV2NodeAllowed(o)){report.skipped++;report.unsupported.push(`filtered:${nodeType||'unknown'}`);return null}
     if(!p){report.skipped++;return null}
@@ -899,7 +921,7 @@
     const imported=result.scenes.map((scene,i)=>normalizeScene(deep({...scene,name:scene.name.replace(/^RaidPlan\s*·?\s*/i,'')}),bossId,i));
     bs.raidPlanScenes=imported;
     bs.raidPlanTimelineV3=typeof raidPlanTimelineForScenes==='function'?raidPlanTimelineForScenes(imported):imported.map((scene,i)=>({id:`rp-time-${i}`,time:i*35,label:scene.name,type:'move',scene:i,note:scene.note||''}));
-    bs.raidPlanImport={at:now,name:result.planName,report:result.report,mode:'separate-tab',sourceCode:result.rawRoot?.code||'',revision:result.rawRoot?.revision??null,renderer:'native-v15-fabric-transform-safe',difficulty:activeDiff,sceneStats:imported.map(sc=>({tokens:(sc.tokens||[]).length,effects:(sc.effects||[]).length}))};
+    bs.raidPlanImport={at:now,name:result.planName,report:result.report,mode:'separate-tab',sourceCode:result.rawRoot?.code||'',revision:result.rawRoot?.revision??null,renderer:'native-v16-flat-path-points',difficulty:activeDiff,sceneStats:imported.map(sc=>({tokens:(sc.tokens||[]).length,effects:(sc.effects||[]).length}))};
     if(typeof setScenarioSourceFor==='function')setScenarioSourceFor(bossId,'raidplan',activeDiff);else{state._scenarioSourceByBoss=state._scenarioSourceByBoss||{};state._scenarioSourceByBoss[bossId]='raidplan'}
     if(mode!=='silent-refresh'){current=bossId;if(typeof diff!=='undefined')diff=activeDiff;sceneIndex=0;playerSceneIndex=0;view='planner'}
     if(typeof save==='function')save();
@@ -910,10 +932,10 @@
   async function refreshCurrentIfLegacy(){
     try{
       if(typeof bossState!=='function'||typeof current==='undefined')return false;
-      const activeDiff=typeof diff!=='undefined'?diff:'heroic';const bs=bossState(current,activeDiff);if(!bs?.raidPlanScenes?.length||bs?.raidPlanImport?.renderer==='native-v15-fabric-transform-safe')return false;
+      const activeDiff=typeof diff!=='undefined'?diff:'heroic';const bs=bossState(current,activeDiff);if(!bs?.raidPlanScenes?.length||bs?.raidPlanImport?.renderer==='native-v16-flat-path-points')return false;
       const name=text(bs?.raidPlanImport?.name||''),code=text(bs?.raidPlanImport?.sourceCode||'')||(name.match(/RaidPlan\s+([A-Za-z0-9_-]{8,64})/i)?.[1]||'');
       if(!code)return false;
-      const guard=`raidru-rp-refresh-${current}-${activeDiff}-${code}-0833`;if(typeof sessionStorage!=='undefined'&&sessionStorage.getItem(guard))return false;
+      const guard=`raidru-rp-refresh-${current}-${activeDiff}-${code}-0835`;if(typeof sessionStorage!=='undefined'&&sessionStorage.getItem(guard))return false;
       if(typeof sessionStorage!=='undefined')sessionStorage.setItem(guard,'1');
       const raw=await fetchUrl(code),result=convert(raw,{bossId:current,currentBoss:current});applyConverted(result,'silent-refresh',{difficulty:activeDiff});return true;
     }catch(e){console.warn('RaidPlan legacy refresh skipped',e);return false}

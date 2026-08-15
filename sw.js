@@ -1,10 +1,10 @@
-const CACHE='raidru-v0834-fabric-transform-safe';
+const CACHE='raidru-v0835-flat-path-points';
 const ASSETS=[
 './',
 './index.html',
-'./styles.css?v=0.8.34',
-'./app.js?v=0.8.34',
-'./raidplan-importer.js?v=0.8.34',
+'./styles.css?v=0.8.35',
+'./app.js?v=0.8.35',
+'./raidplan-importer.js?v=0.8.35',
 './tools/raidplan-browser-export.js',
 './manifest.webmanifest',
 './icon.svg',
