@@ -1,0 +1,95 @@
+/* RaidRU 2.0 — WCL Safe URL Import
+ * Direct Warcraft Logs URL -> cached, quota-aware Worker replay.
+ */
+(() => {
+  const VERSION='2.0.0-wcl-safe';
+  const API=(window.RAIDRU_WCL_API||'https://raidru-raidplan.raidru-wcl.workers.dev').replace(/\/$/,'');
+  let ui={state:'idle',message:'',quota:null,report:null,url:'',fight:null,loops:0};
+
+  function parseWclUrl200(v){
+    const s=String(v||'').trim();
+    const m=s.match(/(?:https?:\/\/)?(?:[a-z]{2}\.)?warcraftlogs\.com\/reports\/([A-Za-z0-9_-]+)(?:[^#?]*[?#][^#]*?fight=([A-Za-z0-9_-]+))?/i);
+    if(m){const f=String(m[2]||'').toLowerCase();return {code:m[1],fight:f==='last'?'last':(/^\d+$/.test(f)?+f:null)}}
+    const plain=s.match(/^([A-Za-z0-9_-]+)(?::(last|\d+))?$/i);if(!plain)return null;
+    return {code:plain[1],fight:plain[2]?.toLowerCase()==='last'?'last':(plain[2]?+plain[2]:null)};
+  }
+  parseWclUrl=parseWclUrl200;
+
+  const qText=q=>q&&q.limitPerHour?`${Math.round(q.pointsSpentThisHour||0)} / ${Math.round(q.limitPerHour)} pts · резерв ${Math.round(q.remaining||0)}`:'';
+  const waitText=s=>{s=Math.max(0,Math.ceil(+s||0));const m=Math.ceil(s/60);return m<=1?'меньше минуты':`${m} мин.`};
+  const knownSpellMap=()=>{const m=new Map();try{for(const p of Object.values(NSRT_VOICE_PROFILES||{}))for(const e of p.events||[])if(e.spellId&&e.text)m.set(+e.spellId,e.text)}catch(_){}return m};
+  function enrichReplay(d){const spells=knownSpellMap();for(const e of d.events||[]){const id=+e.abilityID||0;if(spells.has(id)){e.label=spells.get(id);e.major=true}else e.major=false}return d}
+  function bossFromWcl(id){id=+id||0;try{const hit=Object.entries(NSRT_VOICE_PROFILES||{}).find(([,p])=>+p.encounterId===id||(+p.encounterId+50000)===id||(+p.encounterId)===(id-50000));return hit?.[0]||null}catch(_){return null}}
+
+  async function apiJson(path){
+    const r=await fetch(`${API}${path}`,{headers:{Accept:'application/json'},cache:'no-store'});let body={};try{body=await r.json()}catch(_){}
+    return {status:r.status,ok:r.ok,body};
+  }
+  function setUi(state,message,extra={}){ui={...ui,...extra,state,message};decorateReplay200()}
+  function inputValue(){return document.querySelector('#wclUrl200')?.value?.trim()||ui.url||replayState()?.url||''}
+
+  function showFightPicker200(parsed,report){
+    document.querySelector('#wclFightPicker200')?.remove();
+    const wrap=document.createElement('div');wrap.id='wclFightPicker200';wrap.className='raidplanModalBackdrop wclPickerBackdrop200';
+    const fights=(report.fights||[]).slice().sort((a,b)=>b.id-a.id);
+    wrap.innerHTML=`<div class="wclPicker200"><div class="difficultySwitchHead"><div><small>WARCRAFT LOGS · ${esc(report.code||parsed.code)}</small><h2>Выбери пул</h2></div><button onclick="document.getElementById('wclFightPicker200')?.remove()">×</button></div><p>${esc(report.title||'Отчёт Warcraft Logs')} · ${fights.length} боёв</p><div class="wclFightList200">${fights.map(f=>`<button onclick="wclPickFight200('${parsed.code}',${f.id})"><span><b>#${f.id} · ${esc(f.name)}</b><small>${f.kill?'✓ убийство':'вайп'} · ${fmtTime(Math.max(0,(f.endTime-f.startTime)/1000))}${f.size?' · '+f.size+' игроков':''}</small></span><em>${f.inProgress?'LIVE':'▶'}</em></button>`).join('')||'<div class="empty">В отчёте нет боёв.</div>'}</div></div>`;
+    wrap.onclick=e=>{if(e.target===wrap)wrap.remove()};document.body.appendChild(wrap);
+  }
+
+  async function loadReport200(parsed){
+    setUi('loading','Проверяю отчёт и безопасный лимит WCL…',{url:inputValue()});
+    const res=await apiJson(`/wcl/report?code=${encodeURIComponent(parsed.code)}`);
+    if(res.status===202){const b=res.body||{};setUi('paused',`RaidRU остановился до лимита WCL. Повтори через ${waitText(b.retryAfter)}.`,{quota:b.quota});return null}
+    if(!res.ok){const b=res.body||{};setUi('error',b.error==='wcl_not_configured'?'На Worker ещё не заданы WCL_CLIENT_ID / WCL_CLIENT_SECRET.':`Не удалось открыть отчёт: ${b.message||b.error||res.status}`);return null}
+    ui.report=res.body;ui.quota=res.body.quota||ui.quota;return res.body;
+  }
+
+  async function loadWclFight200(code,fight){
+    let attempts=0;
+    while(attempts++<12){
+      setUi('loading',attempts===1?'Загружаю Replay через безопасный кэш…':'Продолжаю загрузку из сохранённых страниц…',{fight});
+      const res=await apiJson(`/wcl/replay?code=${encodeURIComponent(code)}&fight=${encodeURIComponent(fight)}`),b=res.body||{};
+      if(res.status===202&&b.error==='batch_yield'){
+        ui.quota=b.quota||ui.quota;setUi('loading',`Собрано страниц: ${b.pages||0} (из WCL: ${b.fetchedPages||0}). Продолжаю с контрольной точки…`,{quota:ui.quota});await new Promise(r=>setTimeout(r,450));continue;
+      }
+      if(res.status===202){
+        ui.quota=b.quota||ui.quota;setUi('paused',`RaidRU остановил WCL заранее, чтобы не получить блокировку. Уже загруженное сохранено. Продолжить через ${waitText(b.retryAfter)}.`,{quota:ui.quota});return;
+      }
+      if(!res.ok){setUi('error',b.error==='wcl_not_configured'?'Нужно один раз добавить WCL OAuth secrets в Cloudflare Worker.':`WCL: ${b.message||b.error||'ошибка загрузки'}`);return}
+      const raw=b,detected=bossFromWcl(raw?.source?.bossId||raw?.fight?.bossId);
+      if(detected&&detected!==current)chooseBoss(detected);
+      const r=replayState();r.url=ui.url||inputValue();r.source='wcl-url';r.data=enrichReplay(normalizeReplayPayload(raw));replayClock=0;autoCalibrateReplay();save();ui.quota=raw.quota||ui.quota;
+      setUi('done',`${raw.cache==='hit'?'Из кэша — WCL API не потрачен.':'Replay загружен и закэширован.'} ${r.data.actors?.length||0} игроков · ${(r.data.positions?.length||0).toLocaleString('ru-RU')} точек.`,{fight});render();return;
+    }
+    setUi('error','Загрузка разбита на слишком много порций. Нажми «Продолжить» — уже полученные страницы останутся в кэше.');
+  }
+
+  async function loadWclReplay200(){
+    const v=inputValue(),parsed=parseWclUrl200(v);ui.url=v;
+    if(!parsed){setUi('error','Вставь ссылку вида https://www.warcraftlogs.com/reports/CODE?fight=10');return}
+    replayState().url=v;
+    if(parsed.fight==='last'){
+      const report=await loadReport200(parsed);if(!report)return;const last=(report.fights||[]).slice().sort((a,b)=>b.id-a.id)[0];if(!last){setUi('error','В отчёте нет боёв.');return}return loadWclFight200(parsed.code,last.id);
+    }
+    if(parsed.fight)return loadWclFight200(parsed.code,parsed.fight);
+    const report=await loadReport200(parsed);if(report){setUi('idle','Выбери нужный пул.',{report});showFightPicker200(parsed,report)}
+  }
+  function wclPickFight200(code,fight){document.querySelector('#wclFightPicker200')?.remove();const base=ui.url||`https://www.warcraftlogs.com/reports/${code}`;ui.url=base.replace(/([?&])fight=[^&#]*/i,'$1fight='+fight)+(base.includes('fight=')?'':(base.includes('?')?'&':'?')+'fight='+fight);loadWclFight200(code,fight)}
+
+  function statusHtml(){
+    if(!ui.message&&!ui.quota)return '<span class="wclStatusText200">Ссылка → Worker → WCL API. RaidRU кэширует страницы и останавливается до достижения часового лимита.</span>';
+    return `<div class="wclStatus200 ${ui.state}"><i></i><span>${esc(ui.message||'')}</span>${ui.quota?`<small>${esc(qText(ui.quota))}</small>`:''}</div>`;
+  }
+  function decorateReplay200(){
+    if(typeof view==='undefined'||view!=='replay')return;const card=document.querySelector('.replayImport.card');if(!card)return;
+    const d=replayState().data,currentUrl=ui.url||replayState().url||'';
+    card.innerHTML=`<div class="wclImportHead200"><div><small>RAIDRU 2.0 · WCL SAFE IMPORT</small><h3>Warcraft Logs → Replay</h3><p>Просто вставь ссылку на лог. JSON и консоль браузера больше не нужны.</p></div><span class="wclSafeBadge200">🛡 защита квоты</span></div><div class="wclUrlRow200"><input id="wclUrl200" value="${esc(currentUrl)}" placeholder="https://www.warcraftlogs.com/reports/…?fight=10" onkeydown="if(event.key==='Enter')loadWclReplay200()"><button class="primary" onclick="loadWclReplay200()">${ui.state==='paused'?'↻ Продолжить':'▶ Загрузить бой'}</button></div>${statusHtml()}<div class="replayButtons wclSecondary200"><button onclick="loadDemoReplay()">Демо из плана</button><label class="importBtn">Диагностика: replay JSON<input type="file" accept="application/json,.json" onchange="importReplayJson(this.files[0])"></label>${d?'<button onclick="exportReplayJson()">Экспорт replay JSON</button><button class="rehearse" onclick="createPlanFromReplay()">✦ Создать WCL-черновик</button>':''}</div>`;
+    const empty=document.querySelector('.emptyReplay');if(empty&&!d)empty.innerHTML='<b>Вставь ссылку Warcraft Logs выше</b><p>Если в ссылке нет <code>fight=</code>, RaidRU покажет список пулов из отчёта.</p>';
+  }
+
+  const coreRender200=render;
+  render=function(){coreRender200();decorateReplay200();const version=document.querySelector('aside .version');if(version)version.textContent='RaidRU 2.0 preview · WCL Safe Import'};
+  loadWclReplay=loadWclReplay200;
+  Object.assign(window,{loadWclReplay200,wclPickFight200});
+  render();
+})();
