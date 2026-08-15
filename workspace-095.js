@@ -257,7 +257,9 @@
   function decorate095(){
     const header=document.querySelector('main > header');if(header&&!header.querySelector('[data-workspace095]')){
       header.insertAdjacentHTML('afterbegin',`<button data-workspace095 class="workspaceNav095 ${view==='workspace'?'on':''}" onclick="setView('workspace')">▦ Мои планы</button>`);
-      const spacer=header.querySelector(':scope > span');const p=workspaceCurrentPlan();if(spacer&&p)spacer.insertAdjacentHTML('beforebegin',`<div class="workspaceStatus095" title="Автосохранение Workspace"><i></i><span>${esc(p.name)}</span><small>сохранено</small></div>`);
+      // Keep autosave state inside the flexible spacer. It may shrink/clip there,
+      // but it must never steal width from navigation and make header buttons wrap.
+      const spacer=header.querySelector(':scope > span');const p=workspaceCurrentPlan();if(spacer&&p)spacer.insertAdjacentHTML('afterbegin',`<div class="workspaceStatus095" title="Автосохранение Workspace · ${esc(p.name)}"><i></i><span>${esc(p.name)}</span><small>сохранено</small></div>`);
     }
     const version=document.querySelector('aside .version');if(version)version.textContent='RaidRU 0.9.5 · Raid Workspace + WCL Draft';
     if(view==='player'){
