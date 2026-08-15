@@ -1,12 +1,13 @@
-const CACHE='raidru-v100-raid-ready';
+const CACHE='raidru-v101-ui-polish';
 const ASSETS=[
 './',
 './index.html',
-'./styles.css?v=1.0.0',
+'./styles.css?v=1.0.1',
 './app.js?v=1.0.0',
 './raidplan-importer.js?v=1.0.0',
 './workspace-095.js?v=1.0.0',
 './raid-ready-100.js?v=1.0.0',
+'./ui-101.js?v=1.0.1',
 './tools/raidplan-browser-export.js',
 './manifest.webmanifest',
 './icon.svg',

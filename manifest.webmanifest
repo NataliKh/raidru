@@ -1,12 +1,12 @@
 {
-  "name": "RaidRU 1.0 — Raid Ready",
+  "name": "RaidRU 1.0.1 — Raid Ready",
   "short_name": "RaidRU",
   "start_url": "./",
   "scope": "./",
   "display": "standalone",
   "background_color": "#090c11",
   "theme_color": "#0b0e13",
-  "description": "Русские рейдовые тактики и визуальный планировщик World of Warcraft. Версия 1.0: Raid Ready, боевой режим, проверка плана, персональные назначения и снимки.",
+  "description": "Русские рейдовые тактики и визуальный планировщик World of Warcraft. Версия 1.0.1: новый компактный интерфейс и дорожки визуального таймлайна.",
   "icons": [
     {
       "src": "icon.svg",
