@@ -4,8 +4,13 @@ compatibility_date = "2026-08-15"
 workers_dev = true
 
 [vars]
-# RaidRU deliberately stops well before Warcraft Logs' hard hourly limit.
-WCL_SOFT_LIMIT = "0.70"
-WCL_MIN_RESERVE = "500"
-WCL_MAX_PAGES_PER_REQUEST = "8"
-WCL_EVENT_PAGE_LIMIT = "2500"
+# 2.0.3: soft threshold only switches to the cheap sampler; it no longer blocks import.
+WCL_SOFT_LIMIT = "0.85"
+# Hard stop remains below the real WCL hourly ceiling to avoid 429.
+WCL_HARD_LIMIT = "0.97"
+# Keep only a small emergency reserve. The old 20% reserve made the app unusable too early.
+WCL_MIN_RESERVE = "50"
+# Fewer browser round-trips and fewer standalone quota checks.
+WCL_MAX_PAGES_PER_REQUEST = "16"
+# WCL officially allows 100-10000 events; fast sampler uses the upper bound.
+WCL_EVENT_PAGE_LIMIT = "10000"

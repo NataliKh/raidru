@@ -17,6 +17,7 @@ const REPORT_TTL = 60 * 10;
 const BACKOFF_TTL_FALLBACK = 60 * 60;
 
 let tokenMemo = { token: '', expiresAt: 0 };
+let quotaMemo = { value: null, expiresAt: 0 };
 const inFlight = new Map();
 
 function cors(origin, { echo = false } = {}) {
@@ -150,7 +151,7 @@ async function wclToken(env) {
       'Authorization': `Basic ${basic}`,
       'Content-Type': 'application/x-www-form-urlencoded',
       'Accept': 'application/json',
-      'User-Agent': 'RaidRU/2.0 WCL Safe Import'
+      'User-Agent': 'RaidRU/2.0.3 WCL Adaptive Import'
     },
     body: 'grant_type=client_credentials'
   });
@@ -177,7 +178,7 @@ async function wclGraphql(env, query, variables = {}) {
       'Authorization': `Bearer ${token}`,
       'Content-Type': 'application/json',
       'Accept': 'application/json',
-      'User-Agent': 'RaidRU/2.0 WCL Safe Import'
+      'User-Agent': 'RaidRU/2.0.3 WCL Adaptive Import'
     },
     body: JSON.stringify({ query, variables })
   });
@@ -219,13 +220,14 @@ query RaidRUReport($code: String!) {
 
 const QUOTA_QUERY = `query RaidRUQuota { rateLimitData { limitPerHour pointsSpentThisHour pointsResetIn } }`;
 
-function eventsQuery(fightId) {
+function eventsQuery(fightId, mode = 'casts') {
+  const filter = mode === 'casts' ? 'dataType: Casts,' : '';
   return `
 query RaidRUEvents($code: String!, $start: Float!, $end: Float!, $limit: Int!) {
   rateLimitData { limitPerHour pointsSpentThisHour pointsResetIn }
   reportData {
     report(code: $code) {
-      events(fightIDs: [${fightId}], startTime: $start, endTime: $end, limit: $limit, includeResources: true) {
+      events(${filter} fightIDs: [${fightId}], startTime: $start, endTime: $end, limit: $limit, includeResources: true) {
         data
         nextPageTimestamp
       }
@@ -241,33 +243,52 @@ function normalizeQuota(q) {
 }
 
 function softLimit(env) {
+  // Crossing the soft limit no longer disables RaidRU. It only forces the
+  // low-cost casts sampler. The hard guard below is what can actually pause WCL.
   const n = Number(env?.WCL_SOFT_LIMIT);
-  return Number.isFinite(n) && n >= 0.5 && n <= 0.9 ? n : 0.70;
+  return Number.isFinite(n) && n >= 0.5 && n <= 0.95 ? n : 0.85;
+}
+
+function hardLimit(env) {
+  const n = Number(env?.WCL_HARD_LIMIT);
+  return Number.isFinite(n) && n >= 0.90 && n <= 0.995 ? n : 0.97;
 }
 
 function minReserve(env, limit) {
   const configured = Number(env?.WCL_MIN_RESERVE);
-  const base = Number.isFinite(configured) && configured >= 100 ? configured : 500;
-  return Math.max(base, Math.ceil((limit || 0) * 0.20));
+  const base = Number.isFinite(configured) && configured >= 25 ? configured : 50;
+  return Math.max(base, Math.ceil((limit || 0) * 0.05));
 }
 
 function maxPages(env) {
   const n = Number(env?.WCL_MAX_PAGES_PER_REQUEST);
-  return Number.isInteger(n) && n >= 2 && n <= 20 ? n : 8;
+  return Number.isInteger(n) && n >= 2 && n <= 25 ? n : 16;
 }
 
-function eventPageLimit(env) {
+function eventPageLimit(env, mode = 'casts') {
   const n = Number(env?.WCL_EVENT_PAGE_LIMIT);
-  // Deliberately below WCL's 10k maximum: one expensive page must never be able
-  // to consume most of the hourly budget before we can inspect rateLimitData again.
-  return Number.isInteger(n) && n >= 500 && n <= 5000 ? n : 2500;
+  // WCL explicitly allows up to 10k events. Fast mode uses that maximum so a
+  // normal fight is usually only one or a few GraphQL event requests.
+  const fallback = mode === 'casts' ? 10000 : 5000;
+  return Number.isInteger(n) && n >= 500 && n <= 10000 ? n : fallback;
 }
 
 function quotaUnsafe(q, env, estimatedNext = 0) {
   q = normalizeQuota(q);
   if (!q || !q.limitPerHour) return false;
   const reserve = minReserve(env, q.limitPerHour);
-  return q.usedRatio >= softLimit(env) || q.remaining <= reserve + Math.max(0, estimatedNext || 0);
+  const predicted = Math.max(0, Number(estimatedNext) || 0);
+  return q.usedRatio >= hardLimit(env) || q.remaining <= reserve + predicted;
+}
+
+function chooseFetchMode(q, env, requested = 'smart') {
+  if (requested === 'full') return 'all';
+  if (requested === 'fast') return 'casts';
+  q = normalizeQuota(q);
+  // Smart is intentionally fast-first. For raid planning we need a usable
+  // movement sample, not every combat event in the log.
+  if (!q || !q.limitPerHour) return 'casts';
+  return q.usedRatio >= softLimit(env) ? 'casts' : 'casts';
 }
 
 function publicReport(report, quota = null, cache = 'miss') {
@@ -294,19 +315,27 @@ async function getReport(env, code, { forceQuota = false } = {}) {
   const data = await wclGraphql(env, REPORT_QUERY, { code });
   const report = data?.reportData?.report;
   if (!report) { const e = new Error('WCL_REPORT_NOT_FOUND'); e.code = 'wcl_report_not_found'; throw e; }
+  rememberQuota(data.rateLimitData);
   const out = publicReport(report, data.rateLimitData, 'miss');
   const recent = Date.now() - (out.endTime || 0) < 2 * 60 * 60 * 1000;
   await cachePut(cacheName, out, recent ? REPORT_TTL : COMPLETE_FIGHT_TTL);
   return out;
 }
 
-async function getQuota(env) {
-  const data = await wclGraphql(env, QUOTA_QUERY, {});
-  return normalizeQuota(data?.rateLimitData);
+function rememberQuota(q, ttlMs = 15000) {
+  q = normalizeQuota(q);
+  if (q) quotaMemo = { value: q, expiresAt: Date.now() + Math.max(1000, ttlMs) };
+  return q;
 }
 
-function pageCacheName(code, fightId, start) {
-  return `wcl/page/${code}/${fightId}/${Math.round(start)}`;
+async function getQuota(env, { force = false } = {}) {
+  if (!force && quotaMemo.value && quotaMemo.expiresAt > Date.now()) return quotaMemo.value;
+  const data = await wclGraphql(env, QUOTA_QUERY, {});
+  return rememberQuota(data?.rateLimitData);
+}
+
+function pageCacheName(code, fightId, start, mode = 'casts') {
+  return `wcl/page-v203/${mode}/${code}/${fightId}/${Math.round(start)}`;
 }
 
 function positionCandidate(e, fightStart, playerIds, defaultMapID) {
@@ -391,26 +420,36 @@ function replayBounds(points) {
   return Number.isFinite(minX) ? { minX, maxX, minY, maxY } : null;
 }
 
-async function fetchCompactPage(env, meta, fight, start, previousQuota) {
-  const cacheName = pageCacheName(meta.code, fight.id, start);
+async function fetchCompactPage(env, meta, fight, start, previousQuota, mode = 'casts') {
+  const cacheName = pageCacheName(meta.code, fight.id, start, mode);
   const cached = await cacheGet(cacheName);
-  if (cached) return { page: cached, quota: previousQuota, cache: 'hit', cost: 0 };
+  if (cached) return { page: cached, quota: previousQuota, cache: 'hit', cost: 0, mode };
 
   const before = normalizeQuota(previousQuota) || await getQuota(env);
   if (quotaUnsafe(before, env, 0)) {
     const e = new Error('WCL_BUDGET_GUARD'); e.code = 'wcl_budget_guard'; e.quota = before; throw e;
   }
 
-  const data = await wclGraphql(env, eventsQuery(fight.id), { code: meta.code, start, end: fight.endTime, limit: eventPageLimit(env) });
-  const after = normalizeQuota(data?.rateLimitData) || before;
+  let data;
+  try {
+    data = await wclGraphql(env, eventsQuery(fight.id, mode), { code: meta.code, start, end: fight.endTime, limit: eventPageLimit(env, mode) });
+  } catch (e) {
+    // If a future WCL schema ever rejects Casts, fall back once to the generic
+    // event stream instead of making direct-link import unusable.
+    if (mode === 'casts' && e?.code === 'wcl_graphql_error') {
+      data = await wclGraphql(env, eventsQuery(fight.id, 'all'), { code: meta.code, start, end: fight.endTime, limit: eventPageLimit(env, 'all') });
+      mode = 'all';
+    } else throw e;
+  }
+  const after = rememberQuota(data?.rateLimitData) || before;
   const raw = data?.reportData?.report?.events;
   if (!raw || !Array.isArray(raw.data)) { const e = new Error('WCL_EVENTS_EMPTY'); e.code = 'wcl_events_unavailable'; throw e; }
   const compact = compactWclPage(raw.data, meta, fight);
-  const page = { ...compact, start, nextPageTimestamp: numeric(raw.nextPageTimestamp), fetchedAt: Date.now() };
+  const page = { ...compact, start, nextPageTimestamp: numeric(raw.nextPageTimestamp), fetchedAt: Date.now(), mode };
   const ttl = fight.inProgress ? LIVE_FIGHT_TTL : COMPLETE_FIGHT_TTL;
-  await cachePut(cacheName, page, ttl);
+  await cachePut(pageCacheName(meta.code, fight.id, start, mode), page, ttl);
   const cost = before && after && after.pointsSpentThisHour >= before.pointsSpentThisHour ? after.pointsSpentThisHour - before.pointsSpentThisHour : 0;
-  return { page, quota: after, cache: 'miss', cost };
+  return { page, quota: after, cache: 'miss', cost, mode };
 }
 
 async function backoffState(code, fightId) {
@@ -444,36 +483,137 @@ function selectFight(meta, requested) {
   const id = safeInt(requested); return fights.find(f => f.id === id) || null;
 }
 
-async function buildReplay(env, code, fightParam) {
-  const finalName = `wcl/replay/${code}/${fightParam}`;
+function replayBodyFromProgress(meta, fight, progress, quota, { partial = false, fetchMode = 'casts', resumeAfter = 0, cache = 'miss' } = {}) {
+  const positions = Array.isArray(progress?.positions) ? progress.positions : [];
+  const casts = Array.isArray(progress?.casts) ? progress.casts : [];
+  const thin = thinPositions(positions), timeline = dedupeCasts(casts);
+  const actors = (meta.actors || []).filter(a => String(a.type).toLowerCase() === 'player').map(a => ({ id: a.id, name: a.name, type: 'Player', subType: a.subType || '' }));
+  const mapIDs = {};
+  for (const p of thin) if (p.mapID) mapIDs[p.mapID] = (mapIDs[p.mapID] || 0) + 1;
+  if (!Object.keys(mapIDs).length) for (const id of fight.mapIDs || []) mapIDs[id] = 1;
+  const covered = new Set(thin.map(p => String(p.actorId))).size;
+  const coverage = actors.length ? Math.min(1, covered / actors.length) : 0;
+  const quality = partial ? 'partial' : (fetchMode === 'casts' ? 'fast' : 'full');
+  return {
+    format: 'raidru-wcl-safe-replay', version: 3, createdAt: new Date().toISOString(), cache,
+    partial, quality, resumeAfter: partial ? Math.max(0, Number(resumeAfter) || 0) : 0,
+    source: {
+      pageUrl: `https://www.warcraftlogs.com/reports/${meta.code}?fight=${fight.id}&view=replay`,
+      reportCode: meta.code, fight: String(fight.id),
+      bossId: fight.encounterID || fight.originalEncounterID || 0,
+      safeImport: true, fetchMode
+    },
+    report: { code: meta.code, title: meta.title || '' },
+    fight: {
+      id: fight.id, name: fight.name,
+      bossId: fight.encounterID || fight.originalEncounterID || 0,
+      startTime: fight.startTime, endTime: fight.endTime,
+      duration: Math.max(1, fight.endTime - fight.startTime),
+      difficulty: fight.difficulty, kill: fight.kill, inProgress: fight.inProgress
+    },
+    actors, positions: thin, events: timeline,
+    duration: Math.max(1, fight.endTime - fight.startTime), mapIDs,
+    stats: {
+      rawEvents: Number(progress?.rawEvents) || 0,
+      compactPositionPoints: thin.length,
+      timelineEvents: timeline.length,
+      pages: Number(progress?.pages) || 0,
+      fetchedPages: Number(progress?.fetchedPages) || 0,
+      cachedPages: Number(progress?.cachedPages) || 0,
+      eventPageLimit: eventPageLimit(null, fetchMode),
+      fetchMode,
+      actorCoverage: coverage
+    },
+    quota: normalizeQuota(quota)
+  };
+}
+
+function partialOrPause(meta, fight, progress, quota, { reason = 'wcl_budget_guard', retryAfter = BACKOFF_TTL_FALLBACK, fetchMode = 'casts', message = '' } = {}) {
+  const hasUsefulData = (progress?.positions?.length || 0) >= 2 || (progress?.casts?.length || 0) >= 1;
+  if (hasUsefulData) {
+    const body = replayBodyFromProgress(meta, fight, progress, quota, { partial: true, fetchMode, resumeAfter: retryAfter });
+    body.pauseReason = reason;
+    body.message = message || 'RaidRU открыл уже полученную часть боя. Позже её можно догрузить без потери прогресса.';
+    return { status: 206, body };
+  }
+  return {
+    status: 202,
+    body: {
+      error: reason, retryAfter, fightId: fight.id,
+      pages: Number(progress?.pages) || 0,
+      fetchedPages: Number(progress?.fetchedPages) || 0,
+      cachedPages: Number(progress?.cachedPages) || 0,
+      nextStart: progress?.cursor ?? fight.startTime,
+      quota: normalizeQuota(quota), cachedProgress: true,
+      message: message || 'Загрузка сохранена и продолжится с контрольной точки.'
+    }
+  };
+}
+
+async function buildReplay(env, code, fightParam, requestedMode = 'smart') {
+  const modeKey = requestedMode === 'full' ? 'full' : 'fast';
+  const finalName = `wcl/replay-v203/${modeKey}/${code}/${fightParam}`;
   const cachedFinal = await cacheGet(finalName);
   if (cachedFinal) return { status: 200, body: { ...cachedFinal, cache: 'hit' } };
+
+  // Reuse a completed 2.0.2 replay if it already exists. This costs zero WCL points.
+  const legacyFinal = await cacheGet(`wcl/replay/${code}/${fightParam}`);
+  if (legacyFinal && !legacyFinal.partial) {
+    return { status: 200, body: { ...legacyFinal, cache: 'legacy-hit', quality: legacyFinal.quality || 'full' } };
+  }
 
   const meta = await getReport(env, code);
   const fight = selectFight(meta, fightParam);
   if (!fight) return { status: 404, body: { error: 'fight_not_found', fights: meta.fights } };
-  const actualFinalName = `wcl/replay/${code}/${fight.id}`;
+
+  const actualFinalName = `wcl/replay-v203/${modeKey}/${code}/${fight.id}`;
   if (actualFinalName !== finalName) {
     const hit = await cacheGet(actualFinalName);
     if (hit) return { status: 200, body: { ...hit, cache: 'hit' } };
+    const legacyHit = await cacheGet(`wcl/replay/${code}/${fight.id}`);
+    if (legacyHit && !legacyHit.partial) return { status: 200, body: { ...legacyHit, cache: 'legacy-hit', quality: legacyHit.quality || 'full' } };
   }
 
-  const backoff = await backoffState(code, fight.id);
-  if (backoff?.until > Date.now()) {
-    return { status: 202, body: { error: backoff.reason || 'wcl_budget_guard', retryAfter: Math.ceil((backoff.until - Date.now()) / 1000), quota: backoff.quota, cachedProgress: true } };
-  }
-
-  // Always take a current quota snapshot before an uncached replay batch. Report
-  // metadata itself may have been served from a long-lived cache and its quota value
-  // must never be trusted as a current guard.
-  let quota = await getQuota(env);
   let progress = await loadProgress(code, fight);
   if (!progress) {
     progress = {
       cursor: fight.startTime,
       positions: [], casts: [], rawEvents: 0,
-      pages: 0, fetchedPages: 0, cachedPages: 0, lastCost: 0
+      pages: 0, fetchedPages: 0, cachedPages: 0, lastCost: 0,
+      fetchMode: null
     };
+  }
+
+  // Get a fresh-ish snapshot. The memo prevents the browser's one-second batch
+  // continuation from spending another quota query every time.
+  let quota = await getQuota(env);
+  let fetchMode = requestedMode === 'full' ? 'all' : chooseFetchMode(quota, env, requestedMode);
+  if (progress.fetchMode === 'casts' || progress.fetchMode === 'all') {
+    // Old 2.0.2 checkpoints had no mode. Smart mode may safely switch their
+    // remaining tail to casts without discarding already collected coordinates.
+    if (requestedMode === 'full') fetchMode = 'all';
+    else if (progress.fetchMode === 'casts') fetchMode = 'casts';
+  }
+
+  // Only a real upstream 429 creates a strict time lock. A budget guard from
+  // 2.0.2 was intentionally conservative and is ignored if the new hard reserve
+  // says a cheap fast request still fits.
+  const backoff = await backoffState(code, fight.id);
+  if (backoff?.until > Date.now()) {
+    const retryAfter = Math.ceil((backoff.until - Date.now()) / 1000);
+    if (backoff.reason === 'wcl_rate_limited') {
+      return partialOrPause(meta, fight, progress, backoff.quota || quota, {
+        reason: 'wcl_rate_limited', retryAfter, fetchMode,
+        message: 'Warcraft Logs реально вернул 429. Уже полученная часть боя доступна, догрузка продолжится после Retry-After.'
+      });
+    }
+    if (quotaUnsafe(quota, env, Math.max(1, Number(progress.lastCost) || 1))) {
+      return partialOrPause(meta, fight, progress, quota, {
+        reason: 'wcl_budget_guard', retryAfter, fetchMode,
+        message: 'Осталось слишком мало реального резерва даже для быстрого запроса. Уже полученная часть боя доступна.'
+      });
+    }
+    await cacheDelete(`wcl/backoff/${code}/${fight.id}`);
   }
 
   let cursor = numeric(progress.cursor);
@@ -493,20 +633,38 @@ async function buildReplay(env, code, fightParam) {
     if (seenCursor.has(String(cursor))) { complete = true; break; }
     seenCursor.add(String(cursor));
 
+    // The hard guard is predictive, not a blanket "70% = unusable" switch.
+    if (quotaUnsafe(quota, env, Math.ceil(Math.max(1, lastCost) * 1.5))) {
+      progress = { cursor, positions, casts, rawEvents, pages, fetchedPages, cachedPages, lastCost, fetchMode };
+      await saveProgress(code, fight, progress);
+      const retry = quota?.pointsResetIn || BACKOFF_TTL_FALLBACK;
+      const b = await setBackoff(code, fight.id, retry, 'wcl_budget_guard', quota);
+      return partialOrPause(meta, fight, progress, quota, {
+        reason: 'wcl_budget_guard', retryAfter: b.retryAfter, fetchMode,
+        message: 'RaidRU сохранил и открыл частичный Replay. Полную точность можно догрузить после сброса квоты.'
+      });
+    }
+
     let got;
     try {
-      got = await fetchCompactPage(env, meta, fight, cursor, quota);
+      got = await fetchCompactPage(env, meta, fight, cursor, quota, fetchMode);
     } catch (e) {
-      progress = { cursor, positions, casts, rawEvents, pages, fetchedPages, cachedPages, lastCost };
+      progress = { cursor, positions, casts, rawEvents, pages, fetchedPages, cachedPages, lastCost, fetchMode };
       await saveProgress(code, fight, progress);
       if (e instanceof WclRateError || e?.code === 'wcl_rate_limited') {
         const b = await setBackoff(code, fight.id, e.retryAfter, 'wcl_rate_limited', quota);
-        return { status: 202, body: { error: 'wcl_rate_limited', retryAfter: b.retryAfter, fightId: fight.id, pages, fetchedPages, cachedPages, nextStart: cursor, quota: normalizeQuota(quota), cachedProgress: true } };
+        return partialOrPause(meta, fight, progress, quota, {
+          reason: 'wcl_rate_limited', retryAfter: b.retryAfter, fetchMode,
+          message: 'WCL вернул 429. RaidRU не повторяет запросы; уже полученная часть боя доступна.'
+        });
       }
       if (e?.code === 'wcl_budget_guard') {
         const q = normalizeQuota(e.quota) || normalizeQuota(quota);
         const b = await setBackoff(code, fight.id, q?.pointsResetIn || BACKOFF_TTL_FALLBACK, 'wcl_budget_guard', q);
-        return { status: 202, body: { error: 'wcl_budget_guard', retryAfter: b.retryAfter, fightId: fight.id, pages, fetchedPages, cachedPages, nextStart: cursor, quota: q, cachedProgress: true, message: 'Страницы уже сохранены. После сброса квоты загрузка продолжится с контрольной точки.' } };
+        return partialOrPause(meta, fight, progress, q, {
+          reason: 'wcl_budget_guard', retryAfter: b.retryAfter, fetchMode,
+          message: 'Остаток квоты ниже защищённого резерва. Уже полученный Replay остаётся доступным.'
+        });
       }
       throw e;
     }
@@ -515,6 +673,7 @@ async function buildReplay(env, code, fightParam) {
     if (got.cache === 'hit') cachedPages++;
     else { fetchedPages++; fetchedThisRequest++; }
     quota = got.quota || quota;
+    fetchMode = got.mode || fetchMode;
     lastCost = got.cost || lastCost;
     rawEvents += got.page.scanned || 0;
     positions.push(...(got.page.positions || []));
@@ -528,45 +687,42 @@ async function buildReplay(env, code, fightParam) {
       cursor = next;
     }
 
-    progress = { cursor, positions, casts, rawEvents, pages, fetchedPages, cachedPages, lastCost };
+    progress = { cursor, positions, casts, rawEvents, pages, fetchedPages, cachedPages, lastCost, fetchMode };
     await saveProgress(code, fight, progress);
 
     if (!complete && fetchedThisRequest >= maxPages(env)) {
-      return { status: 202, body: { error: 'batch_yield', retryAfter: 1, fightId: fight.id, pages, fetchedPages, cachedPages, fetchedThisRequest, nextStart: cursor, quota: normalizeQuota(quota), cachedProgress: true } };
-    }
-    // Predict the cost of the next page from the page we just paid for. A 1.5x
-    // margin means a sudden denser page still has to fit inside the protected reserve.
-    if (!complete && quotaUnsafe(quota, env, Math.ceil(lastCost * 1.5))) {
-      const b = await setBackoff(code, fight.id, quota?.pointsResetIn || BACKOFF_TTL_FALLBACK, 'wcl_budget_guard', quota);
-      return { status: 202, body: { error: 'wcl_budget_guard', retryAfter: b.retryAfter, fightId: fight.id, pages, fetchedPages, cachedPages, nextStart: cursor, quota: normalizeQuota(quota), cachedProgress: true, message: 'RaidRU остановил WCL заранее. Уже полученные страницы сохранены.' } };
+      return {
+        status: 202,
+        body: {
+          error: 'batch_yield', retryAfter: 1, fightId: fight.id,
+          pages, fetchedPages, cachedPages, fetchedThisRequest,
+          nextStart: cursor, quota: normalizeQuota(quota),
+          cachedProgress: true, fetchMode
+        }
+      };
     }
   }
 
   if (!complete) {
-    return { status: 202, body: { error: 'batch_yield', retryAfter: 1, fightId: fight.id, pages, fetchedPages, cachedPages, nextStart: cursor, quota: normalizeQuota(quota), cachedProgress: true } };
+    return {
+      status: 202,
+      body: {
+        error: 'batch_yield', retryAfter: 1, fightId: fight.id,
+        pages, fetchedPages, cachedPages, nextStart: cursor,
+        quota: normalizeQuota(quota), cachedProgress: true, fetchMode
+      }
+    };
   }
 
-  const thin = thinPositions(positions), timeline = dedupeCasts(casts);
-  const actors = (meta.actors || []).filter(a => String(a.type).toLowerCase() === 'player').map(a => ({ id: a.id, name: a.name, type: 'Player', subType: a.subType || '' }));
-  const mapIDs = {};
-  for (const p of thin) if (p.mapID) mapIDs[p.mapID] = (mapIDs[p.mapID] || 0) + 1;
-  if (!Object.keys(mapIDs).length) for (const id of fight.mapIDs || []) mapIDs[id] = 1;
-  const body = {
-    format: 'raidru-wcl-safe-replay', version: 2, createdAt: new Date().toISOString(), cache: 'miss',
-    source: { pageUrl: `https://www.warcraftlogs.com/reports/${code}?fight=${fight.id}&view=replay`, reportCode: code, fight: String(fight.id), bossId: fight.encounterID || fight.originalEncounterID || 0, safeImport: true },
-    report: { code, title: meta.title || '' },
-    fight: { id: fight.id, name: fight.name, bossId: fight.encounterID || fight.originalEncounterID || 0, startTime: fight.startTime, endTime: fight.endTime, duration: Math.max(1, fight.endTime - fight.startTime), difficulty: fight.difficulty, kill: fight.kill, inProgress: fight.inProgress },
-    actors, positions: thin, events: timeline, duration: Math.max(1, fight.endTime - fight.startTime), mapIDs,
-    stats: { rawEvents, compactPositionPoints: thin.length, timelineEvents: timeline.length, pages, fetchedPages, cachedPages, eventPageLimit: eventPageLimit(env) },
-    quota: normalizeQuota(quota)
-  };
+  progress = { cursor: null, positions, casts, rawEvents, pages, fetchedPages, cachedPages, lastCost, fetchMode };
+  const body = replayBodyFromProgress(meta, fight, progress, quota, { partial: false, fetchMode, cache: 'miss' });
+  body.stats.eventPageLimit = eventPageLimit(env, fetchMode);
   const ttl = fight.inProgress ? LIVE_FIGHT_TTL : COMPLETE_FIGHT_TTL;
   await cachePut(actualFinalName, body, ttl);
   if (actualFinalName !== finalName) await cachePut(finalName, body, ttl);
   await cacheDelete(progressCacheName(code, fight.id));
   return { status: 200, body };
 }
-
 function wclErrorBody(e) {
   return { error: e?.code || 'wcl_unavailable', message: e?.message || 'Warcraft Logs unavailable', status: e?.status || null };
 }
@@ -578,11 +734,11 @@ export default {
     if (origin && !ALLOWED_ORIGINS.has(origin)) return new Response(JSON.stringify({ error: 'origin_not_allowed', origin, allowed: [...ALLOWED_ORIGINS] }), { status: 403, headers: { 'Content-Type': 'application/json; charset=utf-8', ...cors(origin, { echo: true }), 'X-RaidRU-Origin': origin } });
 
     if (url.pathname === '/wcl/ping') {
-      return json({ ok: true, service: 'raidru-edge', version: '2.0.1-wcl-transport', origin: origin || null, wclConfigured: wclConfigured(env) }, 200, origin, { 'X-RaidRU-WCL-Safe': '1' });
+      return json({ ok: true, service: 'raidru-edge', version: '2.0.3-wcl-adaptive', origin: origin || null, wclConfigured: wclConfigured(env) }, 200, origin, { 'X-RaidRU-WCL-Safe': '1' });
     }
 
     if (url.pathname === '/health') {
-      return json({ ok: true, service: 'raidru-edge', version: '2.0.1-wcl-transport', wclConfigured: wclConfigured(env), features: ['raidplan', 'wcl-report', 'wcl-safe-replay', 'quota-guard', 'resume-cache'] }, 200, origin);
+      return json({ ok: true, service: 'raidru-edge', version: '2.0.3-wcl-adaptive', wclConfigured: wclConfigured(env), features: ['raidplan', 'wcl-report', 'wcl-adaptive-replay', 'fast-casts-sampler', 'partial-replay', 'quota-guard', 'resume-cache'] }, 200, origin);
     }
 
     if (url.pathname === '/raidplan' && request.method === 'GET') {
@@ -612,11 +768,13 @@ export default {
 
     if (url.pathname === '/wcl/replay' && request.method === 'GET') {
       const code = (url.searchParams.get('code') || '').trim(), fight = (url.searchParams.get('fight') || '').trim().toLowerCase();
+      const requestedMode = (url.searchParams.get('mode') || 'smart').trim().toLowerCase();
       if (!validCode(code)) return json({ error: 'invalid_report_code' }, 400, origin);
       if (!(fight === 'last' || safeInt(fight))) return json({ error: 'invalid_fight' }, 400, origin);
-      const key = `replay:${code}:${fight}`;
+      if (!['smart','fast','full'].includes(requestedMode)) return json({ error: 'invalid_mode' }, 400, origin);
+      const key = `replay:${requestedMode}:${code}:${fight}`;
       try {
-        const result = await withInflight(key, () => buildReplay(env, code, fight));
+        const result = await withInflight(key, () => buildReplay(env, code, fight, requestedMode));
         return json(result.body, result.status, origin, { 'X-RaidRU-WCL-Safe': '1' });
       } catch (e) {
         if (e instanceof WclRateError || e?.code === 'wcl_rate_limited') {

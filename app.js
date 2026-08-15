@@ -1017,7 +1017,7 @@ function normalizeReplayPayload(raw){
  if(raw.mapIDs&&typeof raw.mapIDs==='object'&&!Array.isArray(raw.mapIDs))Object.entries(raw.mapIDs).forEach(([id,count])=>{const n=+id;if(Number.isFinite(n)&&n>0)mapIDs[n]=Math.max(1,+count||1)});
  if(Array.isArray(raw.mapIDs))raw.mapIDs.forEach(id=>{const n=+id;if(Number.isFinite(n)&&n>0)mapIDs[n]=(mapIDs[n]||0)+1});
  if(Array.isArray(raw.fight?.mapIDs))raw.fight.mapIDs.forEach(id=>{const n=+id;if(Number.isFinite(n)&&n>0)mapIDs[n]=(mapIDs[n]||0)+1});
- const data={source:raw.source||{},report:raw.report||{},fight:raw.fight||{},actors:raw.actors||[],positions:raw.positions||[],events:raw.events||[],mapIDs,bounds:raw.bounds||null};
+ const data={source:raw.source||{},report:raw.report||{},fight:raw.fight||{},actors:raw.actors||[],positions:raw.positions||[],events:raw.events||[],mapIDs,bounds:raw.bounds||null,partial:!!raw.partial,quality:raw.quality||raw.source?.fetchMode||null,resumeAfter:+raw.resumeAfter||0,stats:raw.stats||{}};
  data.positions=data.positions.map(p=>({actorId:p.actorId??p.sourceID??p.id,t:+(p.t??p.timestamp??0),x:+p.x,y:+p.y,alive:p.alive!==false,mapID:+(p.mapID??p.mapId??0)||null,facing:Number.isFinite(+p.facing)?+p.facing:null,source:p.source||''})).filter(p=>p.actorId!=null&&Number.isFinite(p.x)&&Number.isFinite(p.y));
  data.positions.forEach(p=>{if(p.mapID)mapIDs[p.mapID]=(mapIDs[p.mapID]||0)+1});
  data.positions.sort((a,b)=>a.t-b.t);data.events=(data.events||[]).map(e=>({t:+(e.t??e.timestamp??0),type:e.type||'event',label:e.label||e.abilityName||e.name||e.type||'Событие',abilityID:e.abilityID||e.abilityGameID||null,sourceID:e.sourceID,targetID:e.targetID})).sort((a,b)=>a.t-b.t);
