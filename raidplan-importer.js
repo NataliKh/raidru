@@ -1,11 +1,11 @@
-/* RaidRU v0.8.36 — RaidPlan import adapter
+/* RaidRU v0.8.37 — RaidPlan import adapter
  * Isolated from app.js on purpose: RaidPlan developer integration is not documented yet,
  * so transport/schema changes should stay in this file.
  */
 (function(){
   'use strict';
 
-  const VERSION='0.8.36';
+  const VERSION='0.8.37';
   const STEP_KEYS=['steps','scenes','pages','slides','frames'];
   const ITEM_KEYS=['objects','elements','items','components','drawings','entities','children','nodes'];
   const ROLE_WORDS={
@@ -351,6 +351,18 @@
   function coordTransform(items,step,plan,bossId){
     const pts=items.map(readXY).filter(p=>p.x!=null&&p.y!=null);
     const xs=pts.map(p=>p.x),ys=pts.map(p=>p.y),size=canvasSize(step,plan),tb=targetBox(bossId);
+
+    // RaidPlan v2 positions are expressed in the planner canvas coordinate
+    // system (normally 1200x675). Objects are allowed to sit outside that
+    // canvas. Those off-canvas annotations MUST NOT change the transform for
+    // the whole scene. Scene 4 of 9v3wssyjja56rttz has three arrow-line parts
+    // around x/y = 0; the old heuristic switched the whole step to `fit` mode,
+    // moving the boss from the center to ~70% X.
+    if(step?.__raidplanV2&&size.w&&size.h){
+      const sx=100/size.w,sy=100/size.h;
+      return{mode:'raidplan-v2-canvas',scaleX:sx,scaleY:sy,canvas:size,map:(x,y)=>({x:x*sx,y:y*sy}),sizeScale:v=>v*Math.min(sx,sy)};
+    }
+
     const maxAbs=Math.max(0,...xs.map(Math.abs),...ys.map(Math.abs));
     const allUnit=pts.length&&xs.every(x=>x>=-0.05&&x<=1.05)&&ys.every(y=>y>=-0.05&&y<=1.05);
     const allPct=pts.length&&xs.every(x=>x>=-2&&x<=102)&&ys.every(y=>y>=-2&&y<=102)&&maxAbs>1.1;
@@ -558,24 +570,58 @@
   function raidPlanNodeType(o){return text(o?.type||o?.kind||o?.objectType).toLowerCase()}
   function fabricLineGeometry(o,tf){
     const size=tf?.canvas||null,p=readXY(o),nwh=nativeSize(o,tf),rot=readRotation(o);
+    const ps=pointsOf(o);
 
-    // RaidPlan v2/Fabric line nodes are object-local vectors: meta.pos is the
-    // object position, meta.size is its box and attr.angle is the object
-    // rotation. Treating local points/x1/x2 as absolute canvas coordinates
-    // flattens diagonal hand-drawn arrows into horizontal fragments.
+    if(ps.length>=2){
+      const a=ps[0],b=ps[ps.length-1];
+      const xs=ps.map(q=>q.x),ys=ps.map(q=>q.y);
+      const minX=Math.min(...xs),maxX=Math.max(...xs),minY=Math.min(...ys),maxY=Math.max(...ys);
+      const rawW=Math.max(0,maxX-minX),rawH=Math.max(0,maxY-minY);
+      const sw=Math.max(0,finite(o?.attr?.strokeWidth)??0);
+      const mx=finite(o?.meta?.pos?.x),my=finite(o?.meta?.pos?.y);
+      const mw=finite(o?.meta?.size?.w),mh=finite(o?.meta?.size?.h);
+      const posTol=Math.max(1,sw*.35);
+      const sizeTolX=Math.max(1,rawW*.015),sizeTolY=Math.max(1,rawH*.015);
+
+      // RaidPlan/Fabric line export signature:
+      //   meta.pos.x ~= min(attr.points.x) - strokeWidth/2
+      //   meta.pos.y ~= min(attr.points.y) - strokeWidth/2
+      //   meta.size   ~= max(points) - min(points)
+      // In that case attr.points are already canvas endpoints. Using meta.pos
+      // as the line centre is wrong and turns an off-canvas arrow into a large
+      // horizontal arrow inside the map.
+      const absoluteFabricPoints=
+        mx!=null&&my!=null&&mw!=null&&mh!=null&&
+        Math.abs(mx-(minX-sw/2))<=posTol&&
+        Math.abs(my-(minY-sw/2))<=posTol&&
+        Math.abs(mw-rawW)<=sizeTolX&&
+        Math.abs(mh-rawH)<=sizeTolY;
+
+      if(absoluteFabricPoints){
+        const p1=tf.map(a.x,a.y),p2=tf.map(b.x,b.y),dx=b.x-a.x,dy=b.y-a.y;
+        const widthPct=size?Math.hypot(dx,dy)*(100/size.w):Math.hypot(p2.x-p1.x,p2.y-p1.y);
+        return{
+          x:(p1.x+p2.x)/2,
+          y:(p1.y+p2.y)/2,
+          w:Math.max(.08,widthPct),
+          h:Math.max(.08,sw*(tf.scaleY||1)),
+          rot:Math.atan2(dy,dx)*180/Math.PI+rot,
+          absoluteFabricPoints:true
+        };
+      }
+    }
+
+    // Other Fabric line nodes use meta.pos/meta.size as the object box.
     if(o?.meta?.pos&&p.x!=null&&p.y!=null&&(nwh.w!=null||nwh.h!=null)){
       const q=tf.map(p.x,p.y);
       return{x:q.x,y:q.y,w:nwh.w??Math.max(.2,nwh.h||.2),h:nwh.h??5,rot};
     }
 
-    const ps=pointsOf(o);
     if(ps.length>=2){
       const a=ps[0],b=ps[ps.length-1];
       const looksAbsolute=!size||(a.x>=-size.w*.15&&a.x<=size.w*1.15&&b.x>=-size.w*.15&&b.x<=size.w*1.15&&a.y>=-size.h*.15&&a.y<=size.h*1.15&&b.y>=-size.h*.15&&b.y<=size.h*1.15);
       if(looksAbsolute){
         const p1=tf.map(a.x,a.y),p2=tf.map(b.x,b.y),dx=b.x-a.x,dy=b.y-a.y;
-        // CSS width is relative to arena WIDTH. For a 1200x675 RaidPlan canvas,
-        // angle/length must therefore be calculated in source pixels, not between X/Y percentages.
         const widthPct=size?Math.hypot(dx,dy)*(100/size.w):Math.hypot(p2.x-p1.x,p2.y-p1.y);
         return{x:(p1.x+p2.x)/2,y:(p1.y+p2.y)/2,w:widthPct,h:5,rot:Math.atan2(dy,dx)*180/Math.PI+rot};
       }
@@ -931,7 +977,7 @@
     const imported=result.scenes.map((scene,i)=>normalizeScene(deep({...scene,name:scene.name.replace(/^RaidPlan\s*·?\s*/i,'')}),bossId,i));
     bs.raidPlanScenes=imported;
     bs.raidPlanTimelineV3=typeof raidPlanTimelineForScenes==='function'?raidPlanTimelineForScenes(imported):imported.map((scene,i)=>({id:`rp-time-${i}`,time:i*35,label:scene.name,type:'move',scene:i,note:scene.note||''}));
-    bs.raidPlanImport={at:now,name:result.planName,report:result.report,mode:'separate-tab',sourceCode:result.rawRoot?.code||'',revision:result.rawRoot?.revision??null,renderer:'native-v17-offcanvas-vector-fidelity',difficulty:activeDiff,sceneStats:imported.map(sc=>({tokens:(sc.tokens||[]).length,effects:(sc.effects||[]).length}))};
+    bs.raidPlanImport={at:now,name:result.planName,report:result.report,mode:'separate-tab',sourceCode:result.rawRoot?.code||'',revision:result.rawRoot?.revision??null,renderer:'native-v18-v2-canvas-line-endpoints',difficulty:activeDiff,sceneStats:imported.map(sc=>({tokens:(sc.tokens||[]).length,effects:(sc.effects||[]).length}))};
     if(typeof setScenarioSourceFor==='function')setScenarioSourceFor(bossId,'raidplan',activeDiff);else{state._scenarioSourceByBoss=state._scenarioSourceByBoss||{};state._scenarioSourceByBoss[bossId]='raidplan'}
     if(mode!=='silent-refresh'){current=bossId;if(typeof diff!=='undefined')diff=activeDiff;sceneIndex=0;playerSceneIndex=0;view='planner'}
     if(typeof save==='function')save();
@@ -942,10 +988,10 @@
   async function refreshCurrentIfLegacy(){
     try{
       if(typeof bossState!=='function'||typeof current==='undefined')return false;
-      const activeDiff=typeof diff!=='undefined'?diff:'heroic';const bs=bossState(current,activeDiff);if(!bs?.raidPlanScenes?.length||bs?.raidPlanImport?.renderer==='native-v17-offcanvas-vector-fidelity')return false;
+      const activeDiff=typeof diff!=='undefined'?diff:'heroic';const bs=bossState(current,activeDiff);if(!bs?.raidPlanScenes?.length||bs?.raidPlanImport?.renderer==='native-v18-v2-canvas-line-endpoints')return false;
       const name=text(bs?.raidPlanImport?.name||''),code=text(bs?.raidPlanImport?.sourceCode||'')||(name.match(/RaidPlan\s+([A-Za-z0-9_-]{8,64})/i)?.[1]||'');
       if(!code)return false;
-      const guard=`raidru-rp-refresh-${current}-${activeDiff}-${code}-0836`;if(typeof sessionStorage!=='undefined'&&sessionStorage.getItem(guard))return false;
+      const guard=`raidru-rp-refresh-${current}-${activeDiff}-${code}-0837`;if(typeof sessionStorage!=='undefined'&&sessionStorage.getItem(guard))return false;
       if(typeof sessionStorage!=='undefined')sessionStorage.setItem(guard,'1');
       const raw=await fetchUrl(code),result=convert(raw,{bossId:current,currentBoss:current});applyConverted(result,'silent-refresh',{difficulty:activeDiff});return true;
     }catch(e){console.warn('RaidPlan legacy refresh skipped',e);return false}

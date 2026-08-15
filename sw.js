@@ -1,10 +1,10 @@
-const CACHE='raidru-v0836-offcanvas-vector-fidelity';
+const CACHE='raidru-v0837-v2-canvas-line-endpoints';
 const ASSETS=[
 './',
 './index.html',
-'./styles.css?v=0.8.36',
-'./app.js?v=0.8.36',
-'./raidplan-importer.js?v=0.8.36',
+'./styles.css?v=0.8.37',
+'./app.js?v=0.8.37',
+'./raidplan-importer.js?v=0.8.37',
 './tools/raidplan-browser-export.js',
 './manifest.webmanifest',
 './icon.svg',
