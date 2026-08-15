@@ -1,11 +1,12 @@
-const CACHE='raidru-v095-raid-workspace-h1';
+const CACHE='raidru-v100-raid-ready';
 const ASSETS=[
 './',
 './index.html',
-'./styles.css?v=0.9.5-h1',
-'./app.js?v=0.9.5',
-'./raidplan-importer.js?v=0.9.5',
-'./workspace-095.js?v=0.9.5-h1',
+'./styles.css?v=1.0.0',
+'./app.js?v=1.0.0',
+'./raidplan-importer.js?v=1.0.0',
+'./workspace-095.js?v=1.0.0',
+'./raid-ready-100.js?v=1.0.0',
 './tools/raidplan-browser-export.js',
 './manifest.webmanifest',
 './icon.svg',

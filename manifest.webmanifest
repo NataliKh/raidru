@@ -1,12 +1,12 @@
 {
-  "name": "RaidRU 0.9.5 — Raid Workspace",
+  "name": "RaidRU 1.0 — Raid Ready",
   "short_name": "RaidRU",
   "start_url": "./",
   "scope": "./",
   "display": "standalone",
   "background_color": "#090c11",
   "theme_color": "#0b0e13",
-  "description": "Русские рейдовые тактики и визуальный планировщик расстановок для World of Warcraft. Версия 0.9.5: Raid Workspace, история, таймлайн, назначения и WCL Draft.",
+  "description": "Русские рейдовые тактики и визуальный планировщик World of Warcraft. Версия 1.0: Raid Ready, боевой режим, проверка плана, персональные назначения и снимки.",
   "icons": [
     {
       "src": "icon.svg",

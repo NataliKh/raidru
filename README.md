@@ -376,3 +376,9 @@ test-rp-offcanvas-vector.md
 - игровые/community assets — маркеры, роли и encounter visuals.
 
 RaidRU не является официальным продуктом Blizzard Entertainment, RaidPlan или Warcraft Logs.
+
+---
+
+## RaidRU 1.0 — Raid Ready
+
+Поверх Raid Workspace 0.9.5 подключён `raid-ready-100.js`. Он добавляет проверку готовности, режим «Рейд», сценарий сцены, «Мой план», персональный NSRT export и явные снимки с сравнением истории. Подробности: `RELEASE-1.0.md`.
