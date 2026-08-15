@@ -1,10 +1,10 @@
-const CACHE='raidru-v0835-flat-path-points';
+const CACHE='raidru-v0836-offcanvas-vector-fidelity';
 const ASSETS=[
 './',
 './index.html',
-'./styles.css?v=0.8.35',
-'./app.js?v=0.8.35',
-'./raidplan-importer.js?v=0.8.35',
+'./styles.css?v=0.8.36',
+'./app.js?v=0.8.36',
+'./raidplan-importer.js?v=0.8.36',
 './tools/raidplan-browser-export.js',
 './manifest.webmanifest',
 './icon.svg',

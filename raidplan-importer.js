@@ -1,11 +1,11 @@
-/* RaidRU v0.8.35 — RaidPlan import adapter
+/* RaidRU v0.8.36 — RaidPlan import adapter
  * Isolated from app.js on purpose: RaidPlan developer integration is not documented yet,
  * so transport/schema changes should stay in this file.
  */
 (function(){
   'use strict';
 
-  const VERSION='0.8.35';
+  const VERSION='0.8.36';
   const STEP_KEYS=['steps','scenes','pages','slides','frames'];
   const ITEM_KEYS=['objects','elements','items','components','drawings','entities','children','nodes'];
   const ROLE_WORDS={
@@ -366,8 +366,14 @@
   }
   function pointFor(o,tf,bossId,sceneName){
     const p=readXY(o);if(p.x==null||p.y==null)return null;let q=tf.map(p.x,p.y);
-    // RaidPlan text/markers are deliberately allowed around the arena. Do not snap them
-    // into RaidRU's playable mask: doing so destroys the original plan layout.
+    const nodeType=raidPlanNodeType(o);
+    // RaidPlan freehand/vector drawings may intentionally live partly outside the
+    // visible board. This is used by the planner as natural clipping. Never snap
+    // such objects back to the nearest edge: scene 4 of plan 9v3wssyjja56rttz is
+    // a real example where almost the whole white arrow is outside the top-left.
+    if(nodeType==='path'||nodeType==='line')return q;
+    // Tokens/text remain bounded so accidental source coordinates cannot make
+    // editable controls disappear completely from RaidRU.
     q.x=clamp(q.x,0.5,99.5);q.y=clamp(q.y,0.5,99.5);
     return q;
   }
@@ -784,7 +790,11 @@
       const suppressFill=et==='zone'&&suppressUnresolvedBackdropFill(o,geom,shapeLabel,alpha);if(suppressFill)report.suppressedBackdropFills=(report.suppressedBackdropFills||0)+1;
       const svgPath=nodeType==='path'?raidPlanSvgPath(o):null;
       if(nodeType==='path'&&svgPath)report.nativePaths=(report.nativePaths||0)+1;
-      return{kind:'effect',value:{id:`rpfx-${report.seq++}`,type:et,x:+clamp(geom.x,-10,110).toFixed(2),y:+clamp(geom.y,-10,110).toFixed(2),w:+geom.w.toFixed(2),h:+geom.h.toFixed(2),rot:+(geom.rot||0).toFixed(2),label:'',raidPlan:{native:true,hideLabel:true,nodeType,shapeKind:et==='zone'?shapeKind:null,shapeLabel,shapeFontCqw:font!=null?font/cw*100:null,labelFill:text(o?.attr?.textFill||o?.attr?.fontColor||o?.attr?.color||'#ffffff'),stroke:text(o?.attr?.stroke||'transparent'),fill:suppressFill?'transparent':(o?.attr?.fill||null),strokeWidth:strokeWidth??null,opacity:alpha.opacity,fillOpacity:alpha.fillOpacity,strokeOpacity:alpha.strokeOpacity,suppressedBackdropFill:suppressFill,svgPath,rx:finite(o?.attr?.rx??o?.attr?.radius),startType:text(o?.attr?.startType||'none'),endType:text(o?.attr?.endType||'none'),z:finite(o?.meta?.zIndex??o?.meta?.z??o?.zIndex??o?.z)??sourceOrder,sourceOrder}}};
+      const preserveOffCanvas=nodeType==='path'||nodeType==='line';
+      const effectX=preserveOffCanvas?clamp(geom.x,-500,600):clamp(geom.x,-10,110);
+      const effectY=preserveOffCanvas?clamp(geom.y,-500,600):clamp(geom.y,-10,110);
+      if(preserveOffCanvas&&(effectX<0||effectX>100||effectY<0||effectY>100))report.offCanvasVectors=(report.offCanvasVectors||0)+1;
+      return{kind:'effect',value:{id:`rpfx-${report.seq++}`,type:et,x:+effectX.toFixed(2),y:+effectY.toFixed(2),w:+geom.w.toFixed(2),h:+geom.h.toFixed(2),rot:+(geom.rot||0).toFixed(2),label:'',raidPlan:{native:true,hideLabel:true,nodeType,shapeKind:et==='zone'?shapeKind:null,shapeLabel,shapeFontCqw:font!=null?font/cw*100:null,labelFill:text(o?.attr?.textFill||o?.attr?.fontColor||o?.attr?.color||'#ffffff'),stroke:text(o?.attr?.stroke||'transparent'),fill:suppressFill?'transparent':(o?.attr?.fill||null),strokeWidth:strokeWidth??null,opacity:alpha.opacity,fillOpacity:alpha.fillOpacity,strokeOpacity:alpha.strokeOpacity,suppressedBackdropFill:suppressFill,svgPath,rx:finite(o?.attr?.rx??o?.attr?.radius),startType:text(o?.attr?.startType||'none'),endType:text(o?.attr?.endType||'none'),z:finite(o?.meta?.zIndex??o?.meta?.z??o?.zIndex??o?.z)??sourceOrder,sourceOrder}}};
     }
 
     if((strictV2&&['icon','ability','spell','status','effect','aura','sticker','encountericon','encounter_icon','encounter-icon','tooltip'].includes(nodeType))||(!strictV2&&/boss|enemy|npc|ability|spell|icon|sticker|encounter|object/.test(s))){
@@ -845,7 +855,7 @@
 
   function convert(raw,opts={}){
     const plan=findPlanRoot(raw),steps=findSteps(plan),bossId=opts.bossId||bossFromRaw(plan)||bossFromRaw(raw)||opts.currentBoss||'nekzali';
-    const report={version:VERSION,bossId,steps:steps.length,tokens:0,effects:0,text:0,skipped:0,hidden:0,suppressedBackdropFills:0,suppressedArenaVisuals:0,nativePaths:0,arenaVisuals:0,approximated:0,unsupported:[],modes:{},seq:1};
+    const report={version:VERSION,bossId,steps:steps.length,tokens:0,effects:0,text:0,skipped:0,hidden:0,suppressedBackdropFills:0,suppressedArenaVisuals:0,nativePaths:0,offCanvasVectors:0,arenaVisuals:0,approximated:0,unsupported:[],modes:{},seq:1};
     if(!steps.length)throw new Error('В данных RaidPlan не найден массив steps/scenes/pages.');
     const scenes=steps.map((step,i)=>{
       const name=stepName(step,i),items=flattenItems(step),tf=coordTransform(items,step,plan,bossId);report.modes[tf.mode]=(report.modes[tf.mode]||0)+1;
@@ -921,7 +931,7 @@
     const imported=result.scenes.map((scene,i)=>normalizeScene(deep({...scene,name:scene.name.replace(/^RaidPlan\s*·?\s*/i,'')}),bossId,i));
     bs.raidPlanScenes=imported;
     bs.raidPlanTimelineV3=typeof raidPlanTimelineForScenes==='function'?raidPlanTimelineForScenes(imported):imported.map((scene,i)=>({id:`rp-time-${i}`,time:i*35,label:scene.name,type:'move',scene:i,note:scene.note||''}));
-    bs.raidPlanImport={at:now,name:result.planName,report:result.report,mode:'separate-tab',sourceCode:result.rawRoot?.code||'',revision:result.rawRoot?.revision??null,renderer:'native-v16-flat-path-points',difficulty:activeDiff,sceneStats:imported.map(sc=>({tokens:(sc.tokens||[]).length,effects:(sc.effects||[]).length}))};
+    bs.raidPlanImport={at:now,name:result.planName,report:result.report,mode:'separate-tab',sourceCode:result.rawRoot?.code||'',revision:result.rawRoot?.revision??null,renderer:'native-v17-offcanvas-vector-fidelity',difficulty:activeDiff,sceneStats:imported.map(sc=>({tokens:(sc.tokens||[]).length,effects:(sc.effects||[]).length}))};
     if(typeof setScenarioSourceFor==='function')setScenarioSourceFor(bossId,'raidplan',activeDiff);else{state._scenarioSourceByBoss=state._scenarioSourceByBoss||{};state._scenarioSourceByBoss[bossId]='raidplan'}
     if(mode!=='silent-refresh'){current=bossId;if(typeof diff!=='undefined')diff=activeDiff;sceneIndex=0;playerSceneIndex=0;view='planner'}
     if(typeof save==='function')save();
@@ -932,10 +942,10 @@
   async function refreshCurrentIfLegacy(){
     try{
       if(typeof bossState!=='function'||typeof current==='undefined')return false;
-      const activeDiff=typeof diff!=='undefined'?diff:'heroic';const bs=bossState(current,activeDiff);if(!bs?.raidPlanScenes?.length||bs?.raidPlanImport?.renderer==='native-v16-flat-path-points')return false;
+      const activeDiff=typeof diff!=='undefined'?diff:'heroic';const bs=bossState(current,activeDiff);if(!bs?.raidPlanScenes?.length||bs?.raidPlanImport?.renderer==='native-v17-offcanvas-vector-fidelity')return false;
       const name=text(bs?.raidPlanImport?.name||''),code=text(bs?.raidPlanImport?.sourceCode||'')||(name.match(/RaidPlan\s+([A-Za-z0-9_-]{8,64})/i)?.[1]||'');
       if(!code)return false;
-      const guard=`raidru-rp-refresh-${current}-${activeDiff}-${code}-0835`;if(typeof sessionStorage!=='undefined'&&sessionStorage.getItem(guard))return false;
+      const guard=`raidru-rp-refresh-${current}-${activeDiff}-${code}-0836`;if(typeof sessionStorage!=='undefined'&&sessionStorage.getItem(guard))return false;
       if(typeof sessionStorage!=='undefined')sessionStorage.setItem(guard,'1');
       const raw=await fetchUrl(code),result=convert(raw,{bossId:current,currentBoss:current});applyConverted(result,'silent-refresh',{difficulty:activeDiff});return true;
     }catch(e){console.warn('RaidPlan legacy refresh skipped',e);return false}
