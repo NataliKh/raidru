@@ -1,0 +1,12 @@
+const fs=require('fs'),assert=require('assert');
+const app=fs.readFileSync('app.js','utf8'),client=fs.readFileSync('wcl-safe-200.js','utf8'),html=fs.readFileSync('index.html','utf8'),sw=fs.readFileSync('sw.js','utf8');
+assert(app.includes('function replayPrimaryMapId(data)'),'mapID resolver missing');
+assert(app.includes("mapSource='wcl'"),'WCL map source marker missing');
+assert(app.includes('mapID:+(p.mapID??p.mapId??0)||null'),'position mapID must survive normalization');
+assert(app.includes('replayWclMapConfig'),'WCL map config missing');
+assert(app.includes('class=\"arenaMapImage raidMapFull\"'),'Replay must render WCL raid map asset');
+assert(app.includes("delete template.raidPlan;template.mapSource='wcl'"),'WCL draft must not inherit RaidPlan background');
+assert(client.includes("r.mapId=replayPrimaryMapId(r.data);r.mapSource=r.mapId?'wcl':'fallback'"),'URL import must pin WCL map source');
+assert(html.includes('app.js?v=2.0.2-wcl-map-fix')&&html.includes('wcl-safe-200.js?v=2.0.2-wcl-map-fix'),'cache bust missing');
+assert(sw.includes("raidru-v202-wcl-map-fix"),'service worker version missing');
+console.log('WCL map priority 2.0.2 static checks: OK');

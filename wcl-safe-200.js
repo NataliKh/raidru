@@ -2,7 +2,7 @@
  * Direct Warcraft Logs URL -> cached, quota-aware Worker replay.
  */
 (() => {
-  const VERSION='2.0.1-wcl-transport';
+  const VERSION='2.0.2-wcl-map-fix';
   const API=(window.RAIDRU_WCL_API||'https://raidru-raidplan.raidru-wcl.workers.dev').replace(/\/$/,'');
   let ui={state:'idle',message:'',quota:null,report:null,url:'',fight:null,loops:0};
 
@@ -67,8 +67,8 @@
       if(!res.ok){setUi('error',b.error==='wcl_not_configured'?'Нужно один раз добавить WCL OAuth secrets в Cloudflare Worker.':`WCL: ${b.message||b.error||'ошибка загрузки'}`);return}
       const raw=b,detected=bossFromWcl(raw?.source?.bossId||raw?.fight?.bossId);
       if(detected&&detected!==current)chooseBoss(detected);
-      const r=replayState();r.url=ui.url||inputValue();r.source='wcl-url';r.data=enrichReplay(normalizeReplayPayload(raw));replayClock=0;autoCalibrateReplay();save();ui.quota=raw.quota||ui.quota;
-      setUi('done',`${raw.cache==='hit'?'Из кэша — WCL API не потрачен.':'Replay загружен и закэширован.'} ${r.data.actors?.length||0} игроков · ${(r.data.positions?.length||0).toLocaleString('ru-RU')} точек.`,{fight});render();return;
+      const r=replayState();r.url=ui.url||inputValue();r.source='wcl-url';r.data=enrichReplay(normalizeReplayPayload(raw));r.mapId=replayPrimaryMapId(r.data);r.mapSource=r.mapId?'wcl':'fallback';replayClock=0;autoCalibrateReplay();save();ui.quota=raw.quota||ui.quota;
+      setUi('done',`${raw.cache==='hit'?'Из кэша — WCL API не потрачен.':'Replay загружен и закэширован.'} ${r.data.actors?.length||0} игроков · ${(r.data.positions?.length||0).toLocaleString('ru-RU')} точек${r.mapId?` · WCL mapID ${r.mapId}`:''}.`,{fight});render();return;
     }
     setUi('error','Загрузка разбита на слишком много порций. Нажми «Продолжить» — уже полученные страницы останутся в кэше.');
   }
@@ -97,7 +97,7 @@
   }
 
   const coreRender200=render;
-  render=function(){coreRender200();decorateReplay200();const version=document.querySelector('aside .version');if(version)version.textContent='RaidRU 2.0 preview · WCL Safe Import'};
+  render=function(){coreRender200();decorateReplay200();const version=document.querySelector('aside .version');if(version)version.textContent='RaidRU 2.0.2 preview · WCL Map Fix'};
   loadWclReplay=loadWclReplay200;
   Object.assign(window,{loadWclReplay200,wclPickFight200});
   render();
