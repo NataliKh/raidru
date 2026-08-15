@@ -1,10 +1,10 @@
-const CACHE='raidru-v0833-vector-arrow-stroke-safe';
+const CACHE='raidru-v0834-fabric-transform-safe';
 const ASSETS=[
 './',
 './index.html',
-'./styles.css?v=0.8.33',
-'./app.js?v=0.8.33',
-'./raidplan-importer.js?v=0.8.33',
+'./styles.css?v=0.8.34',
+'./app.js?v=0.8.34',
+'./raidplan-importer.js?v=0.8.34',
 './tools/raidplan-browser-export.js',
 './manifest.webmanifest',
 './icon.svg',

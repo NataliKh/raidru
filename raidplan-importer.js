@@ -1,11 +1,11 @@
-/* RaidRU v0.8.33 — RaidPlan import adapter
+/* RaidRU v0.8.34 — RaidPlan import adapter
  * Isolated from app.js on purpose: RaidPlan developer integration is not documented yet,
  * so transport/schema changes should stay in this file.
  */
 (function(){
   'use strict';
 
-  const VERSION='0.8.33';
+  const VERSION='0.8.34';
   const STEP_KEYS=['steps','scenes','pages','slides','frames'];
   const ITEM_KEYS=['objects','elements','items','components','drawings','entities','children','nodes'];
   const ROLE_WORDS={
@@ -234,11 +234,12 @@
     return{x,y};
   }
   function nativeScale(o){
-    // RaidPlan has used both {scale:{x,y}} and scalar scale values across planner revisions.
-    // Treat all variants as equivalent; ignoring scalar scale is what made small spell icons huge.
-    const scalar=finite(deepPick(o,[['meta','scale'],['scale']]));
-    const sx=finite(deepPick(o,[['meta','scale','x'],['scale','x'],['meta','scaleX'],['scaleX']]))??scalar??1;
-    const sy=finite(deepPick(o,[['meta','scale','y'],['scale','y'],['meta','scaleY'],['scaleY']]))??scalar??1;
+    // RaidPlan v2 keeps most Fabric visual transforms under attr, while older
+    // revisions used meta/top-level fields. Read all known locations. Missing
+    // attr.scaleX/scaleY was one reason vector objects lost their real geometry.
+    const scalar=finite(deepPick(o,[['meta','scale'],['attr','scale'],['data','scale'],['scale']]));
+    const sx=finite(deepPick(o,[['meta','scale','x'],['attr','scale','x'],['data','scale','x'],['scale','x'],['meta','scaleX'],['attr','scaleX'],['data','scaleX'],['scaleX']]))??scalar??1;
+    const sy=finite(deepPick(o,[['meta','scale','y'],['attr','scale','y'],['data','scale','y'],['scale','y'],['meta','scaleY'],['attr','scaleY'],['data','scaleY'],['scaleY']]))??scalar??1;
     return{sx:Math.abs(sx)||1,sy:Math.abs(sy)||1};
   }
   function readWH(o){
@@ -249,7 +250,17 @@
     return{w,h};
   }
   function readRotation(o){
-    let r=finite(deepPick(o,[['rotation'],['rot'],['angle'],['meta','rotation'],['meta','rot'],['meta','angle'],['degrees'],['direction']]))||0;
+    // RaidPlan v2 serializes Fabric angle on attr for lines/drawings. Earlier
+    // imports only inspected top-level/meta values, so rotated arrow strokes
+    // were rendered as horizontal segments. Prefer explicit degree-like angle
+    // fields but keep the legacy radian compatibility for small values.
+    let r=finite(deepPick(o,[
+      ['attr','rotation'],['attr','rot'],['attr','angle'],
+      ['data','rotation'],['data','rot'],['data','angle'],
+      ['style','rotation'],['style','rot'],['style','angle'],
+      ['transform','rotation'],['transform','rot'],['transform','angle'],
+      ['rotation'],['rot'],['angle'],['meta','rotation'],['meta','rot'],['meta','angle'],['degrees'],['direction']
+    ]))||0;
     if(Math.abs(r)<=Math.PI*2+.02&&Math.abs(r)>.001)r=r*180/Math.PI;
     return r;
   }
@@ -361,8 +372,8 @@
     return q;
   }
   function lineFromEndpoints(o,tf,bossId,sceneName){
-    const a={x:finite(pick(o,['x1','startX','fromX'])),y:finite(pick(o,['y1','startY','fromY']))};
-    const b={x:finite(pick(o,['x2','endX','toX'])),y:finite(pick(o,['y2','endY','toY']))};
+    const a={x:finite(deepPick(o,[['x1'],['startX'],['fromX'],['attr','x1'],['attr','startX'],['attr','fromX']])),y:finite(deepPick(o,[['y1'],['startY'],['fromY'],['attr','y1'],['attr','startY'],['attr','fromY']]))};
+    const b={x:finite(deepPick(o,[['x2'],['endX'],['toX'],['attr','x2'],['attr','endX'],['attr','toX']])),y:finite(deepPick(o,[['y2'],['endY'],['toY'],['attr','y2'],['attr','endY'],['attr','toY']]))};
     if([a.x,a.y,b.x,b.y].some(v=>v==null))return null;
     const p1=tf.map(a.x,a.y),p2=tf.map(b.x,b.y),cx=(p1.x+p2.x)/2,cy=(p1.y+p2.y)/2;
     const w=Math.hypot(p2.x-p1.x,p2.y-p1.y),rot=Math.atan2(p2.y-p1.y,p2.x-p1.x)*180/Math.PI;
@@ -519,7 +530,18 @@
   function tokenType(role,meta){if(role)return role;if(meta?.role==='tank')return'tank';if(meta?.role==='healer')return'healer';return meta?.range||'ranged'}
   function raidPlanNodeType(o){return text(o?.type||o?.kind||o?.objectType).toLowerCase()}
   function fabricLineGeometry(o,tf){
-    const ps=pointsOf(o),size=tf?.canvas||null;
+    const size=tf?.canvas||null,p=readXY(o),nwh=nativeSize(o,tf),rot=readRotation(o);
+
+    // RaidPlan v2/Fabric line nodes are object-local vectors: meta.pos is the
+    // object position, meta.size is its box and attr.angle is the object
+    // rotation. Treating local points/x1/x2 as absolute canvas coordinates
+    // flattens diagonal hand-drawn arrows into horizontal fragments.
+    if(o?.meta?.pos&&p.x!=null&&p.y!=null&&(nwh.w!=null||nwh.h!=null)){
+      const q=tf.map(p.x,p.y);
+      return{x:q.x,y:q.y,w:nwh.w??Math.max(.2,nwh.h||.2),h:nwh.h??5,rot};
+    }
+
+    const ps=pointsOf(o);
     if(ps.length>=2){
       const a=ps[0],b=ps[ps.length-1];
       const looksAbsolute=!size||(a.x>=-size.w*.15&&a.x<=size.w*1.15&&b.x>=-size.w*.15&&b.x<=size.w*1.15&&a.y>=-size.h*.15&&a.y<=size.h*1.15&&b.y>=-size.h*.15&&b.y<=size.h*1.15);
@@ -528,7 +550,7 @@
         // CSS width is relative to arena WIDTH. For a 1200x675 RaidPlan canvas,
         // angle/length must therefore be calculated in source pixels, not between X/Y percentages.
         const widthPct=size?Math.hypot(dx,dy)*(100/size.w):Math.hypot(p2.x-p1.x,p2.y-p1.y);
-        return{x:(p1.x+p2.x)/2,y:(p1.y+p2.y)/2,w:widthPct,h:5,rot:Math.atan2(dy,dx)*180/Math.PI};
+        return{x:(p1.x+p2.x)/2,y:(p1.y+p2.y)/2,w:widthPct,h:5,rot:Math.atan2(dy,dx)*180/Math.PI+rot};
       }
     }
     return null;
@@ -877,7 +899,7 @@
     const imported=result.scenes.map((scene,i)=>normalizeScene(deep({...scene,name:scene.name.replace(/^RaidPlan\s*·?\s*/i,'')}),bossId,i));
     bs.raidPlanScenes=imported;
     bs.raidPlanTimelineV3=typeof raidPlanTimelineForScenes==='function'?raidPlanTimelineForScenes(imported):imported.map((scene,i)=>({id:`rp-time-${i}`,time:i*35,label:scene.name,type:'move',scene:i,note:scene.note||''}));
-    bs.raidPlanImport={at:now,name:result.planName,report:result.report,mode:'separate-tab',sourceCode:result.rawRoot?.code||'',revision:result.rawRoot?.revision??null,renderer:'native-v14-vector-arrow-stroke-safe',difficulty:activeDiff,sceneStats:imported.map(sc=>({tokens:(sc.tokens||[]).length,effects:(sc.effects||[]).length}))};
+    bs.raidPlanImport={at:now,name:result.planName,report:result.report,mode:'separate-tab',sourceCode:result.rawRoot?.code||'',revision:result.rawRoot?.revision??null,renderer:'native-v15-fabric-transform-safe',difficulty:activeDiff,sceneStats:imported.map(sc=>({tokens:(sc.tokens||[]).length,effects:(sc.effects||[]).length}))};
     if(typeof setScenarioSourceFor==='function')setScenarioSourceFor(bossId,'raidplan',activeDiff);else{state._scenarioSourceByBoss=state._scenarioSourceByBoss||{};state._scenarioSourceByBoss[bossId]='raidplan'}
     if(mode!=='silent-refresh'){current=bossId;if(typeof diff!=='undefined')diff=activeDiff;sceneIndex=0;playerSceneIndex=0;view='planner'}
     if(typeof save==='function')save();
@@ -888,7 +910,7 @@
   async function refreshCurrentIfLegacy(){
     try{
       if(typeof bossState!=='function'||typeof current==='undefined')return false;
-      const activeDiff=typeof diff!=='undefined'?diff:'heroic';const bs=bossState(current,activeDiff);if(!bs?.raidPlanScenes?.length||bs?.raidPlanImport?.renderer==='native-v14-vector-arrow-stroke-safe')return false;
+      const activeDiff=typeof diff!=='undefined'?diff:'heroic';const bs=bossState(current,activeDiff);if(!bs?.raidPlanScenes?.length||bs?.raidPlanImport?.renderer==='native-v15-fabric-transform-safe')return false;
       const name=text(bs?.raidPlanImport?.name||''),code=text(bs?.raidPlanImport?.sourceCode||'')||(name.match(/RaidPlan\s+([A-Za-z0-9_-]{8,64})/i)?.[1]||'');
       if(!code)return false;
       const guard=`raidru-rp-refresh-${current}-${activeDiff}-${code}-0833`;if(typeof sessionStorage!=='undefined'&&sessionStorage.getItem(guard))return false;
