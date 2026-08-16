@@ -1,16 +1,17 @@
-const CACHE='raidru-v208-wcl-workspace';
+const CACHE='raidru-v209-mechanics-analysis';
 const ASSETS=[
 './',
 './index.html',
-'./styles.css?v=2.0.8-wcl-workspace',
-'./app.js?v=2.0.8-wcl-workspace',
+'./styles.css?v=2.0.9-mechanics',
+'./app.js?v=2.0.9-mechanics',
 './raidplan-importer.js?v=1.0.0',
 './workspace-095.js?v=1.0.0',
 './raid-ready-100.js?v=1.0.0',
 './ui-101.js?v=1.0.1',
 './tools/raidplan-browser-export.js',
-'./wcl-safe-200.js?v=2.0.8-wcl-workspace',
-'./wcl-workspace-208.js?v=2.0.8-wcl-workspace',
+'./wcl-safe-200.js?v=2.0.9-mechanics',
+'./wcl-workspace-208.js?v=2.0.9-mechanics',
+'./wcl-mechanics-209.js?v=2.0.9-mechanics',
 './manifest.webmanifest',
 './icon.svg',
 './assets/maps/2606-map.webp',

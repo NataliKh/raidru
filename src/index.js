@@ -151,7 +151,7 @@ async function wclToken(env) {
       'Authorization': `Basic ${basic}`,
       'Content-Type': 'application/x-www-form-urlencoded',
       'Accept': 'application/json',
-      'User-Agent': 'RaidRU/2.0.8 WCL Workspace'
+      'User-Agent': 'RaidRU/2.0.9 Mechanics Analysis'
     },
     body: 'grant_type=client_credentials'
   });
@@ -178,7 +178,7 @@ async function wclGraphql(env, query, variables = {}) {
       'Authorization': `Bearer ${token}`,
       'Content-Type': 'application/json',
       'Accept': 'application/json',
-      'User-Agent': 'RaidRU/2.0.8 WCL Workspace'
+      'User-Agent': 'RaidRU/2.0.9 Mechanics Analysis'
     },
     body: JSON.stringify({ query, variables })
   });
@@ -944,6 +944,179 @@ async function buildReplay(env, code, fightParam, requestedMode = 'smart') {
   await cacheDelete(progressCacheName(code, fight.id));
   return { status: 200, body };
 }
+
+// 2.0.9 Mechanics Pack -------------------------------------------------------
+// Replay coordinates and mechanics are intentionally fetched independently.
+// The mechanics request has no includeResources and asks WCL only for the event
+// families needed by a raid leader: hostile casts/debuffs/summons plus deaths.
+// One user click = at most one GraphQL request; incomplete categories resume from
+// cached cursors on the next click.
+function mechanicsEventLimit(env) {
+  const n = Number(env?.WCL_MECHANICS_EVENT_LIMIT);
+  return Number.isInteger(n) && n >= 500 && n <= 5000 ? n : 2000;
+}
+
+function mechanicsQuery(fightId, cursors = {}) {
+  const startArg = (name) => numeric(cursors?.[name]) != null ? `startTime: $${name}Start,` : '';
+  const varArg = (name) => numeric(cursors?.[name]) != null ? `, $${name}Start: Float!` : '';
+  return `
+query RaidRUMechanics($code: String!, $limit: Int!, $needCasts: Boolean!, $needDebuffs: Boolean!, $needSummons: Boolean!, $needDeaths: Boolean!${varArg('casts')}${varArg('debuffs')}${varArg('summons')}${varArg('deaths')}) {
+  rateLimitData { limitPerHour pointsSpentThisHour pointsResetIn }
+  reportData {
+    report(code: $code) {
+      code title startTime endTime
+      fights {
+        id encounterID originalEncounterID name difficulty kill startTime endTime inProgress size
+        maps { id }
+      }
+      masterData {
+        actors { id name type subType }
+        abilities { gameID name }
+      }
+      casts: events(dataType: Casts, hostilityType: 1, fightIDs: [${fightId}], ${startArg('casts')} limit: $limit) @include(if: $needCasts) {
+        data nextPageTimestamp
+      }
+      debuffs: events(dataType: Debuffs, hostilityType: 0, fightIDs: [${fightId}], ${startArg('debuffs')} limit: $limit) @include(if: $needDebuffs) {
+        data nextPageTimestamp
+      }
+      summons: events(dataType: Summons, hostilityType: 1, fightIDs: [${fightId}], ${startArg('summons')} limit: $limit) @include(if: $needSummons) {
+        data nextPageTimestamp
+      }
+      deaths: events(dataType: Deaths, fightIDs: [${fightId}], ${startArg('deaths')} limit: $limit) @include(if: $needDeaths) {
+        data nextPageTimestamp
+      }
+    }
+  }
+}`;
+}
+
+function mechanicsProgressName(code, fightId) { return `wcl/mechanics-v209-progress/${code}/${fightId}`; }
+function mechanicsFinalName(code, fightId) { return `wcl/mechanics-v209/${code}/${fightId}`; }
+
+function mechanicsAbility(e) {
+  return safeInt(e?.abilityGameID ?? e?.abilityID ?? e?.ability?.gameID ?? e?.ability?.id) || 0;
+}
+
+function compactMechanicEvents(rows, fightStart, playerIds, actorIds, abilityNames, family) {
+  const out = [];
+  for (const e of Array.isArray(rows) ? rows : []) {
+    const ts = numeric(e?.timestamp) ?? numeric(e?.t);
+    if (ts == null) continue;
+    const type = String(e?.type || family || '').toLowerCase();
+    const sourceID = safeInt(e?.sourceID ?? e?.source?.id ?? e?.resourceActor1) || null;
+    const targetID = safeInt(e?.targetID ?? e?.target?.id ?? e?.resourceActor2) || null;
+    const abilityID = mechanicsAbility(e);
+    const sourceFriendly = sourceID != null ? playerIds.has(String(sourceID)) : false;
+    const targetFriendly = targetID != null ? playerIds.has(String(targetID)) : false;
+    if ((type === 'cast' || type === 'begincast') && abilityID === 1) continue; // melee spam
+    if ((family === 'casts' || family === 'summons') && sourceFriendly) continue;
+    if (family === 'debuffs' && (!targetFriendly || sourceFriendly)) continue;
+    out.push({
+      t: Math.max(0, ts - fightStart), type,
+      sourceID, targetID,
+      sourceIsFriendly: sourceFriendly,
+      targetIsFriendly: targetFriendly,
+      sourceName: sourceID != null ? (actorIds.get(String(sourceID)) || '') : '',
+      targetName: targetID != null ? (actorIds.get(String(targetID)) || '') : '',
+      abilityID: abilityID || null,
+      abilityName: e?.abilityName || e?.ability?.name || e?.name || abilityNames.get(String(abilityID)) || '',
+      stack: safeInt(e?.stack) || null,
+      family
+    });
+  }
+  return out;
+}
+
+function dedupeMechanicTimeline(events) {
+  const out = [], seen = new Set();
+  for (const e of (Array.isArray(events) ? events : []).sort((a,b)=>(a.t||0)-(b.t||0))) {
+    const key = [Math.round(Number(e.t)||0), e.type||'', e.sourceID||0, e.targetID||0, e.abilityID||0, e.family||''].join(':');
+    if (seen.has(key)) continue;
+    seen.add(key); out.push(e);
+  }
+  return out;
+}
+
+function mechanicsPack(meta, fight, progress, quota, { cache='miss', partial=false } = {}) {
+  const timeline = dedupeMechanicTimeline(progress?.timeline || []);
+  const counts = {};
+  for (const e of timeline) counts[e.family || e.type || 'other'] = (counts[e.family || e.type || 'other'] || 0) + 1;
+  const cursors = progress?.cursors || {};
+  return {
+    format: 'raidru-wcl-mechanics', version: 1, createdAt: new Date().toISOString(), cache,
+    partial, complete: !partial,
+    source: { reportCode: meta.code, fight: String(fight.id), bossId: fight.encounterID || fight.originalEncounterID || 0 },
+    report: { code: meta.code, title: meta.title || '' },
+    fight: { id:fight.id, name:fight.name, bossId:fight.encounterID || fight.originalEncounterID || 0, startTime:fight.startTime, endTime:fight.endTime, duration:Math.max(1,fight.endTime-fight.startTime), difficulty:fight.difficulty, kill:fight.kill },
+    actors: meta.actors || [], timeline, cursors,
+    stats: { total: timeline.length, casts: counts.casts||0, debuffs: counts.debuffs||0, summons: counts.summons||0, deaths: counts.deaths||0, pages:Number(progress?.pages)||0, eventLimit:Number(progress?.eventLimit)||0 },
+    quota: normalizeQuota(quota),
+    message: partial ? 'Механики уже доступны. Некоторые категории имеют продолжение; «Догрузить» сделает ещё один WCL-запрос.' : 'Mechanics Pack готов и сохранён в серверном кэше.'
+  };
+}
+
+async function buildMechanics(env, code, fightId) {
+  const finalName = mechanicsFinalName(code, fightId);
+  const final = await cacheGet(finalName);
+  if (final) return { status:200, body:{...final, cache:'hit'} };
+
+  const backoff = await backoffState(code, fightId);
+  if (backoff?.until > Date.now() && backoff.reason === 'wcl_rate_limited') {
+    return { status:202, body:{ error:'wcl_rate_limited', retryAfter:Math.ceil((backoff.until-Date.now())/1000), quota:backoff.quota||null } };
+  }
+
+  const saved = await cacheGet(mechanicsProgressName(code, fightId));
+  const cursors = saved?.cursors || {};
+  const done = saved?.done || {};
+  const variables = { code, limit: mechanicsEventLimit(env), needCasts:!done.casts, needDebuffs:!done.debuffs, needSummons:!done.summons, needDeaths:!done.deaths };
+  for (const k of ['casts','debuffs','summons','deaths']) if (numeric(cursors[k]) != null) variables[`${k}Start`] = numeric(cursors[k]);
+
+  let data;
+  try { data = await wclGraphql(env, mechanicsQuery(fightId, cursors), variables); }
+  catch (e) {
+    if (e instanceof WclRateError || e?.code === 'wcl_rate_limited') {
+      const b = await setBackoff(code, fightId, e.retryAfter, 'wcl_rate_limited', null);
+      return { status:202, body:{ error:'wcl_rate_limited', retryAfter:b.retryAfter, cachedProgress:!!saved } };
+    }
+    throw e;
+  }
+
+  const quota = rememberQuota(data?.rateLimitData);
+  const reportRaw = data?.reportData?.report;
+  if (!reportRaw) { const e=new Error('WCL_REPORT_NOT_FOUND'); e.code='wcl_report_not_found'; throw e; }
+  const meta = publicReport(reportRaw, data.rateLimitData, 'miss');
+  const fight = selectFight(meta, String(fightId));
+  if (!fight) return { status:404, body:{ error:'fight_not_found', fights:meta.fights } };
+  await cachePut(`wcl/report/${code}`, meta, fight.inProgress ? REPORT_TTL : COMPLETE_FIGHT_TTL);
+
+  const actorIds = new Map((meta.actors||[]).map(a=>[String(a.id),a.name||'']));
+  const abilityNames = new Map((reportRaw?.masterData?.abilities||[]).map(a=>[String(a.gameID||a.id||''),a.name||'']));
+  const playerIds = new Set((meta.actors||[]).filter(a=>String(a.type).toLowerCase()==='player').map(a=>String(a.id)));
+  const timeline = Array.isArray(saved?.timeline) ? [...saved.timeline] : [];
+  const nextCursors = {...cursors}, nextDone={...done};
+  let partial = false;
+  for (const family of ['casts','debuffs','summons','deaths']) {
+    const page = reportRaw?.[family];
+    if (done[family]) continue;
+    if (!page || !Array.isArray(page.data)) { partial=true; continue; }
+    timeline.push(...compactMechanicEvents(page.data, fight.startTime, playerIds, actorIds, abilityNames, family));
+    const next = numeric(page.nextPageTimestamp);
+    if (next != null && next > (numeric(cursors[family]) ?? -1) && next <= fight.endTime) { nextCursors[family]=next; partial=true; }
+    else { delete nextCursors[family]; nextDone[family]=true; }
+  }
+  partial = ['casts','debuffs','summons','deaths'].some(k=>!nextDone[k]);
+  const progress = { timeline:dedupeMechanicTimeline(timeline), cursors:nextCursors, done:nextDone, pages:(Number(saved?.pages)||0)+1, eventLimit:mechanicsEventLimit(env), fightStart:fight.startTime, fightEnd:fight.endTime };
+  const ttl = fight.inProgress ? LIVE_FIGHT_TTL : COMPLETE_FIGHT_TTL;
+  if (partial) {
+    await cachePut(mechanicsProgressName(code, fightId), progress, ttl);
+    return { status:206, body:mechanicsPack(meta,fight,progress,quota,{partial:true}) };
+  }
+  const body = mechanicsPack(meta,fight,progress,quota,{partial:false});
+  await cachePut(finalName, body, ttl);
+  await cacheDelete(mechanicsProgressName(code, fightId));
+  return { status:200, body };
+}
+
 function wclErrorBody(e) {
   return { error: e?.code || 'wcl_unavailable', message: e?.message || 'Warcraft Logs unavailable', status: e?.status || null };
 }
@@ -955,11 +1128,11 @@ export default {
     if (origin && !ALLOWED_ORIGINS.has(origin)) return new Response(JSON.stringify({ error: 'origin_not_allowed', origin, allowed: [...ALLOWED_ORIGINS] }), { status: 403, headers: { 'Content-Type': 'application/json; charset=utf-8', ...cors(origin, { echo: true }), 'X-RaidRU-Origin': origin } });
 
     if (url.pathname === '/wcl/ping') {
-      return json({ ok: true, service: 'raidru-edge', version: '2.0.8-wcl-workspace', origin: origin || null, wclConfigured: wclConfigured(env) }, 200, origin, { 'X-RaidRU-WCL-Safe': '1' });
+      return json({ ok: true, service: 'raidru-edge', version: '2.0.9-mechanics-analysis', origin: origin || null, wclConfigured: wclConfigured(env) }, 200, origin, { 'X-RaidRU-WCL-Safe': '1' });
     }
 
     if (url.pathname === '/health') {
-      return json({ ok: true, service: 'raidru-edge', version: '2.0.8-wcl-workspace', wclConfigured: wclConfigured(env), features: ['raidplan', 'wcl-report', 'wcl-one-shot-replay', 'wcl-browser-v2-envelope', 'single-query-fast-path', 'fast-casts-sampler', 'partial-replay', '429-lock-only', 'resume-cache'] }, 200, origin);
+      return json({ ok: true, service: 'raidru-edge', version: '2.0.9-mechanics-analysis', wclConfigured: wclConfigured(env), features: ['raidplan', 'wcl-report', 'wcl-one-shot-replay', 'wcl-browser-v2-envelope', 'wcl-mechanics-pack', 'single-query-fast-path', 'fast-casts-sampler', 'partial-replay', '429-lock-only', 'resume-cache'] }, 200, origin);
     }
 
     if (url.pathname === '/raidplan' && request.method === 'GET') {
@@ -1007,6 +1180,20 @@ export default {
           return json({ error: 'wcl_rate_limited', retryAfter: b.retryAfter, cachedProgress: true }, 202, origin);
         }
         return json(wclErrorBody(e), e?.code === 'wcl_not_configured' ? 503 : 502, origin);
+      }
+    }
+
+
+    if (url.pathname === '/wcl/mechanics' && request.method === 'GET') {
+      const code=(url.searchParams.get('code')||'').trim(), fight=safeInt((url.searchParams.get('fight')||'').trim());
+      if (!validCode(code)) return json({error:'invalid_report_code'},400,origin);
+      if (!fight) return json({error:'invalid_fight'},400,origin);
+      const key=`mechanics:${code}:${fight}`;
+      try {
+        const result=await withInflight(key,()=>buildMechanics(env,code,fight));
+        return json(result.body,result.status,origin,{'X-RaidRU-WCL-Safe':'1','X-RaidRU-Mechanics':'v1'});
+      } catch(e) {
+        return json(wclErrorBody(e),e?.code==='wcl_not_configured'?503:502,origin);
       }
     }
 

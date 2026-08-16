@@ -2,7 +2,7 @@
  * Direct Warcraft Logs URL -> cached, quota-aware Worker replay.
  */
 (() => {
-  const VERSION='2.0.8-wcl-workspace';
+  const VERSION='2.0.9-mechanics-analysis';
   const API=(window.RAIDRU_WCL_API||'https://raidru-raidplan.raidru-wcl.workers.dev').replace(/\/$/,'');
   let ui={state:'idle',message:'',quota:null,report:null,url:'',fight:null,code:null,loops:0,partial:false,quality:null};
 
@@ -141,7 +141,7 @@
   }
 
   const coreRender200=render;
-  render=function(){coreRender200();decorateReplay200();const version=document.querySelector('aside .version');if(version)version.textContent='RaidRU 2.0.8 preview · WCL Workspace'};
+  render=function(){coreRender200();decorateReplay200();const version=document.querySelector('aside .version');if(version)version.textContent='RaidRU 2.0.9 · Mechanics Analysis'};
   loadWclReplay=loadWclReplay200;
   Object.assign(window,{loadWclReplay200,wclPickFight200,loadWclFight200,clearWclReplay200,wclUiState200:()=>ui});
   render();

@@ -15,6 +15,6 @@ ok(ui.includes('▶ Replay')&&ui.includes('✦ Разбор')&&ui.includes('▦ 
 ok(ui.includes('Экспорт Replay v2 JSON'),'diagnostic export missing');
 ok(ui.includes('function analysis208'),'local analysis missing');
 ok(css.includes('.wclFightShell208')&&css.includes('.wclMetricGrid208'),'WCL workspace styles missing');
-ok(html.includes('wcl-workspace-208.js?v=2.0.8-wcl-workspace'),'workspace script missing');
-ok(sw.includes("raidru-v208-wcl-workspace")&&sw.includes('wcl-workspace-208.js?v=2.0.8-wcl-workspace'),'service worker cache missing');
+ok(/wcl-workspace-208\.js\?v=2\.0\.(8-wcl-workspace|9-mechanics)/.test(html),'workspace script missing');
+ok(/raidru-v20(8-wcl-workspace|9-mechanics-analysis)/.test(sw)&&/wcl-workspace-208\.js\?v=2\.0\.(8-wcl-workspace|9-mechanics)/.test(sw),'service worker cache missing');
 console.log('WCL Workspace 2.0.8 regression checks: OK');

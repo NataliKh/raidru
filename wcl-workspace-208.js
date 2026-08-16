@@ -48,6 +48,7 @@
     return {frames,moments:moments.sort((a,b)=>a.t-b.t),maxSpread};
   }
   function analysisHtml208(d){
+    if(typeof window.wclMechanicsAnalysis209==='function')return window.wclMechanicsAnalysis209(d);
     const a=analysis208(d),s=source208(d);return `<div class="wclAnalysis208"><div class="wclMetricGrid208"><article><small>ДЛИТЕЛЬНОСТЬ</small><b>${fmtTime(s.duration/1000)}</b><span>${replayActors(d).length} игроков</span></article><article><small>ПОЗИЦИИ</small><b>${count208(d.positions?.length)}</b><span>координатных точек</span></article><article><small>РАЗБРОС РЕЙДА</small><b>${a.maxSpread.toFixed(1)}%</b><span>максимум по траектории</span></article><article><small>КЛЮЧЕВЫЕ СДВИГИ</small><b>${a.moments.length}</b><span>найдено автоматически</span></article></div><section class="wclMoments208"><div><small>FIGHT INTELLIGENCE · PREVIEW</small><h3>Ключевые моменты движения</h3><p>Разбор работает локально по уже загруженным координатам и не расходует WCL API.</p></div>${a.moments.length?`<div class="wclMomentList208">${a.moments.map(m=>`<button onclick="setReplayTime(${Math.round(m.t)});setWclTab208('replay')"><time>${fmtTime(m.t/1000)}</time><span><b>${esc(m.label)}</b><small>движение ${m.move.toFixed(1)}% · разброс ${m.spread.toFixed(1)}%</small></span><em>▶</em></button>`).join('')}</div>`:'<div class="wclAnalysisEmpty208">Недостаточно координат для уверенного поиска движений.</div>'}</section></div>`;
   }
   function planHtml208(d){return `<div class="wclPlan208"><section><small>WCL → RAIDRU</small><h3>Фактический бой → редактируемый план</h3><p>RaidRU создаст отдельный Workspace-план из реальных позиций игроков. Исходная тактика не перезаписывается.</p><div class="wclPlanActions208"><button class="primary" onclick="createPlanFromReplay()">✦ Создать план из боя</button><button onclick="setWclTab208('analysis')">Посмотреть ключевые моменты</button></div></section><div class="wclPlanStats208"><b>${replayActors(d).length}</b><span>игроков</span><b>${count208(d.positions?.length)}</b><span>точек позиции</span><b>${count208(d.events?.length)}</b><span>событий</span></div></div>`}
@@ -69,7 +70,7 @@
     const grid=document.querySelector('.replayGrid');if(grid)grid.style.display=wclTab208==='replay'?'grid':'none';document.querySelectorAll('.wclAnalysis208,.wclPlan208').forEach(x=>x.remove());if(wclTab208!=='replay'){const holder=document.createElement('div');holder.innerHTML=wclTab208==='analysis'?analysisHtml208(d):planHtml208(d);shell.insertAdjacentElement('afterend',holder.firstElementChild)}
   }
 
-  const oldRender208=render;render=function(){oldRender208();decorateWclWorkspace208();const version=document.querySelector('aside .version');if(version)version.textContent='RaidRU 2.0.8 · WCL Workspace'};
+  const oldRender208=render;render=function(){oldRender208();decorateWclWorkspace208();const version=document.querySelector('aside .version');if(version)version.textContent='RaidRU 2.0.9 · Mechanics Analysis'};
   const oldClear208=clearWclReplay200;clearWclReplay200=function(){wclTab208='replay';wclInfo208=false;window.__raidruExactReplay208=null;oldClear208()};
   Object.assign(window,{setWclTab208,toggleWclInfo208,refreshWclReplay208,exportReplayV2208,decorateWclWorkspace208});
   render();

@@ -15,6 +15,6 @@ ok(wcl.includes("replayClock=0;"),'clock is not reset');
 ok(wcl.includes('＋ Новый бой'),'new fight button missing');
 ok(wcl.includes('clearWclReplay200'),'clear function not exposed');
 ok(css.includes('.wclUrlRow200.hasReset'),'reset row layout missing');
-ok(/2\.0\.(7-wcl-coordinates|8-wcl-workspace)/.test(html),'index cache bust missing');
-ok(/raidru-v20(7-wcl-coordinates|8-wcl-workspace)/.test(sw),'service worker cache bump missing');
+ok(/2\.0\.(7-wcl-coordinates|8-wcl-workspace|9-mechanics)/.test(html),'index cache bust missing');
+ok(/raidru-v20(7-wcl-coordinates|8-wcl-workspace|9-mechanics-analysis)/.test(sw),'service worker cache bump missing');
 console.log('WCL new-fight 2.0.6 regression checks: OK');

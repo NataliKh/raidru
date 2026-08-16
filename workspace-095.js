@@ -221,7 +221,7 @@
   player=function(b,bs){return corePlayer095(b,bs)};
   normalizeReplayPayload=function(raw){if(raw?.format==='raidru-wcl-replay-browser'||(raw?.positionsByActor&&raw?.timeline&&raw?.time))return normalizeBrowserReplay095(raw);return coreNormalizeReplay095(raw)};
   importReplayJson=function(file){
-    if(!file)return;const fr=new FileReader();fr.onload=()=>{try{const raw=JSON.parse(fr.result),detected=replayBoss095(raw);workspaceFlushSync();if(detected&&detected!==current){current=detected;sceneIndex=0;playerSceneIndex=0;workspaceEnsureSlot(current,diff,{apply:true})}const r=replayState();r.data=normalizeReplayPayload(raw);r.source='json';replayClock=0;autoCalibrateReplay();coreSave095();render();toast(`WCL Replay загружен${detected?' · '+bossName(detected):''}`)}catch(e){console.warn(e);toast('Не удалось прочитать replay JSON')}};fr.readAsText(file)
+    if(!file)return;const fr=new FileReader();fr.onload=()=>{try{const raw=JSON.parse(fr.result),detected=replayBoss095(raw);workspaceFlushSync();if(detected&&detected!==current){current=detected;sceneIndex=0;playerSceneIndex=0;workspaceEnsureSlot(current,diff,{apply:true})}const r=replayState();if(raw?.format==='raidru-wcl-replay-browser'){window.__raidruExactReplay208=raw;try{window.clearWclMechanics209?.()}catch(_){}}r.data=normalizeReplayPayload(raw);r.source='json';replayClock=0;autoCalibrateReplay();coreSave095();render();toast(`WCL Replay загружен${detected?' · '+bossName(detected):''}`)}catch(e){console.warn(e);toast('Не удалось прочитать replay JSON')}};fr.readAsText(file)
   };
   createPlanFromReplay=function(){return createDraftFromReplay095()};
   importPlanFile=function(file){

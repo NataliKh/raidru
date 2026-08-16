@@ -7,6 +7,6 @@ assert(app.includes('replayWclMapConfig'),'WCL map config missing');
 assert(app.includes('class=\"arenaMapImage raidMapFull\"'),'Replay must render WCL raid map asset');
 assert(app.includes("delete template.raidPlan;template.mapSource='wcl'"),'WCL draft must not inherit RaidPlan background');
 assert(client.includes("r.mapId=replayPrimaryMapId(r.data);r.mapSource=r.mapId?'wcl':'fallback'"),'URL import must pin WCL map source');
-assert(html.includes('app.js?v=2.0.3-wcl-adaptive')&&html.includes('wcl-safe-200.js?v=2.0.3-wcl-adaptive'),'cache bust missing');
-assert(sw.includes("raidru-v203-wcl-adaptive"),'service worker version missing');
+assert(/app\.js\?v=2\.0\.(7-wcl-coordinates|9-mechanics)/.test(html)&&/wcl-safe-200\.js\?v=2\.0\.(7-wcl-coordinates|9-mechanics)/.test(html),'cache bust missing');
+assert(/raidru-v20(7-wcl-coordinates|9-mechanics-analysis)/.test(sw),'service worker version missing');
 console.log('WCL map priority 2.0.2 static checks: OK');

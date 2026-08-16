@@ -4,7 +4,7 @@ compatibility_date = "2026-08-15"
 workers_dev = true
 
 [vars]
-# 2.0.5: numeric fight URLs use one GraphQL request per user action; full mode remains opt-in.
+# 2.0.9: Replay Core remains one-shot; Mechanics Pack is a separate one-request selective layer.
 WCL_SOFT_LIMIT = "0.85"
 # Artificial pauses are allowed only when the hourly API budget is effectively empty.
 # A real upstream 429 still creates a strict Retry-After lock.
@@ -15,3 +15,6 @@ WCL_MIN_RESERVE = "2"
 WCL_MAX_PAGES_PER_REQUEST = "16"
 # Normal fast page size. Worker automatically reduces it to 500/1000/2000/5000 when quota is tight.
 WCL_EVENT_PAGE_LIMIT = "10000"
+
+# 2.0.9 selective Mechanics Pack (no coordinate resources).
+WCL_MECHANICS_EVENT_LIMIT = "2000"
