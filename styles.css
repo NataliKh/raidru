@@ -998,3 +998,93 @@
 /* RaidRU 2.0.9 — Mechanics Analysis */
 .wclMechanics209{display:grid;gap:10px}.wclMechanicsHero209{display:flex;align-items:center;justify-content:space-between;gap:18px;padding:18px;border:1px solid #294039;border-radius:12px;background:linear-gradient(135deg,#0e1d18,#0c1317)}.wclMechanicsHero209 small{font-size:8px;font-weight:900;letter-spacing:.14em;color:#5de0a0}.wclMechanicsHero209 h3{margin:5px 0 7px;color:#edf7f2;font-size:18px}.wclMechanicsHero209 p{max-width:760px;margin:0;color:#84978f;font-size:9px;line-height:1.55}.wclMechanicsActions209{display:flex;justify-content:flex-end;align-items:center;gap:7px;flex-wrap:wrap}.wclMechanicsActions209>span{padding:7px 10px;border:1px solid #2d6048;border-radius:999px;background:#10241b;color:#6ce6a6;font-size:8px;font-weight:800}.wclMechanicsActions209>span.partial{border-color:#6a592e;background:#201a0d;color:#dfbd5e}.wclMechanicsWhy209{display:flex;gap:6px;flex-wrap:wrap}.wclMechanicsWhy209 span{padding:6px 9px;border:1px solid #22363a;border-radius:999px;background:#0a1115;color:#788e85;font-size:8px}.wclMechStatus209{padding:9px 11px;border:1px solid #2b4039;border-radius:9px;background:#0b1512;color:#9fb5ac;font-size:9px}.wclMechStatus209.loading{border-color:#66582d;color:#d9bd69}.wclMechStatus209.error{border-color:#693535;color:#df8989}.wclMechStatus209.paused{border-color:#66582d;color:#dfbd69}.wclMechTimeline209{overflow:hidden;border:1px solid #24363c;border-radius:12px;background:#091015}.wclMechTimeline209>header{display:flex;justify-content:space-between;align-items:center;gap:14px;padding:12px 14px;border-bottom:1px solid #1e2e34;background:#0d1519}.wclMechTimeline209>header small{display:block;color:#57dc99;font-size:7px;font-weight:900;letter-spacing:.13em}.wclMechTimeline209>header h3{margin:4px 0 0;color:#dce9e3;font-size:13px}.wclMechTimeline209>header>span{font-size:8px;color:#73877f}.wclMechScale209{position:relative;height:26px;margin-left:116px;border-bottom:1px solid #1b2a30}.wclMechScale209>i{position:absolute;top:0;bottom:0;border-left:1px dashed #25343a;font-style:normal}.wclMechScale209>i em{position:absolute;top:7px;left:4px;color:#61746d;font-size:7px;font-style:normal;white-space:nowrap}.wclMechLane209{display:grid;grid-template-columns:116px minmax(0,1fr);min-height:47px;border-bottom:1px solid #18262b}.wclMechLane209:last-child{border-bottom:0}.wclMechLane209>b{display:flex;align-items:center;padding:0 12px;border-right:1px solid #1e2d32;color:#879a92;font-size:8px}.wclMechLane209>div{position:relative;min-width:0;background-image:linear-gradient(90deg,#1d2a2f33 1px,transparent 1px);background-size:10% 100%}.wclMechLane209 button{position:absolute;top:10px;transform:translateX(-5px);width:10px;height:27px;border:0;background:transparent;padding:0;overflow:visible;z-index:1}.wclMechLane209 button i{display:block;width:8px;height:8px;border-radius:3px;background:#77908a;box-shadow:0 0 0 2px #091015}.wclMechLane209 button span{display:none;position:absolute;left:12px;top:-2px;z-index:4;width:max-content;max-width:190px;padding:5px 7px;border:1px solid #33464d;border-radius:6px;background:#0d161b;color:#cddbd5;font-size:7px;white-space:nowrap}.wclMechLane209 button:hover{z-index:8}.wclMechLane209 button:hover span{display:block}.wclMechLane209.boss button i{background:#e07178}.wclMechLane209.debuff button i{background:#c58ae4}.wclMechLane209.adds button i{background:#e0a463}.wclMechLane209.death button i{background:#89939b}.wclMechLane209.move button i{background:#60a9e4;border-radius:50%}.wclMechToolbar209{display:flex;justify-content:space-between;align-items:center;gap:12px}.wclMechToolbar209>div{display:flex;gap:4px;flex-wrap:wrap}.wclMechToolbar209 button{padding:7px 10px;border:1px solid #24363b;background:#0c1418;color:#84978f;border-radius:8px;font-size:8px}.wclMechToolbar209 button.on{border-color:#347153;background:#12271d;color:#68e3a3}.wclMechToolbar209>span{color:#687c74;font-size:8px}.wclMechanicList209{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:7px}.wclMechanicCard209{overflow:hidden;border:1px solid #22353b;border-radius:10px;background:#0b1216}.wclMechanicCard209.selected{border-color:#386852}.wclMechCardHead209{width:100%;display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px;text-align:left;border:0;background:transparent;padding:11px 12px}.wclMechCardHead209 span small,.wclMechCardHead209 span b,.wclMechCardHead209 span em{display:block}.wclMechCardHead209 span small{font-size:7px;font-weight:900;letter-spacing:.08em;color:#80938c}.wclMechanicCard209.boss small{color:#d77d84}.wclMechanicCard209.debuff small{color:#bd86da}.wclMechanicCard209.adds small{color:#d8a05f}.wclMechCardHead209 span b{margin:4px 0;color:#d4e1db;font-size:10px}.wclMechCardHead209 span em{font-style:normal;color:#687b74;font-size:7px}.wclMechCardHead209 strong{align-self:center;color:#5fd99b;font-size:14px}.wclMechOccurrence209{border-top:1px solid #1f3035;padding:6px;display:grid;gap:3px;background:#091014}.wclMechOccurrence209 button{display:grid;grid-template-columns:46px minmax(0,1fr) auto;gap:7px;align-items:center;text-align:left;border:0;background:transparent;border-radius:6px;padding:6px}.wclMechOccurrence209 button:hover{background:#102019}.wclMechOccurrence209 time{color:#68e4a4;font-size:8px;font-weight:800}.wclMechOccurrence209 span{color:#82958d;font-size:7px}.wclMechOccurrence209 em{color:#5f9f82;font-size:7px;font-style:normal}.wclMechOccurrence209>small{padding:4px 6px;color:#61736c;font-size:7px}.wclMechMetrics209{margin:0}
 @media(max-width:980px){.wclMechanicsHero209,.wclMechToolbar209{align-items:flex-start;flex-direction:column}.wclMechanicsActions209{justify-content:flex-start}.wclMechanicList209{grid-template-columns:1fr}}@media(max-width:620px){.wclMechScale209{margin-left:86px}.wclMechLane209{grid-template-columns:86px minmax(0,1fr)}.wclMechLane209>b{padding:0 7px;font-size:7px}}
+
+/* RaidRU 2.0.11 — WCL Mechanics readability pass
+ * 2.0.9 deliberately used very dense 7–10px typography. On a normal desktop
+ * this made the Mechanics Analysis technically rich but visually too small.
+ * Keep the same data density, but make the working surface readable at 100% zoom.
+ */
+.wclFightShell208{padding:7px 9px;gap:18px}
+.wclFightShell208 nav{gap:5px}
+.wclFightShell208 nav button{padding:10px 16px;font-size:13px}
+.wclFightShell208>span{font-size:11px}
+.wclAnalysis208,.wclPlan208{padding:20px}
+
+.wclMechanics209{gap:14px}
+.wclMechanicsHero209{gap:22px;padding:21px 22px;border-radius:14px}
+.wclMechanicsHero209 small{font-size:10px;letter-spacing:.13em}
+.wclMechanicsHero209 h3{margin:7px 0 8px;font-size:24px;line-height:1.2}
+.wclMechanicsHero209 p{max-width:880px;font-size:13px;line-height:1.6}
+.wclMechanicsActions209{gap:9px}
+.wclMechanicsActions209>span{padding:8px 12px;font-size:11px}
+.wclMechanicsActions209 button{min-height:38px;padding:8px 13px;font-size:12px}
+.wclMechanicsWhy209{gap:8px}
+.wclMechanicsWhy209 span{padding:7px 11px;font-size:11px}
+.wclMechStatus209{padding:11px 13px;font-size:12px;line-height:1.45}
+
+.wclMetricGrid208{gap:11px}
+.wclMetricGrid208 article{padding:16px 17px;border-radius:11px}
+.wclMetricGrid208 small{font-size:10px;letter-spacing:.11em}
+.wclMetricGrid208 b{margin:8px 0 4px;font-size:29px;line-height:1}
+.wclMetricGrid208 span{font-size:12px;line-height:1.35}
+
+.wclMechTimeline209{border-radius:14px}
+.wclMechTimeline209>header{gap:18px;padding:16px 18px}
+.wclMechTimeline209>header small{font-size:10px;letter-spacing:.12em}
+.wclMechTimeline209>header h3{margin-top:5px;font-size:17px}
+.wclMechTimeline209>header>span{font-size:11px}
+.wclMechScale209{height:34px;margin-left:150px}
+.wclMechScale209>i em{top:9px;left:5px;font-size:10px}
+.wclMechLane209{grid-template-columns:150px minmax(0,1fr);min-height:60px}
+.wclMechLane209>b{padding:0 15px;font-size:12px;font-weight:750}
+.wclMechLane209 button{top:12px;transform:translateX(-7px);width:16px;height:38px}
+.wclMechLane209 button i{width:12px;height:12px;border-radius:4px;box-shadow:0 0 0 3px #091015}
+.wclMechLane209.move button i{border-radius:50%}
+.wclMechLane209 button span{left:17px;top:-5px;max-width:260px;padding:8px 10px;border-radius:8px;font-size:11px;line-height:1.35;box-shadow:0 10px 30px #0008}
+
+.wclMechToolbar209{gap:15px;min-height:42px}
+.wclMechToolbar209>div{gap:6px}
+.wclMechToolbar209 button{padding:8px 13px;border-radius:9px;font-size:12px}
+.wclMechToolbar209>span{font-size:11px;line-height:1.4;text-align:right}
+
+.wclMechanicList209{gap:10px}
+.wclMechanicCard209{border-radius:12px}
+.wclMechCardHead209{gap:11px;padding:15px 16px}
+.wclMechCardHead209 span small{font-size:10px;letter-spacing:.075em}
+.wclMechCardHead209 span b{margin:6px 0 5px;font-size:15px;line-height:1.25}
+.wclMechCardHead209 span em{font-size:11px;line-height:1.45}
+.wclMechCardHead209 strong{font-size:20px}
+.wclMechOccurrence209{padding:9px;gap:5px}
+.wclMechOccurrence209 button{grid-template-columns:62px minmax(0,1fr) auto;gap:10px;padding:9px 10px;border-radius:8px}
+.wclMechOccurrence209 time{font-size:12px}
+.wclMechOccurrence209 span{font-size:11px;line-height:1.35}
+.wclMechOccurrence209 em{font-size:11px;white-space:nowrap}
+.wclMechOccurrence209>small{padding:6px 8px;font-size:10px}
+
+/* WCL workspace surrounding controls should not look miniature next to the new analysis. */
+.wclUpload208 small,.wclLoadedTitle208 small,.wclMoments208>div:first-child small,.wclPlan208>section small{font-size:10px}
+.wclUpload208 h2,.wclLoadedTitle208 h2{font-size:25px}
+.wclUpload208 p,.wclLoadedTitle208 p{font-size:13px}
+.wclSafeBadge208,.wclReplayBadge208{font-size:11px}
+.wclInput208>input{height:44px;font-size:13px}
+.wclHint208{font-size:11px}
+.wclInlineStatus208 span{font-size:11px}.wclInlineStatus208 small{font-size:10px}
+.wclInfo208 small{font-size:9px}.wclInfo208 b{font-size:11px}
+.wclDiag208 button,.wclDiag208 label{font-size:11px}
+
+@media(max-width:1200px){
+  .wclMechanicList209{grid-template-columns:1fr}
+}
+@media(max-width:980px){
+  .wclMechScale209{margin-left:120px}
+  .wclMechLane209{grid-template-columns:120px minmax(0,1fr)}
+  .wclMechLane209>b{padding:0 10px;font-size:11px}
+}
+@media(max-width:620px){
+  .wclAnalysis208,.wclPlan208{padding:13px}
+  .wclMechanicsHero209 h3{font-size:20px}
+  .wclMechanicsHero209 p{font-size:12px}
+  .wclMechScale209{margin-left:92px}
+  .wclMechLane209{grid-template-columns:92px minmax(0,1fr);min-height:56px}
+  .wclMechLane209>b{padding:0 7px;font-size:10px}
+}
