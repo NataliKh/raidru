@@ -8,6 +8,10 @@ const sw=fs.readFileSync(path.join(root,'sw.js'),'utf8');
 function ok(v,m){if(!v)throw new Error(m)}
 ok(worker.includes("url.pathname === '/wcl/mechanics'"),'mechanics endpoint missing');
 ok(worker.includes('query RaidRUMechanics'),'mechanics GraphQL query missing');
+
+ok(worker.includes('hostilityType: Enemies'),'enemy hostility must use GraphQL enum literal Enemies');
+ok(worker.includes('hostilityType: Friendlies'),'friendly hostility must use GraphQL enum literal Friendlies');
+ok(!/hostilityType:\s*[01](?:[,\s)])/.test(worker),'numeric hostilityType literals are invalid GraphQL enum values');
 ok(worker.includes('dataType: Casts')&&worker.includes('dataType: Debuffs')&&worker.includes('dataType: Summons')&&worker.includes('dataType: Deaths'),'selective mechanics families missing');
 ok(!/RaidRUMechanics[\s\S]{0,1600}includeResources:\s*true/.test(worker),'mechanics must not request coordinate resources');
 ok(worker.includes("format: 'raidru-wcl-mechanics'"),'mechanics envelope missing');

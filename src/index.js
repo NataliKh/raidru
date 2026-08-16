@@ -151,7 +151,7 @@ async function wclToken(env) {
       'Authorization': `Basic ${basic}`,
       'Content-Type': 'application/x-www-form-urlencoded',
       'Accept': 'application/json',
-      'User-Agent': 'RaidRU/2.0.9 Mechanics Analysis'
+      'User-Agent': 'RaidRU/2.0.10 Mechanics Enum Fix'
     },
     body: 'grant_type=client_credentials'
   });
@@ -178,7 +178,7 @@ async function wclGraphql(env, query, variables = {}) {
       'Authorization': `Bearer ${token}`,
       'Content-Type': 'application/json',
       'Accept': 'application/json',
-      'User-Agent': 'RaidRU/2.0.9 Mechanics Analysis'
+      'User-Agent': 'RaidRU/2.0.10 Mechanics Enum Fix'
     },
     body: JSON.stringify({ query, variables })
   });
@@ -973,13 +973,13 @@ query RaidRUMechanics($code: String!, $limit: Int!, $needCasts: Boolean!, $needD
         actors { id name type subType }
         abilities { gameID name }
       }
-      casts: events(dataType: Casts, hostilityType: 1, fightIDs: [${fightId}], ${startArg('casts')} limit: $limit) @include(if: $needCasts) {
+      casts: events(dataType: Casts, hostilityType: Enemies, fightIDs: [${fightId}], ${startArg('casts')} limit: $limit) @include(if: $needCasts) {
         data nextPageTimestamp
       }
-      debuffs: events(dataType: Debuffs, hostilityType: 0, fightIDs: [${fightId}], ${startArg('debuffs')} limit: $limit) @include(if: $needDebuffs) {
+      debuffs: events(dataType: Debuffs, hostilityType: Friendlies, fightIDs: [${fightId}], ${startArg('debuffs')} limit: $limit) @include(if: $needDebuffs) {
         data nextPageTimestamp
       }
-      summons: events(dataType: Summons, hostilityType: 1, fightIDs: [${fightId}], ${startArg('summons')} limit: $limit) @include(if: $needSummons) {
+      summons: events(dataType: Summons, hostilityType: Enemies, fightIDs: [${fightId}], ${startArg('summons')} limit: $limit) @include(if: $needSummons) {
         data nextPageTimestamp
       }
       deaths: events(dataType: Deaths, fightIDs: [${fightId}], ${startArg('deaths')} limit: $limit) @include(if: $needDeaths) {
@@ -1128,11 +1128,11 @@ export default {
     if (origin && !ALLOWED_ORIGINS.has(origin)) return new Response(JSON.stringify({ error: 'origin_not_allowed', origin, allowed: [...ALLOWED_ORIGINS] }), { status: 403, headers: { 'Content-Type': 'application/json; charset=utf-8', ...cors(origin, { echo: true }), 'X-RaidRU-Origin': origin } });
 
     if (url.pathname === '/wcl/ping') {
-      return json({ ok: true, service: 'raidru-edge', version: '2.0.9-mechanics-analysis', origin: origin || null, wclConfigured: wclConfigured(env) }, 200, origin, { 'X-RaidRU-WCL-Safe': '1' });
+      return json({ ok: true, service: 'raidru-edge', version: '2.0.10-mechanics-enum-fix', origin: origin || null, wclConfigured: wclConfigured(env) }, 200, origin, { 'X-RaidRU-WCL-Safe': '1' });
     }
 
     if (url.pathname === '/health') {
-      return json({ ok: true, service: 'raidru-edge', version: '2.0.9-mechanics-analysis', wclConfigured: wclConfigured(env), features: ['raidplan', 'wcl-report', 'wcl-one-shot-replay', 'wcl-browser-v2-envelope', 'wcl-mechanics-pack', 'single-query-fast-path', 'fast-casts-sampler', 'partial-replay', '429-lock-only', 'resume-cache'] }, 200, origin);
+      return json({ ok: true, service: 'raidru-edge', version: '2.0.10-mechanics-enum-fix', wclConfigured: wclConfigured(env), features: ['raidplan', 'wcl-report', 'wcl-one-shot-replay', 'wcl-browser-v2-envelope', 'wcl-mechanics-pack', 'graphql-hostility-enums', 'single-query-fast-path', 'fast-casts-sampler', 'partial-replay', '429-lock-only', 'resume-cache'] }, 200, origin);
     }
 
     if (url.pathname === '/raidplan' && request.method === 'GET') {
