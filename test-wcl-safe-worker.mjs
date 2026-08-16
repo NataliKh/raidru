@@ -84,6 +84,14 @@ const beforeCache=gqlCalls;
 r=await worker.fetch(req(),env,{}); b=await r.json();
 ok('completed replay is cache-only',r.status===200&&b.cache==='hit'&&gqlCalls===beforeCache);
 
+// Canonical endpoint returns the Browser Replay v2 public envelope.
+const reqExact=(code='ExactTestAA',fight='10',modeArg='smart')=>new Request(`https://worker.test/wcl/exact-replay?code=${code}&fight=${fight}&mode=${modeArg}`,{headers:{Origin:'https://natalikh.github.io'}});
+before=gqlCalls;
+r=await worker.fetch(reqExact(),env,{}); b=await r.json();
+ok('exact endpoint returns Browser Replay v2 envelope',r.status===206&&b.format==='raidru-wcl-replay-browser'&&b.version===2&&Array.isArray(b.timeline)&&b.positionsByActor);
+ok('exact endpoint preserves actors and map IDs',Array.isArray(b.actors)&&b.actors.some(a=>a.name==='Player One')&&String(Object.keys(b.mapIDs||{})).includes('2609'));
+ok('exact endpoint is still one GraphQL request per click',gqlCalls-before===1);
+
 // A real 429 is one attempt, then cached Retry-After blocks later clicks without touching WCL.
 mode='rate';
 const beforeRate=gqlCalls;

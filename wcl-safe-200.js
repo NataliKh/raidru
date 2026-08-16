@@ -2,7 +2,7 @@
  * Direct Warcraft Logs URL -> cached, quota-aware Worker replay.
  */
 (() => {
-  const VERSION='2.0.6-wcl-new-fight';
+  const VERSION='2.0.8-wcl-workspace';
   const API=(window.RAIDRU_WCL_API||'https://raidru-raidplan.raidru-wcl.workers.dev').replace(/\/$/,'');
   let ui={state:'idle',message:'',quota:null,report:null,url:'',fight:null,code:null,loops:0,partial:false,quality:null};
 
@@ -32,7 +32,7 @@
       return {status:0,ok:false,url,networkError:true,body:{error:'worker_fetch_failed',message:`Не удалось связаться с RaidRU Worker из ${location.origin}. Проверь /health и CORS.`,detail:String(err?.message||err)}};
     }
   }
-  function setUi(state,message,extra={}){ui={...ui,...extra,state,message};decorateReplay200()}
+  function setUi(state,message,extra={}){ui={...ui,...extra,state,message};decorateReplay200();try{window.decorateWclWorkspace208?.()}catch(_){}}
   function inputValue(){return document.querySelector('#wclUrl200')?.value?.trim()||ui.url||replayState()?.url||''}
 
   function showFightPicker200(parsed,report){
@@ -52,11 +52,23 @@
     ui.report=res.body;ui.quota=res.body.quota||ui.quota;return res.body;
   }
 
+  function normalizeExactReplay200(raw){
+    if(raw?.format!=='raidru-wcl-replay-browser'||!Array.isArray(raw?.actors)||!raw.actors.length)return normalizeReplayPayload(raw);
+    const players=raw.actors.filter(a=>!a?.type||String(a.type).toLowerCase().includes('player'));
+    const ids=new Set(players.map(a=>String(a.id)));
+    const actors=players.map(a=>({id:a.id,name:a.name||`Игрок ${a.id}`,type:'Player',subType:a.subType||'',class:a.subType||'',role:a.role||''}));
+    const positions=(raw.positions||[]).filter(p=>ids.has(String(p.actorId))).map(p=>({actorId:p.actorId,t:+p.t||0,x:+p.x,y:+p.y,alive:p.alive!==false,mapID:p.mapID,source:p.source||''})).filter(p=>Number.isFinite(p.x)&&Number.isFinite(p.y)).sort((a,b)=>a.t-b.t);
+    const spells=knownSpellMap(),events=[],last=new Map();
+    for(const e of raw.timeline||[]){const type=String(e.type||'').toLowerCase();if(!['cast','begincast'].includes(type)||e.sourceIsFriendly===true)continue;const abilityID=+e.abilityID||+e.abilityGameID||0,t=+e.t||0,key=`${e.sourceID||0}:${abilityID||e.abilityName||''}`;if(t-(last.get(key)||-1e9)<900)continue;last.set(key,t);events.push({t,type,label:spells.get(abilityID)||e.abilityName||`Способность ${abilityID||''}`.trim(),abilityID:abilityID||null,sourceID:e.sourceID??null,targetID:e.targetID??null,major:spells.has(abilityID)})}
+    const duration=+(raw.time?.duration||raw.fight?.duration||0)||Math.max(1,...positions.map(p=>p.t),...events.map(e=>e.t));
+    return {sourceBrowser:true,source:raw.source||{},report:raw.report||{code:raw.source?.reportCode||'',title:'Warcraft Logs'},fight:{...(raw.fight||{}),name:raw.fight?.name||bossName(current),duration,bossId:raw.source?.bossId||raw.fight?.bossId||null},actors,positions,events,duration,mapIDs:raw.mapIDs||{},normalizedPercent:false,coordinateSemantics:raw.coordinateSemantics||null,stats:{...(raw.stats||{}),playerTracks:actors.length},partial:!!raw.partial,quality:raw.quality||raw.source?.quality||'fast',quota:raw.quota||null};
+  }
+
   async function loadWclFight200(code,fight,mode='smart'){
     let attempts=0;
     while(attempts++<12){
       setUi('loading',attempts===1?'Загружаю быстрый Replay из WCL…':'Продолжаю из сохранённой контрольной точки…',{fight,code,partial:false});
-      const res=await apiJson(`/wcl/replay?code=${encodeURIComponent(code)}&fight=${encodeURIComponent(fight)}&mode=${encodeURIComponent(mode)}`),b=res.body||{};
+      const res=await apiJson(`/wcl/exact-replay?code=${encodeURIComponent(code)}&fight=${encodeURIComponent(fight)}&mode=${encodeURIComponent(mode)}`),b=res.body||{};
       if(res.networkError){setUi('error',`${b.message||'Не удалось связаться с Worker'} API: ${res.url}`);return}
       if(res.status===202&&b.error==='batch_yield'){
         ui.quota=b.quota||ui.quota;setUi('loading',`Собрано страниц: ${b.pages||0} (из WCL: ${b.fetchedPages||0}). Продолжаю с контрольной точки…`,{quota:ui.quota});await new Promise(r=>setTimeout(r,450));continue;
@@ -76,7 +88,7 @@
       if(!res.ok){setUi('error',b.error==='wcl_not_configured'?'Нужно один раз добавить WCL OAuth secrets в Cloudflare Worker.':`WCL: ${b.message||b.error||'ошибка загрузки'}`);return}
       const raw=b,detected=bossFromWcl(raw?.source?.bossId||raw?.fight?.bossId);
       if(detected&&detected!==current)chooseBoss(detected);
-      const r=replayState();r.url=ui.url||inputValue();r.source='wcl-url';r.data=enrichReplay(normalizeReplayPayload(raw));r.mapId=replayPrimaryMapId(r.data);r.mapSource=r.mapId?'wcl':'fallback';replayClock=0;autoCalibrateReplay();save();ui.quota=raw.quota||ui.quota;
+      const r=replayState();r.url=ui.url||inputValue();r.source='wcl-url';window.__raidruExactReplay208=raw;r.data=enrichReplay(normalizeExactReplay200(raw));r.mapId=replayPrimaryMapId(r.data);r.mapSource=r.mapId?'wcl':'fallback';replayClock=0;autoCalibrateReplay();save();ui.quota=raw.quota||ui.quota;
       const isPartial=!!raw.partial,quality=raw.quality||raw?.source?.fetchMode||'fast';
       const coverage=Math.round((raw?.stats?.actorCoverage||0)*100);
       const cacheText=raw.message||(raw.cache==='hit'||raw.cache==='legacy-hit'?'Из кэша — WCL API не потрачен.':(isPartial?'Часть боя уже доступна.':'Replay загружен и закэширован.'));
@@ -104,7 +116,7 @@
     replayClock=0;
     try{replaySelectedActor='all'}catch(_){}
     const r=replayState();
-    r.data=null;
+    r.data=null;window.__raidruExactReplay208=null;
     r.source='';
     r.url='';
     r.mapId=null;
@@ -129,8 +141,8 @@
   }
 
   const coreRender200=render;
-  render=function(){coreRender200();decorateReplay200();const version=document.querySelector('aside .version');if(version)version.textContent='RaidRU 2.0.6 preview · WCL New Fight'};
+  render=function(){coreRender200();decorateReplay200();const version=document.querySelector('aside .version');if(version)version.textContent='RaidRU 2.0.8 preview · WCL Workspace'};
   loadWclReplay=loadWclReplay200;
-  Object.assign(window,{loadWclReplay200,wclPickFight200,loadWclFight200,clearWclReplay200});
+  Object.assign(window,{loadWclReplay200,wclPickFight200,loadWclFight200,clearWclReplay200,wclUiState200:()=>ui});
   render();
 })();

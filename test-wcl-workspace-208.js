@@ -1,0 +1,20 @@
+const fs=require('fs'),path=require('path'),root=__dirname;
+const wcl=fs.readFileSync(path.join(root,'wcl-safe-200.js'),'utf8');
+const ui=fs.readFileSync(path.join(root,'wcl-workspace-208.js'),'utf8');
+const worker=fs.readFileSync(path.join(root,'src/index.js'),'utf8');
+const css=fs.readFileSync(path.join(root,'styles.css'),'utf8');
+const html=fs.readFileSync(path.join(root,'index.html'),'utf8');
+const sw=fs.readFileSync(path.join(root,'sw.js'),'utf8');
+function ok(v,msg){if(!v)throw new Error(msg)}
+ok(wcl.includes('/wcl/exact-replay?code='),'URL importer does not use canonical replay endpoint');
+ok(worker.includes("url.pathname === '/wcl/exact-replay'"),'exact replay endpoint missing');
+ok(worker.includes("format: 'raidru-wcl-replay-browser'"),'Browser Replay v2 envelope missing');
+ok(worker.includes('positionsByActor: replayPositionsByActor(positions)'),'positionsByActor missing');
+ok(ui.includes('Загрузить бой'),'URL-first upload UI missing');
+ok(ui.includes('▶ Replay')&&ui.includes('✦ Разбор')&&ui.includes('▦ План'),'WCL workspace tabs missing');
+ok(ui.includes('Экспорт Replay v2 JSON'),'diagnostic export missing');
+ok(ui.includes('function analysis208'),'local analysis missing');
+ok(css.includes('.wclFightShell208')&&css.includes('.wclMetricGrid208'),'WCL workspace styles missing');
+ok(html.includes('wcl-workspace-208.js?v=2.0.8-wcl-workspace'),'workspace script missing');
+ok(sw.includes("raidru-v208-wcl-workspace")&&sw.includes('wcl-workspace-208.js?v=2.0.8-wcl-workspace'),'service worker cache missing');
+console.log('WCL Workspace 2.0.8 regression checks: OK');

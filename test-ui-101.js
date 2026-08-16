@@ -5,7 +5,7 @@ const html=fs.readFileSync('index.html','utf8');
 const sw=fs.readFileSync('sw.js','utf8');
 const checks=[
  ['ui script loaded',html.includes('ui-101.js?v=1.0.1')],
- ['current cache',sw.includes('raidru-v203-wcl-adaptive')&&sw.includes("'./ui-101.js?v=1.0.1'")&&sw.includes("'./wcl-safe-200.js?v=2.0.3-wcl-adaptive'")],
+ ['current cache',/raidru-v20(7-wcl-coordinates|8-wcl-workspace)/.test(sw)&&sw.includes("'./ui-101.js?v=1.0.1'")&&/wcl-safe-200\.js\?v=2\.0\.(7-wcl-coordinates|8-wcl-workspace)/.test(sw)],
  ['five mechanic lanes',ui.includes("label:'Урон рейду'")&&ui.includes("label:'Перемещение'")&&ui.includes("label:'Механика танка'")&&ui.includes("label:'Адды'")&&ui.includes("label:'Назначения / КД'")],
  ['assignments lane',ui.includes('assignmentLane101')&&ui.includes('Назначения</span>')],
  ['compact mode',ui.includes('setTimelineCompact101')&&ui.includes('Сжатый вид')],

@@ -151,7 +151,7 @@ async function wclToken(env) {
       'Authorization': `Basic ${basic}`,
       'Content-Type': 'application/x-www-form-urlencoded',
       'Accept': 'application/json',
-      'User-Agent': 'RaidRU/2.0.5 WCL One-Shot Import'
+      'User-Agent': 'RaidRU/2.0.8 WCL Workspace'
     },
     body: 'grant_type=client_credentials'
   });
@@ -178,7 +178,7 @@ async function wclGraphql(env, query, variables = {}) {
       'Authorization': `Bearer ${token}`,
       'Content-Type': 'application/json',
       'Accept': 'application/json',
-      'User-Agent': 'RaidRU/2.0.5 WCL One-Shot Import'
+      'User-Agent': 'RaidRU/2.0.8 WCL Workspace'
     },
     body: JSON.stringify({ query, variables })
   });
@@ -589,6 +589,60 @@ function replayBodyFromProgress(meta, fight, progress, quota, { partial = false,
   };
 }
 
+
+function replayPositionsByActor(points) {
+  const out = {};
+  for (const p of Array.isArray(points) ? points : []) {
+    const k = String(p.actorId);
+    if (!out[k]) out[k] = [];
+    out[k].push(p);
+  }
+  for (const arr of Object.values(out)) arr.sort((a, b) => (Number(a.t) || 0) - (Number(b.t) || 0));
+  return out;
+}
+
+// 2.0.8 canonical transport: direct WCL URL import and Browser Exporter share
+// the same public Replay v2 envelope. Extra API metadata is additive only.
+function toBrowserReplayV2(body) {
+  if (!body || typeof body !== 'object') return body;
+  if (body.format === 'raidru-wcl-replay-browser' && Number(body.version) === 2) return body;
+  const positions = Array.isArray(body.positions) ? body.positions : [];
+  const timeline = Array.isArray(body.timeline) ? body.timeline : (Array.isArray(body.events) ? body.events : []);
+  const actors = Array.isArray(body.actors) ? body.actors : [];
+  const fight = body.fight || {};
+  const duration = Math.max(1, Number(body.duration) || Number(fight.duration) || ((Number(fight.endTime) || 0) - (Number(fight.startTime) || 0)) || 1);
+  const start = Number(fight.startTime) || 0;
+  const end = Number(fight.endTime) || (start + duration);
+  const mapIDs = body.mapIDs && typeof body.mapIDs === 'object' ? body.mapIDs : {};
+  const stats = body.stats || {};
+  const eventPos = positions.filter(p => p?.source === 'event').length;
+  const nextPos = positions.filter(p => p?.source === 'next').length;
+  return {
+    format: 'raidru-wcl-replay-browser', version: 2,
+    createdAt: body.createdAt || new Date().toISOString(),
+    source: {
+      pageUrl: body.source?.pageUrl || '', reportCode: body.source?.reportCode || body.report?.code || '',
+      fight: String(body.source?.fight || fight.id || ''), bossId: Number(body.source?.bossId || fight.bossId || 0) || 0,
+      segmentCount: Number(stats.pages) || 1, segments: [], rawEvents: Number(stats.rawEvents) || timeline.length,
+      deduplicatedEvents: Number(stats.rawEvents) || timeline.length, capture: 'raidru-worker',
+      fetchMode: body.source?.fetchMode || stats.fetchMode || 'casts', partial: !!body.partial, quality: body.quality || 'fast'
+    },
+    time: { absoluteStart: start, absoluteEnd: end, duration },
+    coordinateSemantics: { resourceActor1: 'sourceID', resourceActor2: 'targetID', nextXY: 'same actor at nextTimestamp' },
+    bounds: replayBounds(positions), mapIDs,
+    actorIds: actors.map(a => safeInt(a?.id) || a?.id).filter(x => x != null),
+    stats: {
+      positionEvents: Number(stats.positionEvents) || eventPos, nextPositionEvents: Number(stats.nextPositionEvents) || nextPos,
+      compactPositionPoints: positions.length, timelineEvents: timeline.length, rawEvents: Number(stats.rawEvents) || timeline.length,
+      pages: Number(stats.pages) || 0, fetchedPages: Number(stats.fetchedPages) || 0, cachedPages: Number(stats.cachedPages) || 0,
+      actorCoverage: Number(stats.actorCoverage) || 0, oneShot: !!stats.oneShot, fetchMode: stats.fetchMode || body.source?.fetchMode || 'casts'
+    },
+    positions, positionsByActor: replayPositionsByActor(positions), timeline,
+    actors, report: body.report || null, fight, partial: !!body.partial, quality: body.quality || 'fast',
+    resumeAfter: Number(body.resumeAfter) || 0, pauseReason: body.pauseReason || '', message: body.message || '', quota: body.quota || null, cache: body.cache || 'miss'
+  };
+}
+
 function partialOrPause(meta, fight, progress, quota, { reason = 'wcl_quota_empty', retryAfter = BACKOFF_TTL_FALLBACK, fetchMode = 'casts', message = '' } = {}) {
   const hasUsefulData = (progress?.positions?.length || 0) >= 2 || (progress?.casts?.length || 0) >= 1;
   if (hasUsefulData) {
@@ -901,11 +955,11 @@ export default {
     if (origin && !ALLOWED_ORIGINS.has(origin)) return new Response(JSON.stringify({ error: 'origin_not_allowed', origin, allowed: [...ALLOWED_ORIGINS] }), { status: 403, headers: { 'Content-Type': 'application/json; charset=utf-8', ...cors(origin, { echo: true }), 'X-RaidRU-Origin': origin } });
 
     if (url.pathname === '/wcl/ping') {
-      return json({ ok: true, service: 'raidru-edge', version: '2.0.5-wcl-one-shot', origin: origin || null, wclConfigured: wclConfigured(env) }, 200, origin, { 'X-RaidRU-WCL-Safe': '1' });
+      return json({ ok: true, service: 'raidru-edge', version: '2.0.8-wcl-workspace', origin: origin || null, wclConfigured: wclConfigured(env) }, 200, origin, { 'X-RaidRU-WCL-Safe': '1' });
     }
 
     if (url.pathname === '/health') {
-      return json({ ok: true, service: 'raidru-edge', version: '2.0.5-wcl-one-shot', wclConfigured: wclConfigured(env), features: ['raidplan', 'wcl-report', 'wcl-one-shot-replay', 'single-query-fast-path', 'fast-casts-sampler', 'partial-replay', '429-lock-only', 'resume-cache'] }, 200, origin);
+      return json({ ok: true, service: 'raidru-edge', version: '2.0.8-wcl-workspace', wclConfigured: wclConfigured(env), features: ['raidplan', 'wcl-report', 'wcl-one-shot-replay', 'wcl-browser-v2-envelope', 'single-query-fast-path', 'fast-casts-sampler', 'partial-replay', '429-lock-only', 'resume-cache'] }, 200, origin);
     }
 
     if (url.pathname === '/raidplan' && request.method === 'GET') {
@@ -934,6 +988,26 @@ export default {
         });
         return json(result.body, result.status, origin, { 'X-RaidRU-WCL-Safe': '1' });
       } catch (e) { return json(wclErrorBody(e), e?.code === 'wcl_report_not_found' ? 404 : e?.code === 'wcl_not_configured' ? 503 : 502, origin); }
+    }
+
+    if (url.pathname === '/wcl/exact-replay' && request.method === 'GET') {
+      const code = (url.searchParams.get('code') || '').trim(), fight = (url.searchParams.get('fight') || '').trim().toLowerCase();
+      const requestedMode = (url.searchParams.get('mode') || 'smart').trim().toLowerCase();
+      if (!validCode(code)) return json({ error: 'invalid_report_code' }, 400, origin);
+      if (!(fight === 'last' || safeInt(fight))) return json({ error: 'invalid_fight' }, 400, origin);
+      if (!['smart','fast','full'].includes(requestedMode)) return json({ error: 'invalid_mode' }, 400, origin);
+      const key = `exact-replay:${requestedMode}:${code}:${fight}`;
+      try {
+        const result = await withInflight(key, () => buildReplay(env, code, fight, requestedMode));
+        const body = (result.status === 200 || result.status === 206) ? toBrowserReplayV2(result.body) : result.body;
+        return json(body, result.status, origin, { 'X-RaidRU-WCL-Safe': '1', 'X-RaidRU-Replay-Format': 'raidru-wcl-replay-browser-v2' });
+      } catch (e) {
+        if (e instanceof WclRateError || e?.code === 'wcl_rate_limited') {
+          const b = await setBackoff(code, safeInt(fight), e.retryAfter, 'wcl_rate_limited', null);
+          return json({ error: 'wcl_rate_limited', retryAfter: b.retryAfter, cachedProgress: true }, 202, origin);
+        }
+        return json(wclErrorBody(e), e?.code === 'wcl_not_configured' ? 503 : 502, origin);
+      }
     }
 
     if (url.pathname === '/wcl/replay' && request.method === 'GET') {
