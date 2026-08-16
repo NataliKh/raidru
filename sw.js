@@ -1,15 +1,15 @@
-const CACHE='raidru-v206-wcl-new-fight';
+const CACHE='raidru-v207-wcl-coordinates';
 const ASSETS=[
 './',
 './index.html',
-'./styles.css?v=2.0.6-wcl-new-fight',
-'./app.js?v=2.0.6-wcl-new-fight',
+'./styles.css?v=2.0.7-wcl-coordinates',
+'./app.js?v=2.0.7-wcl-coordinates',
 './raidplan-importer.js?v=1.0.0',
 './workspace-095.js?v=1.0.0',
 './raid-ready-100.js?v=1.0.0',
 './ui-101.js?v=1.0.1',
 './tools/raidplan-browser-export.js',
-'./wcl-safe-200.js?v=2.0.6-wcl-new-fight',
+'./wcl-safe-200.js?v=2.0.7-wcl-coordinates',
 './manifest.webmanifest',
 './icon.svg',
 './assets/maps/2606-map.webp',

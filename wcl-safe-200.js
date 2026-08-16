@@ -109,7 +109,7 @@
     r.url='';
     r.mapId=null;
     r.mapSource='';
-    r.cal={rot:0,flipX:false,flipY:false,scale:92,offX:0,offY:0};
+    r.cal=typeof defaultReplayCal==='function'?defaultReplayCal(null,''):{v:2,rot:0,flipX:false,flipY:false,scale:88,offX:0,offY:0};
     ui={state:'idle',message:'',quota:null,report:null,url:'',fight:null,code:null,loops:0,partial:false,quality:null};
     save();
     render();

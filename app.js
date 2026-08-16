@@ -986,7 +986,28 @@ function parseWclUrl(v){
   if(m)return {code:m[1],fight:+(m[2]||0)||null};
   const plain=s.match(/^([A-Za-z0-9]+)(?::(\d+))?$/);return plain?{code:plain[1],fight:+(plain[2]||0)||null}:null;
 }
-function replayState(id=current){const bs=bossState(id);if(!bs.replay)bs.replay={data:null,source:'',url:'',cal:{rot:0,flipX:false,flipY:false,scale:100,offX:0,offY:0}};if(!bs.replay.cal)bs.replay.cal={rot:0,flipX:false,flipY:false,scale:100,offX:0,offY:0};return bs.replay}
+const REPLAY_COORD_VERSION=2;
+const replayMapCalPresets={
+  // WCL world coordinates use one physical scale for X/Y. 2606 is additionally
+  // tuned against the official WCL Replay frame supplied for Nek'zali at 0:22.
+  2606:{scale:78,offX:0,offY:-5},
+  2607:{scale:88,offX:0,offY:0},
+  2608:{scale:88,offX:0,offY:0},
+  2609:{scale:88,offX:0,offY:0}
+};
+function defaultReplayCal(data=null,source=''){
+ const mapId=replayPrimaryMapId(data),p=replayMapCalPresets[mapId]||{};
+ return {v:REPLAY_COORD_VERSION,rot:0,flipX:false,flipY:false,scale:p.scale??88,offX:p.offX??0,offY:p.offY??0};
+}
+function replayState(id=current){
+ const bs=bossState(id);
+ if(!bs.replay)bs.replay={data:null,source:'',url:'',cal:defaultReplayCal()};
+ if(!bs.replay.cal)bs.replay.cal=defaultReplayCal(bs.replay.data,bs.replay.source);
+ // 2.0.7 migration: old builds stretched fight bounds independently on X/Y and
+ // rendered the WCL Y axis upside-down. Recalibrate stored WCL replays once.
+ if((bs.replay.source==='wcl-url'||bs.replay.source==='json')&&bs.replay.cal.v!==REPLAY_COORD_VERSION)bs.replay.cal=defaultReplayCal(bs.replay.data,bs.replay.source);
+ return bs.replay;
+}
 function replayDuration(data){return Math.max(1,Number(data?.duration)||Number(data?.fight?.duration)||((Number(data?.fight?.endTime)||0)-(Number(data?.fight?.startTime)||0))||1)}
 function replayActors(data){return (data?.actors||[]).filter(a=>!a.type||String(a.type).toLowerCase().includes('player'))}
 function replayRole(a){if(a.role&&['tank','healer','ranged','melee'].includes(a.role))return a.role;return replayRoleClasses[a.subType]||'ranged'}
@@ -999,10 +1020,22 @@ function replayBounds(data){
  const px=(maxX-minX)*.035,py=(maxY-minY)*.035;return {minX:minX-px,maxX:maxX+px,minY:minY-py,maxY:maxY+py};
 }
 function replayPoint(data,x,y){
- const b=replayBounds(data),c=replayState().cal||{};let px=(+x-b.minX)/(b.maxX-b.minX)*100,py=(+y-b.minY)/(b.maxY-b.minY)*100;
+ const b=replayBounds(data),c=replayState().cal||defaultReplayCal(data);
+ const spanX=Math.max(1,b.maxX-b.minX),spanY=Math.max(1,b.maxY-b.minY),midX=(b.minX+b.maxX)/2,midY=(b.minY+b.maxY)/2;
+ const cfg=replayWclMapConfig(data),v=cfg?.viewport||cfg?.map||{w:16,h:9};
+ const aspect=Math.max(.1,(+v.w||16)/Math.max(1,+v.h||9)),worldAspect=spanX/spanY;
+ // Fit the fight with a SINGLE world->pixel scale. The old code normalized X and Y
+ // separately, which widened a compact raid by 2x+ on tall coordinate bounds.
+ const fit=Math.max(.2,Math.min(1.6,(+c.scale||88)/100));
+ let rangeX,rangeY;
+ if(worldAspect>=aspect){rangeX=100*fit;rangeY=100*fit*aspect/worldAspect}
+ else{rangeY=100*fit;rangeX=100*fit*worldAspect/aspect}
+ let px=50+((+x-midX)/spanX)*rangeX;
+ // Warcraft/world Y grows in the opposite screen direction from CSS top.
+ let py=50-((+y-midY)/spanY)*rangeY;
  if(c.flipX)px=100-px;if(c.flipY)py=100-py;
  const rot=+c.rot||0;let nx=px,ny=py;if(rot===90){nx=100-py;ny=px}else if(rot===180){nx=100-px;ny=100-py}else if(rot===270){nx=py;ny=100-px}
- const sc=(+c.scale||100)/100;nx=50+(nx-50)*sc+(+c.offX||0);ny=50+(ny-50)*sc+(+c.offY||0);
+ nx+=(+c.offX||0);ny+=(+c.offY||0);
  return {x:Math.max(0,Math.min(100,nx)),y:Math.max(0,Math.min(100,ny))};
 }
 function positionAt(data,actorId,t){
@@ -1035,9 +1068,9 @@ function loadDemoReplay(){const r=replayState();r.data=demoReplayFromPlan();r.so
 async function loadWclReplay(){toast('Сетевой WCL импорт отключён — используй локальный Browser Replay JSON.')}
 function importReplayJson(file){if(!file)return;const fr=new FileReader();fr.onload=()=>{try{const r=replayState();r.data=normalizeReplayPayload(JSON.parse(fr.result));r.source='json';r.mapId=replayPrimaryMapId(r.data);r.mapSource=r.mapId?'wcl':'legacy';replayClock=0;autoCalibrateReplay();save();toast(r.mapId?`Replay JSON импортирован · WCL mapID ${r.mapId}`:'Replay JSON импортирован');render()}catch(e){toast('Не удалось прочитать replay JSON')}};fr.readAsText(file)}
 function exportReplayJson(){const d=replayState().data;if(!d)return toast('Replay ещё не загружен');const blob=new Blob([JSON.stringify(d,null,2)],{type:'application/json'}),a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=`raidru-replay-${current}.json`;a.click();URL.revokeObjectURL(a.href)}
-function autoCalibrateReplay(){const r=replayState();r.cal={rot:0,flipX:false,flipY:false,scale:92,offX:0,offY:0}}
+function autoCalibrateReplay(){const r=replayState();r.cal=defaultReplayCal(r.data,r.source)}
 function setReplayCal(k,v){const r=replayState();if(k==='flipX'||k==='flipY')r.cal[k]=!!v;else r.cal[k]=+v;save();updateReplayDom(true)}
-function resetReplayCal(){replayState().cal={rot:0,flipX:false,flipY:false,scale:92,offX:0,offY:0};save();render()}
+function resetReplayCal(){const r=replayState();r.cal=defaultReplayCal(r.data,r.source);save();render()}
 function setReplayTime(v){stopReplay();replayClock=Math.max(0,Math.min(replayDuration(replayState().data),+v||0));updateReplayDom(true)}
 function setReplaySpeed(v){replaySpeed=+v||1}
 function replayStep(ms){setReplayTime(replayClock+ms)}
