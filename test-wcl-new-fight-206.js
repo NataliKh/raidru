@@ -1,0 +1,20 @@
+const fs=require('fs');
+const path=require('path');
+const root=__dirname;
+const wcl=fs.readFileSync(path.join(root,'wcl-safe-200.js'),'utf8');
+const css=fs.readFileSync(path.join(root,'styles.css'),'utf8');
+const html=fs.readFileSync(path.join(root,'index.html'),'utf8');
+const sw=fs.readFileSync(path.join(root,'sw.js'),'utf8');
+function ok(v,msg){if(!v)throw new Error(msg)}
+ok(wcl.includes('function clearWclReplay200()'),'missing clear function');
+ok(wcl.includes("r.data=null;"),'replay data is not cleared');
+ok(wcl.includes("r.url='';"),'replay url is not cleared');
+ok(wcl.includes("r.mapId=null;"),'map id is not cleared');
+ok(wcl.includes("try{stopReplay()}catch(_){}"),'playback is not stopped');
+ok(wcl.includes("replayClock=0;"),'clock is not reset');
+ok(wcl.includes('＋ Новый бой'),'new fight button missing');
+ok(wcl.includes('clearWclReplay200'),'clear function not exposed');
+ok(css.includes('.wclUrlRow200.hasReset'),'reset row layout missing');
+ok(html.includes('2.0.6-wcl-new-fight'),'index cache bust missing');
+ok(sw.includes("raidru-v206-wcl-new-fight"),'service worker cache bump missing');
+console.log('WCL new-fight 2.0.6 regression checks: OK');
