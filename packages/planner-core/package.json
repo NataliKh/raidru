@@ -1,5 +1,5 @@
 {
-  "name": "@raidru/replay-core",
+  "name": "@raidru/planner-core",
   "private": true,
   "version": "3.0.0-alpha.2",
   "type": "module",

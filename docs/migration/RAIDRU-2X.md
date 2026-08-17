@@ -12,6 +12,6 @@ Currently migrated defensively:
 - roster;
 - selected difficulty plan where present.
 
-Replay blobs are intentionally not migrated in alpha.1. They will move into a dedicated Replay repository after the WCL integration is rebuilt.
+Replay blobs are intentionally not migrated in alpha.2. They will move into a dedicated Replay repository after the WCL integration is rebuilt.
 
 Because the old key is not removed, reverting to RaidRU 2.x remains possible during the alpha period.

@@ -23,11 +23,15 @@
     "paths": {
       "@raidru/shared-types": [
         "../../packages/shared-types/src/index.ts"
+      ],
+      "@raidru/planner-core": [
+        "../../packages/planner-core/src/index.ts"
       ]
     }
   },
   "include": [
     "src",
-    "../../packages/shared-types/src"
+    "../../packages/shared-types/src",
+    "../../packages/planner-core/src"
   ]
 }

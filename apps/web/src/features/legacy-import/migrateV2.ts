@@ -1,7 +1,8 @@
-import type { BossId, BossPlanState, RaidruState, RosterMember, Scene, TimelineEvent } from '@raidru/shared-types';
+import type { BossDifficultyPlanState, BossId, Difficulty, RaidruState, RosterMember, Scene, SceneRoute, TimelineEvent } from '@raidru/shared-types';
 import { bosses, builtInScenes, builtInTimelines } from '../../data/content';
 
 export const LEGACY_STORAGE_KEY = 'raidru-standalone';
+const difficulties: Difficulty[] = ['normal', 'heroic', 'mythic'];
 
 function safeNumber(value: unknown, fallback = 0): number {
   const n = Number(value);
@@ -24,6 +25,30 @@ function normalizeRoster(value: unknown): RosterMember[] {
   });
 }
 
+function normalizeRoutes(value: unknown, sceneIndex: number): SceneRoute[] {
+  if (Array.isArray(value)) return value.map((route, routeIndex) => {
+    const source = route && typeof route === 'object' ? route as Record<string, unknown> : {};
+    const points = Array.isArray(source.points) ? source.points : [];
+    return {
+      id: String(source.id || `legacy-route-${sceneIndex}-${routeIndex}`),
+      name: String(source.name || `Маршрут ${routeIndex + 1}`),
+      points: points.map(point => {
+        const p = point && typeof point === 'object' ? point as Record<string, unknown> : {};
+        return { x: safeNumber(p.x), y: safeNumber(p.y) };
+      })
+    };
+  });
+  if (!value || typeof value !== 'object') return [];
+  return Object.entries(value as Record<string, unknown>).map(([name, rawPoints], routeIndex) => ({
+    id: `legacy-route-${sceneIndex}-${routeIndex}`,
+    name,
+    points: Array.isArray(rawPoints) ? rawPoints.map(point => {
+      const p = point && typeof point === 'object' ? point as Record<string, unknown> : {};
+      return { x: safeNumber(p.x), y: safeNumber(p.y) };
+    }) : []
+  }));
+}
+
 function normalizeLegacyScenes(value: unknown, fallback: Scene[]): Scene[] {
   if (!Array.isArray(value) || !value.length) return structuredClone(fallback);
   return value.map((scene, index) => {
@@ -31,17 +56,21 @@ function normalizeLegacyScenes(value: unknown, fallback: Scene[]): Scene[] {
     const tokens = Array.isArray(source.tokens) ? source.tokens : [];
     const effects = Array.isArray(source.effects) ? source.effects : [];
     return {
-      id: `legacy-scene-${index + 1}`,
+      id: String(source.id || `legacy-scene-${index + 1}`),
       name: String(source.name || `Сцена ${index + 1}`),
       note: String(source.note || ''),
       duration: safeNumber(source.duration, 10),
       map: { zoom: 100, x: 0, y: 0, dark: 4, ...((source.map && typeof source.map === 'object') ? source.map as object : {}) },
       tokens: tokens.map((token, tokenIndex) => {
-        if (!Array.isArray(token)) return { id: `legacy-token-${tokenIndex}`, label: 'Объект', type: 'marker', x: 50, y: 50 };
-        return { id: String(token[0] || `legacy-token-${tokenIndex}`), label: String(token[1] || ''), type: String(token[2] || 'marker'), x: safeNumber(token[3], 50), y: safeNumber(token[4], 50), meta: token[5] && typeof token[5] === 'object' ? token[5] : undefined };
+        if (Array.isArray(token)) return { id: String(token[0] || `legacy-token-${tokenIndex}`), label: String(token[1] || ''), type: String(token[2] || 'marker'), x: safeNumber(token[3], 50), y: safeNumber(token[4], 50), meta: token[5] && typeof token[5] === 'object' ? token[5] : undefined };
+        const item = token && typeof token === 'object' ? token as Record<string, unknown> : {};
+        return { id: String(item.id || `legacy-token-${tokenIndex}`), label: String(item.label || 'Объект'), type: String(item.type || 'marker'), x: safeNumber(item.x, 50), y: safeNumber(item.y, 50), meta: item.meta && typeof item.meta === 'object' ? item.meta as Record<string, unknown> : undefined };
       }),
-      effects: effects.filter(Boolean) as Scene['effects'],
-      routes: source.routes && typeof source.routes === 'object' ? structuredClone(source.routes as Scene['routes']) : {}
+      effects: effects.map((effect, effectIndex) => {
+        const item = effect && typeof effect === 'object' ? effect as Record<string, unknown> : {};
+        return { id: String(item.id || `legacy-effect-${index}-${effectIndex}`), type: String(item.type || 'danger'), x: safeNumber(item.x, 50), y: safeNumber(item.y, 50), w: safeNumber(item.w, 20), h: safeNumber(item.h, 20), rot: safeNumber(item.rot), label: item.label ? String(item.label) : undefined };
+      }),
+      routes: normalizeRoutes(source.routes, index)
     };
   });
 }
@@ -55,6 +84,14 @@ function normalizeTimeline(value: unknown, fallback: TimelineEvent[], bossId: Bo
   });
 }
 
+function normalizeDifficultyPlan(value: unknown, bossId: BossId): BossDifficultyPlanState {
+  const source = value && typeof value === 'object' ? value as Record<string, unknown> : {};
+  return {
+    scenes: normalizeLegacyScenes(source.scenes, builtInScenes[bossId]),
+    timeline: normalizeTimeline(source.timelineV3 || source.timeline, builtInTimelines[bossId], bossId)
+  };
+}
+
 export function readLegacyState(): Record<string, unknown> | null {
   try {
     const raw = localStorage.getItem(LEGACY_STORAGE_KEY);
@@ -64,9 +101,7 @@ export function readLegacyState(): Record<string, unknown> | null {
   }
 }
 
-export function hasLegacyState(): boolean {
-  return Boolean(readLegacyState());
-}
+export function hasLegacyState(): boolean { return Boolean(readLegacyState()); }
 
 export function migrateLegacyState(base: RaidruState): RaidruState {
   const legacy = readLegacyState();
@@ -77,20 +112,15 @@ export function migrateLegacyState(base: RaidruState): RaidruState {
     const oldBoss = legacy[boss.id];
     if (!oldBoss || typeof oldBoss !== 'object') continue;
     const source = oldBoss as Record<string, unknown>;
-    const difficultyPlans = source.difficultyPlans && typeof source.difficultyPlans === 'object'
-      ? source.difficultyPlans as Record<string, unknown>
-      : null;
-    const selectedPlan = difficultyPlans?.[next.difficulty];
-    const planSource = selectedPlan && typeof selectedPlan === 'object' ? selectedPlan as Record<string, unknown> : source;
-
-    const merged: BossPlanState = {
+    const rawDifficultyPlans = source.difficultyPlans && typeof source.difficultyPlans === 'object' ? source.difficultyPlans as Record<string, unknown> : null;
+    const fallbackPlan = normalizeDifficultyPlan(source, boss.id);
+    const difficultyPlans = Object.fromEntries(difficulties.map(difficulty => [difficulty, rawDifficultyPlans?.[difficulty] ? normalizeDifficultyPlan(rawDifficultyPlans[difficulty], boss.id) : structuredClone(fallbackPlan)])) as RaidruState['bosses'][BossId]['difficultyPlans'];
+    next.bosses[boss.id] = {
       favorite: Boolean(source.favorite),
       progress: Math.max(0, Math.min(100, safeNumber(source.progress))),
       note: String(source.note || ''),
-      scenes: normalizeLegacyScenes(planSource.scenes, builtInScenes[boss.id]),
-      timeline: normalizeTimeline(planSource.timelineV3 || source.timelineV3, builtInTimelines[boss.id], boss.id)
+      difficultyPlans
     };
-    next.bosses[boss.id] = merged;
   }
 
   next.roster = normalizeRoster(legacy.roster);

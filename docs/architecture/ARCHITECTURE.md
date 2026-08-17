@@ -31,20 +31,46 @@ A lower layer never imports a page/component.
 5. Replay is normalized once in `packages/replay-core` and then consumed by Map, Timeline and Mechanics.
 6. Large data belongs in IndexedDB. `localStorage` is only read by the 2.x migration adapter.
 7. Built-in tactics/scenes are source data, not mutable globals.
-8. Every future external adapter must have a real fixture from production data before it is wired into the UI.
+8. Every external adapter must have a real fixture from production data before it is wired into the UI.
+9. Planner mutations go through `AppStore`; components do not mutate scene arrays directly.
+10. A difficulty owns its own `BossDifficultyPlanState`. Switching difficulty never silently overwrites another plan.
+11. Drag gestures create one history checkpoint, not hundreds of undo entries.
+12. UI-only selection/tool state stays local to Planner components and is not persisted as raid data.
 
-## State ownership
+## Planner model
 
-`RaidruState` owns:
-- selected boss, page and difficulty;
-- per-boss progress, notes, scenes and timeline;
-- global roster;
-- migration marker.
+```text
+BossPlanState
+├─ favorite / progress / note
+└─ difficultyPlans
+   ├─ normal
+   ├─ heroic
+   └─ mythic
+      ├─ scenes[]
+      │  ├─ tokens[]
+      │  ├─ effects[]
+      │  └─ routes[]
+      └─ timeline[]
+```
 
-The React tree subscribes to one `AppStore`. Updates are immutable and persisted by a repository.
+`SceneToken`, `SceneEffect` and `SceneRoute` all have stable IDs. This is required for selection, undo/redo, future collaboration and safe RaidPlan import.
 
-## Current alpha.1 scope
+## History
 
-Implemented: app shell, eight bosses, current visual maps, tactics, scene viewer, draggable planner tokens, timeline, roster, notes, IndexedDB persistence, backup import/export and defensive migration from `raidru-standalone`.
+`AppStore` owns a bounded 50-step in-memory history; `packages/planner-core` remains pure and history-agnostic. History is intentionally not persisted. Continuous pointer movement is wrapped in a gesture transaction so a drag operation is undone in one step.
 
-Not yet wired: RaidPlan import, WCL Replay/Mechanics, scenario authoring tools, route editing and live sharing.
+## Difficulty switching
+
+The UI always asks before switching to another difficulty:
+
+- **Open existing** — keeps the target difficulty untouched.
+- **Copy current** — replaces the target with a deep copy of the current plan.
+- **Clear target map** — keeps target scenes/timeline but removes tokens, effects and routes.
+
+This replaces the ambiguous shared-map behavior from RaidRU 2.x.
+
+## Current alpha.2 scope
+
+Implemented: application shell, eight bosses, visual maps, tactics, independent difficulty plans, full scene management, object palette, arrows/zones, route authoring, drag/drop, selection inspector, undo/redo, timeline, roster, notes, IndexedDB persistence, backup import/export and defensive migration from both RaidRU 2.x and RaidRU 3 alpha.1 schema v3.
+
+Not yet wired: RaidPlan import, WCL Replay/Mechanics, multi-select, live collaboration/sharing.

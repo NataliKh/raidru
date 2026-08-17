@@ -1,17 +1,104 @@
-import { useAppState, appStore } from '../../app/store';
+import { useEffect, useState } from 'react';
+import type { PlannerSelection } from '@raidru/shared-types';
+import { appStore, difficultyPlan, useAppState } from '../../app/store';
 import { Arena } from './Arena';
+import { InspectorPanel } from './InspectorPanel';
+import { PalettePanel } from './PalettePanel';
+import { paletteItems } from './palette';
 
 export function PlannerWorkspace({ editable = true }: { editable?: boolean }) {
   const state = useAppState();
   const bossId = state.selectedBossId;
-  const plan = state.bosses[bossId];
-  const rawIndex = state.selectedSceneByBoss[bossId] || 0;
+  const difficulty = state.difficulty;
+  const plan = difficultyPlan(state, bossId, difficulty);
+  const rawIndex = state.selectedSceneByBoss[bossId]?.[difficulty] || 0;
   const sceneIndex = Math.min(rawIndex, Math.max(0, plan.scenes.length - 1));
   const scene = plan.scenes[sceneIndex];
+  const [selection, setSelection] = useState<PlannerSelection>(null);
+  const [activeRouteId, setActiveRouteId] = useState<string | null>(null);
+
+  useEffect(() => { setSelection(null); setActiveRouteId(null); }, [bossId, difficulty, sceneIndex]);
+
+  useEffect(() => {
+    if (!editable) return;
+    const handler = (event: KeyboardEvent) => {
+      const target = event.target as HTMLElement | null;
+      const typing = target?.tagName === 'INPUT' || target?.tagName === 'TEXTAREA' || target?.isContentEditable;
+      if (event.key === 'Escape' && activeRouteId) { setActiveRouteId(null); return; }
+      if (typing) return;
+      if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'z') { event.preventDefault(); event.shiftKey ? appStore.redo() : appStore.undo(); return; }
+      if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'y') { event.preventDefault(); appStore.redo(); return; }
+      if ((event.key === 'Delete' || event.key === 'Backspace') && selection && scene) {
+        event.preventDefault();
+        if (selection.kind === 'token') appStore.removeToken(bossId, difficulty, sceneIndex, selection.id);
+        if (selection.kind === 'effect') appStore.removeEffect(bossId, difficulty, sceneIndex, selection.id);
+        if (selection.kind === 'route') appStore.removeRoute(bossId, difficulty, sceneIndex, selection.id);
+        setSelection(null);
+      }
+    };
+    window.addEventListener('keydown', handler);
+    return () => window.removeEventListener('keydown', handler);
+  }, [editable, activeRouteId, selection, scene, bossId, difficulty, sceneIndex]);
+
   if (!scene) return <div className="emptyState">У этого босса пока нет сцен.</div>;
 
-  return <section className="page plannerPage">
-    <div className="sceneRail"><div className="sceneRailTitle"><strong>СЦЕНЫ</strong><span>{plan.scenes.length}</span></div>{plan.scenes.map((item, index) => <button key={item.id} className={index === sceneIndex ? 'active' : ''} onClick={() => appStore.setScene(bossId, index)}><i>{index + 1}</i><span><strong>{item.name}</strong><small>{item.duration} сек</small></span></button>)}</div>
-    <div className="workspace"><div className="workspaceToolbar"><div><small>{editable ? 'PLAN EDITOR' : 'PLAN VIEWER'}</small><strong>{scene.name}</strong></div><span>Сцена {sceneIndex + 1} / {plan.scenes.length}</span></div><Arena bossId={bossId} scene={scene} sceneIndex={sceneIndex} editable={editable} /><div className="sceneNote">{scene.note || 'Для этой сцены пока нет заметки.'}</div></div>
+  function addPaletteItem(itemId: string, x = 50, y = 50) {
+    const item = paletteItems.find(candidate => candidate.id === itemId);
+    if (!item) return;
+    if (item.kind === 'token') {
+      const id = appStore.addToken(bossId, difficulty, sceneIndex, { ...item.token, x, y, meta:{ ...item.token.meta, paletteId:item.id } });
+      setSelection({ kind:'token', id });
+    } else {
+      const id = appStore.addEffect(bossId, difficulty, sceneIndex, { ...item.effect, x, y });
+      setSelection({ kind:'effect', id });
+    }
+  }
+
+  function toggleRouteDrawing() {
+    if (activeRouteId) { setActiveRouteId(null); return; }
+    const id = appStore.createRoute(bossId, difficulty, sceneIndex);
+    setActiveRouteId(id);
+    setSelection({ kind:'route', id });
+  }
+
+  function duplicateScene() { appStore.duplicateScene(bossId, difficulty, sceneIndex); }
+  function deleteScene() {
+    if (plan.scenes.length <= 1) return;
+    if (window.confirm(`Удалить сцену «${scene.name}»?`)) appStore.deleteScene(bossId, difficulty, sceneIndex);
+  }
+  function clearScene() {
+    if (window.confirm('Очистить все объекты, зоны и маршруты этой сцены?')) {
+      appStore.clearScene(bossId, difficulty, sceneIndex);
+      setSelection(null);
+      setActiveRouteId(null);
+    }
+  }
+
+  return <section className={`page plannerPage ${editable ? 'plannerEditor' : 'plannerViewer'}`}>
+    <div className="sceneRail">
+      <div className="sceneRailTitle"><strong>СЦЕНЫ</strong><div><span>{plan.scenes.length}</span>{editable && <button title="Новая сцена" onClick={() => appStore.addScene(bossId, difficulty, sceneIndex)}>＋</button>}</div></div>
+      {plan.scenes.map((item, index) => <button key={item.id} className={index === sceneIndex ? 'active' : ''} onClick={() => appStore.setScene(bossId, index, difficulty)}><i>{index + 1}</i><span><strong>{item.name}</strong><small>{item.duration} сек · {item.tokens.length + item.effects.length} объектов</small></span></button>)}
+    </div>
+
+    <div className="workspace">
+      <div className="workspaceToolbar">
+        <div className="workspaceIdentity"><small>{editable ? 'PLANNER CORE' : 'PLAN VIEWER'}</small><strong>{scene.name}</strong></div>
+        {editable ? <div className="plannerToolbar">
+          <button onClick={() => appStore.undo()} disabled={!appStore.canUndo()} title="Отменить (Ctrl+Z)">↶</button>
+          <button onClick={() => appStore.redo()} disabled={!appStore.canRedo()} title="Повторить (Ctrl+Y)">↷</button>
+          <span />
+          <button onClick={() => appStore.addScene(bossId, difficulty, sceneIndex)} title="Новая сцена">＋ Сцена</button>
+          <button onClick={duplicateScene} title="Дублировать сцену">⧉</button>
+          <button onClick={deleteScene} disabled={plan.scenes.length <= 1} title="Удалить сцену">−</button>
+          <span />
+          <button className={activeRouteId ? 'active' : ''} onClick={toggleRouteDrawing}>{activeRouteId ? '✓ Маршрут' : '⌁ Маршрут'}</button>
+          <button onClick={clearScene} title="Очистить карту">⌫</button>
+        </div> : <span>Сцена {sceneIndex + 1} / {plan.scenes.length}</span>}
+      </div>
+      <Arena bossId={bossId} difficulty={difficulty} scene={scene} sceneIndex={sceneIndex} editable={editable} selection={selection} activeRouteId={activeRouteId} onSelect={setSelection} onPaletteDrop={addPaletteItem} onRoutePoint={(x,y) => activeRouteId && appStore.appendRoutePoint(bossId, difficulty, sceneIndex, activeRouteId, x, y)} />
+      <div className="sceneNote">{scene.note || 'Для этой сцены пока нет заметки.'}</div>
+    </div>
+
+    {editable && <aside className="plannerSidebar"><PalettePanel onAdd={itemId => addPaletteItem(itemId)} /><InspectorPanel bossId={bossId} difficulty={difficulty} scene={scene} sceneIndex={sceneIndex} selection={selection} onClearSelection={() => setSelection(null)} /></aside>}
   </section>;
 }

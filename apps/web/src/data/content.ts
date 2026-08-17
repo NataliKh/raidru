@@ -1,4 +1,4 @@
-import type { BossDefinition, BossId, BossPhase, Scene, SceneEffect, SceneToken, TimelineEvent } from '@raidru/shared-types';
+import type { BossDefinition, BossId, BossPhase, Scene, SceneEffect, SceneRoute, SceneToken, TimelineEvent } from '@raidru/shared-types';
 import legacyContent from './legacy-content.json';
 
 type LegacyBoss = {
@@ -22,7 +22,7 @@ type LegacyScene = {
   map?: { zoom?: number; x?: number; y?: number; dark?: number };
   tokens?: LegacyToken[];
   effects?: SceneEffect[];
-  routes?: Record<string, Array<{ x: number; y: number }>>;
+  routes?: Record<string, Array<{ x: number; y: number }>> | SceneRoute[];
 };
 type LegacyTimeline = [number, string, string, number];
 
@@ -49,6 +49,19 @@ function normalizeToken(token: LegacyToken): SceneToken {
   return { id: token[0], label: token[1], type: token[2], x: token[3], y: token[4], meta: token[5] };
 }
 
+function normalizeRoutes(routes: LegacyScene['routes'], bossId: BossId, sceneIndex: number): SceneRoute[] {
+  if (Array.isArray(routes)) return routes.map((route, routeIndex) => ({
+    id: route.id || `${bossId}-scene-${sceneIndex + 1}-route-${routeIndex + 1}`,
+    name: route.name || `Маршрут ${routeIndex + 1}`,
+    points: structuredClone(route.points || [])
+  }));
+  return Object.entries(routes || {}).map(([name, points], routeIndex) => ({
+    id: `${bossId}-scene-${sceneIndex + 1}-route-${routeIndex + 1}`,
+    name,
+    points: structuredClone(points)
+  }));
+}
+
 function normalizeScene(scene: LegacyScene, bossId: BossId, index: number): Scene {
   return {
     id: `${bossId}-scene-${index + 1}`,
@@ -62,8 +75,8 @@ function normalizeScene(scene: LegacyScene, bossId: BossId, index: number): Scen
       dark: Number(scene.map?.dark ?? 4)
     },
     tokens: (scene.tokens || []).map(normalizeToken),
-    effects: (scene.effects || []).map(effect => ({ ...effect })),
-    routes: structuredClone(scene.routes || {})
+    effects: (scene.effects || []).map((effect, effectIndex) => ({ ...effect, id: effect.id || `${bossId}-scene-${index + 1}-effect-${effectIndex + 1}` })),
+    routes: normalizeRoutes(scene.routes, bossId, index)
   };
 }
 
