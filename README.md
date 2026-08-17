@@ -2,10 +2,30 @@
 
 Русскоязычный визуальный планировщик рейдов World of Warcraft: сцены, таймлайн, назначения, импорт RaidPlan и создание черновика тактики по реальным позициям Warcraft Logs.
 
-**Текущая версия:** `2.1.5 — WCL Full Event Replay`  
+**Текущая версия:** `2.1.6 — WCL ReplaySegment Core`  
 **Сайт:** https://natalikh.github.io/raidru/
 
 
+
+
+## 2.1.6 — WCL ReplaySegment Core
+
+Исправлена корневая причина пустых координат в прямом импорте Warcraft Logs. Рабочий Browser Replay получал позиции не из GraphQL `events(includeResources: true)`, а из внутреннего потока WCL Replay `reports/replaysegment/...`. В этих событиях поле `resourceActor` задаёт владельца координат: `1 = sourceID`, `2 = targetID`.
+
+Теперь обычный `smart` Replay:
+
+- GraphQL использует только для metadata боя и `friendlyPlayers`;
+- Worker запрашивает тот же ReplaySegment-поток WCL, но режет бой на 30-секундные окна: наблюдаемый 240-секундный сырой сегмент может весить около 100 МБ, что слишком рискованно для памяти Worker;
+- каждый сегмент кэшируется отдельно и загружается по одному за Worker-вызов;
+- `x/y`, `nextX/nextY`, `nextTimestamp`, `facing`, `mapID` разбираются по реальной семантике `resourceActor`;
+- из тех же сегментов сразу сохраняются hostile casts, debuffs, summons и deaths, поэтому раздел «Механики» не делает второй GraphQL-запрос после готового Replay;
+- старые cache namespaces заменены на `v216`;
+- исправлено `numeric(null)`: `null` больше не превращается в `0` и не создаёт ложный cursor/continuation;
+- при новой загрузке старый Replay очищается, чтобы не оставалось визуального состояния «18 игроков / 0 точек» от предыдущего запроса.
+
+Regression-тест использует реальную форму ReplaySegment JSON (`events[]`, `resourceActor: 1|2`, `ability.guid`, `nextX/nextY`) и отдельно проверяет, что координаты target при `resourceActor=2` не приписываются source-игроку.
+
+Подробнее: `RELEASE-2.1.6-WCL-REPLAYSEGMENT-CORE.md`.
 
 ## 2.1.5 — WCL Full Event Replay
 

@@ -12,6 +12,6 @@ ok(!app.includes("const priest=["), 'specialization spell appendix still present
 ok(app.includes('<h3>♥ Хилы</h3>'), 'generic healer guidance card missing');
 ok(app.includes('Хилы: ${b.heal}'), 'generic healer raid note missing');
 ok(!css.includes('.priest.on')&&!css.includes('.priestCard'), 'legacy specialization CSS remains');
-ok(html.includes('app.js?v=2.1.5-wcl-full-event-replay'), 'app cache bust missing');
-ok((sw.includes("raidru-v213-neutral-roles")||sw.includes("raidru-v214-wcl-fight-scope")||sw.includes("raidru-v215-wcl-full-event-replay")), 'service worker cache not bumped');
+ok(html.includes('app.js?v=2.1.6-wcl-replaysegment-core'), 'app cache bust missing');
+ok((sw.includes("raidru-v213-neutral-roles")||sw.includes("raidru-v214-wcl-fight-scope")||sw.includes("raidru-v215-wcl-full-event-replay")||sw.includes("raidru-v216-wcl-replaysegment-core")), 'service worker cache not bumped');
 console.log('neutral roles 2.1.3 regression checks: OK');

@@ -4,7 +4,7 @@ compatibility_date = "2026-08-15"
 workers_dev = true
 
 [vars]
-# 2.1.5: smart Replay uses the generic full event stream; explicit mode=fast retains the legacy Casts-only one-shot diagnostic.
+# 2.1.6: smart Replay uses WCL /reports/replaysegment (same source as the WCL Replay UI); mode=fast retains the legacy GraphQL diagnostic.
 WCL_SOFT_LIMIT = "0.85"
 # Artificial pauses are allowed only when the hourly API budget is effectively empty.
 # A real upstream 429 still creates a strict Retry-After lock.
@@ -13,7 +13,7 @@ WCL_HARD_LIMIT = "0.999"
 WCL_MIN_RESERVE = "2"
 # One browser action can process several cached/small pages without extra UI clicks.
 WCL_MAX_PAGES_PER_REQUEST = "16"
-# Full-event Replay page size. Worker automatically reduces it to 500/1000/2000/5000 when quota is tight.
+# GraphQL page size is retained for explicit mode=fast and fallback mechanics only; smart ReplaySegment import does not consume event-page API quota.
 WCL_EVENT_PAGE_LIMIT = "10000"
 
 # 2.0.9 selective Mechanics Pack (no coordinate resources).

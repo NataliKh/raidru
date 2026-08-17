@@ -7,6 +7,6 @@ assert(app.includes('replayWclMapConfig'),'WCL map config missing');
 assert(app.includes('class=\"arenaMapImage raidMapFull\"'),'Replay must render WCL raid map asset');
 assert(app.includes("delete template.raidPlan;template.mapSource='wcl'"),'WCL draft must not inherit RaidPlan background');
 assert(client.includes("r.mapId=replayPrimaryMapId(r.data);r.mapSource=r.mapId?'wcl':'fallback'"),'URL import must pin WCL map source');
-assert(/app\.js\?v=(2\.0\.(7-wcl-coordinates|9-mechanics)|2\.1\.(0-performance|3-neutral-roles|4-wcl-fight-scope|5-wcl-full-event-replay))/.test(html)&&/wcl-safe-200\.js\?v=(2\.0\.(7-wcl-coordinates|9-mechanics)|2\.1\.(0-performance|4-wcl-fight-scope|5-wcl-full-event-replay))/.test(html),'cache bust missing');
-assert(/raidru-v(207-wcl-coordinates|209-mechanics-analysis|210-performance-core|211-mechanics-readability|211-navigation|213-neutral-roles|214-wcl-fight-scope|215-wcl-full-event-replay)/.test(sw),'service worker version missing');
+assert(/app\.js\?v=(2\.0\.(7-wcl-coordinates|9-mechanics)|2\.1\.(0-performance|3-neutral-roles|4-wcl-fight-scope|5-wcl-full-event-replay|6-wcl-replaysegment-core))/.test(html)&&/wcl-safe-200\.js\?v=(2\.0\.(7-wcl-coordinates|9-mechanics)|2\.1\.(0-performance|4-wcl-fight-scope|5-wcl-full-event-replay|6-wcl-replaysegment-core))/.test(html),'cache bust missing');
+assert(/raidru-v(207-wcl-coordinates|209-mechanics-analysis|210-performance-core|211-mechanics-readability|211-navigation|213-neutral-roles|214-wcl-fight-scope|215-wcl-full-event-replay|216-wcl-replaysegment-core)/.test(sw),'service worker version missing');
 console.log('WCL map priority 2.0.2 static checks: OK');

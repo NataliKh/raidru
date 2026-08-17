@@ -1,18 +1,18 @@
-const CACHE='raidru-v215-wcl-full-event-replay';
+const CACHE='raidru-v216-wcl-replaysegment-core';
 const CORE=[
 './',
 './index.html',
-'./styles.css?v=2.1.5-wcl-full-event-replay',
-'./app.js?v=2.1.5-wcl-full-event-replay',
+'./styles.css?v=2.1.6-wcl-replaysegment-core',
+'./app.js?v=2.1.6-wcl-replaysegment-core',
 './raidplan-importer.js?v=1.0.0',
 './workspace-095.js?v=2.1.0-performance',
 './raid-ready-100.js?v=2.1.0-performance',
-'./ui-101.js?v=2.1.5-wcl-full-event-replay',
-'./wcl-safe-200.js?v=2.1.5-wcl-full-event-replay',
+'./ui-101.js?v=2.1.6-wcl-replaysegment-core',
+'./wcl-safe-200.js?v=2.1.6-wcl-replaysegment-core',
 './wcl-workspace-208.js?v=2.1.0-performance',
 './wcl-mechanics-209.js?v=2.1.0-performance',
 './navigation-211.js?v=2.1.1-navigation',
-'./viewer-212.js?v=2.1.5-wcl-full-event-replay',
+'./viewer-212.js?v=2.1.6-wcl-replaysegment-core',
 './manifest.webmanifest',
 './icon.svg'
 ];
