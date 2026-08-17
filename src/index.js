@@ -151,7 +151,7 @@ async function wclToken(env) {
       'Authorization': `Basic ${basic}`,
       'Content-Type': 'application/x-www-form-urlencoded',
       'Accept': 'application/json',
-      'User-Agent': 'RaidRU/2.1.4 Fight Scoped Replay'
+      'User-Agent': 'RaidRU/2.1.5 Full Event Replay'
     },
     body: 'grant_type=client_credentials'
   });
@@ -178,7 +178,7 @@ async function wclGraphql(env, query, variables = {}) {
       'Authorization': `Bearer ${token}`,
       'Content-Type': 'application/json',
       'Accept': 'application/json',
-      'User-Agent': 'RaidRU/2.1.4 Fight Scoped Replay'
+      'User-Agent': 'RaidRU/2.1.5 Full Event Replay'
     },
     body: JSON.stringify({ query, variables })
   });
@@ -237,11 +237,9 @@ query RaidRUEvents($code: String!, $start: Float!, $end: Float!, $limit: Int!) {
 }`;
 }
 
-// 2.0.5 fast path: a normal URL containing an explicit numeric fight ID is
-// intentionally resolved with ONE WCL GraphQL request per user action. The same
-// query returns report metadata, actors, the selected fight and one page of casts
-// with resource coordinates. This removes the old report + quota + events triple
-// request that could burn a small hourly budget before Replay was even usable.
+// Legacy diagnostic fast path. In 2.1.5 this path is used only for explicit
+// `mode=fast`. Normal/smart imports intentionally use the generic event stream,
+// because resource coordinates are not guaranteed to be present on Casts-only pages.
 function oneShotReplayQuery(fightId, mode = 'casts', hasStart = false) {
   const filter = mode === 'casts' ? 'dataType: Casts,' : '';
   const startArg = hasStart ? 'startTime: $start,' : '';
@@ -273,8 +271,8 @@ function normalizeQuota(q) {
 }
 
 function softLimit(env) {
-  // Crossing the soft limit no longer disables RaidRU. It only forces the
-  // low-cost casts sampler. The hard guard below is what can actually pause WCL.
+  // Retained for compatibility with older deployments. Smart Replay no longer
+  // downgrades to Casts-only, because that can produce a roster with zero movement.
   const n = Number(env?.WCL_SOFT_LIMIT);
   return Number.isFinite(n) && n >= 0.5 && n <= 0.95 ? n : 0.85;
 }
@@ -300,9 +298,9 @@ function maxPages(env) {
 
 function eventPageLimit(env, mode = 'casts') {
   const n = Number(env?.WCL_EVENT_PAGE_LIMIT);
-  // WCL explicitly allows up to 10k events. Fast mode uses that maximum so a
-  // normal fight is usually only one or a few GraphQL event requests.
-  const fallback = mode === 'casts' ? 10000 : 5000;
+  // Use the largest configured page supported by this importer. Full-event Replay
+  // is paginated and resumed from cache, so larger pages reduce round trips.
+  const fallback = 10000;
   return Number.isInteger(n) && n >= 500 && n <= 10000 ? n : fallback;
 }
 
@@ -344,13 +342,12 @@ function adaptiveEventLimit(q, lastCost, env, mode = 'casts') {
 }
 
 function chooseFetchMode(q, env, requested = 'smart') {
-  if (requested === 'full') return 'all';
+  // Coordinates are resource snapshots attached across the generic event stream.
+  // A Casts-only query can correctly discover the roster yet still contain zero
+  // usable x/y samples, so smart mode must use the full event stream. The old
+  // Casts sampler remains available only as an explicit diagnostic `mode=fast`.
   if (requested === 'fast') return 'casts';
-  q = normalizeQuota(q);
-  // Smart is intentionally fast-first. For raid planning we need a usable
-  // movement sample, not every combat event in the log.
-  if (!q || !q.limitPerHour) return 'casts';
-  return q.usedRatio >= softLimit(env) ? 'casts' : 'casts';
+  return 'all';
 }
 
 function publicReport(report, quota = null, cache = 'miss') {
@@ -370,7 +367,7 @@ function publicReport(report, quota = null, cache = 'miss') {
   };
 }
 
-function reportCacheName(code) { return `wcl/report-v214/${code}`; }
+function reportCacheName(code) { return `wcl/report-v215/${code}`; }
 
 async function getReport(env, code, { forceQuota = false } = {}) {
   const cacheName = reportCacheName(code);
@@ -399,7 +396,7 @@ async function getQuota(env, { force = false } = {}) {
 }
 
 function pageCacheName(code, fightId, start, mode = 'casts') {
-  return `wcl/page-v214/${mode}/${code}/${fightId}/${Math.round(start)}`;
+  return `wcl/page-v215/${mode}/${code}/${fightId}/${Math.round(start)}`;
 }
 
 function positionCandidate(e, fightStart, playerIds, defaultMapID) {
@@ -543,7 +540,7 @@ async function setBackoff(code, fightId, retryAfter, reason, quota) {
   return value;
 }
 
-function progressCacheName(code, fightId) { return `wcl/progress-v214/${code}/${fightId}`; }
+function progressCacheName(code, fightId) { return `wcl/progress-v215/${code}/${fightId}`; }
 
 async function loadProgress(code, fight) {
   const p = await cacheGet(progressCacheName(code, fight.id));
@@ -686,11 +683,11 @@ function partialOrPause(meta, fight, progress, quota, { reason = 'wcl_quota_empt
 
 
 async function buildReplayOneShot(env, code, fightId, requestedMode = 'smart') {
-  const finalName = `wcl/replay-v214/fast/${code}/${fightId}`;
+  const finalName = `wcl/replay-v215/fast/${code}/${fightId}`;
   const finalHit = await cacheGet(finalName);
   if (finalHit) return { status: 200, body: { ...finalHit, cache: 'hit' } };
 
-  // 2.1.4 deliberately does not reuse older replay envelopes here. Previous
+  // 2.1.5 deliberately does not reuse older replay envelopes here. Previous
   // caches could contain report-wide actor tables (often capped at 500 entries),
   // which makes a fight look like 500 players and can discard every coordinate.
 
@@ -790,21 +787,21 @@ async function buildReplayOneShot(env, code, fightId, requestedMode = 'smart') {
 
 async function buildReplay(env, code, fightParam, requestedMode = 'smart') {
   const directFightId = safeInt(fightParam);
-  if (directFightId && requestedMode !== 'full') {
+  if (directFightId && requestedMode === 'fast') {
     return buildReplayOneShot(env, code, directFightId, requestedMode);
   }
-  const modeKey = requestedMode === 'full' ? 'full' : 'fast';
-  const finalName = `wcl/replay-v214/${modeKey}/${code}/${fightParam}`;
+  const modeKey = requestedMode === 'fast' ? 'fast' : 'full';
+  const finalName = `wcl/replay-v215/${modeKey}/${code}/${fightParam}`;
   const cachedFinal = await cacheGet(finalName);
   if (cachedFinal) return { status: 200, body: { ...cachedFinal, cache: 'hit' } };
 
-  // Old replay caches are intentionally bypassed in 2.1.4 because actor scope semantics changed.
+  // Old replay caches are intentionally bypassed in 2.1.5 because the coordinate source changed from Casts-only to the full event stream.
 
   const meta = await getReport(env, code);
   const fight = selectFight(meta, fightParam);
   if (!fight) return { status: 404, body: { error: 'fight_not_found', fights: meta.fights } };
 
-  const actualFinalName = `wcl/replay-v214/${modeKey}/${code}/${fight.id}`;
+  const actualFinalName = `wcl/replay-v215/${modeKey}/${code}/${fight.id}`;
   if (actualFinalName !== finalName) {
     const hit = await cacheGet(actualFinalName);
     if (hit) return { status: 200, body: { ...hit, cache: 'hit' } };
@@ -823,11 +820,11 @@ async function buildReplay(env, code, fightParam, requestedMode = 'smart') {
   // Get a fresh-ish snapshot. The memo prevents the browser's one-second batch
   // continuation from spending another quota query every time.
   let quota = await getQuota(env);
-  let fetchMode = requestedMode === 'full' ? 'all' : chooseFetchMode(quota, env, requestedMode);
+  let fetchMode = requestedMode === 'fast' ? 'casts' : 'all';
   if (progress.fetchMode === 'casts' || progress.fetchMode === 'all') {
     // Old 2.0.2 checkpoints had no mode. Smart mode may safely switch their
     // remaining tail to casts without discarding already collected coordinates.
-    if (requestedMode === 'full') fetchMode = 'all';
+    if (requestedMode !== 'fast') fetchMode = 'all';
     else if (progress.fetchMode === 'casts') fetchMode = 'casts';
   }
 
@@ -863,7 +860,7 @@ async function buildReplay(env, code, fightParam, requestedMode = 'smart') {
     if (seenCursor.has(String(cursor))) { complete = true; break; }
     seenCursor.add(String(cursor));
 
-    // 2.0.4 continuously shrinks the next WCL page as the hourly budget gets low.
+    // Continuously shrink the next WCL page as the hourly budget gets low.
     // We only stop pre-emptively when there are effectively no points left.
     const nextEventLimit = adaptiveEventLimit(quota, lastCost, env, fetchMode);
     if (nextEventLimit <= 0 || quotaUnsafe(quota, env, 0)) {
@@ -999,8 +996,8 @@ query RaidRUMechanics($code: String!, $limit: Int!, $needCasts: Boolean!, $needD
 }`;
 }
 
-function mechanicsProgressName(code, fightId) { return `wcl/mechanics-v209-progress/${code}/${fightId}`; }
-function mechanicsFinalName(code, fightId) { return `wcl/mechanics-v209/${code}/${fightId}`; }
+function mechanicsProgressName(code, fightId) { return `wcl/mechanics-v215-progress/${code}/${fightId}`; }
+function mechanicsFinalName(code, fightId) { return `wcl/mechanics-v215/${code}/${fightId}`; }
 
 function mechanicsAbility(e) {
   return safeInt(e?.abilityGameID ?? e?.abilityID ?? e?.ability?.gameID ?? e?.ability?.id) || 0;
@@ -1100,7 +1097,7 @@ async function buildMechanics(env, code, fightId) {
 
   const actorIds = new Map((meta.actors||[]).map(a=>[String(a.id),a.name||'']));
   const abilityNames = new Map((reportRaw?.masterData?.abilities||[]).map(a=>[String(a.gameID||a.id||''),a.name||'']));
-  const playerIds = new Set((meta.actors||[]).filter(a=>String(a.type).toLowerCase()==='player').map(a=>String(a.id)));
+  const playerIds = fightPlayerIds(meta, fight);
   const timeline = Array.isArray(saved?.timeline) ? [...saved.timeline] : [];
   const nextCursors = {...cursors}, nextDone={...done};
   let partial = false;
@@ -1137,11 +1134,11 @@ export default {
     if (origin && !ALLOWED_ORIGINS.has(origin)) return new Response(JSON.stringify({ error: 'origin_not_allowed', origin, allowed: [...ALLOWED_ORIGINS] }), { status: 403, headers: { 'Content-Type': 'application/json; charset=utf-8', ...cors(origin, { echo: true }), 'X-RaidRU-Origin': origin } });
 
     if (url.pathname === '/wcl/ping') {
-      return json({ ok: true, service: 'raidru-edge', version: '2.1.4-fight-scoped-replay', origin: origin || null, wclConfigured: wclConfigured(env) }, 200, origin, { 'X-RaidRU-WCL-Safe': '1' });
+      return json({ ok: true, service: 'raidru-edge', version: '2.1.5-full-event-replay', origin: origin || null, wclConfigured: wclConfigured(env) }, 200, origin, { 'X-RaidRU-WCL-Safe': '1' });
     }
 
     if (url.pathname === '/health') {
-      return json({ ok: true, service: 'raidru-edge', version: '2.1.4-fight-scoped-replay', wclConfigured: wclConfigured(env), features: ['raidplan', 'wcl-report', 'wcl-one-shot-replay', 'wcl-browser-v2-envelope', 'wcl-mechanics-pack', 'graphql-hostility-enums', 'single-query-fast-path', 'fast-casts-sampler', 'fight-scoped-friendly-players', 'partial-replay', '429-lock-only', 'resume-cache'] }, 200, origin);
+      return json({ ok: true, service: 'raidru-edge', version: '2.1.5-full-event-replay', wclConfigured: wclConfigured(env), features: ['raidplan', 'wcl-report', 'wcl-one-shot-replay', 'wcl-browser-v2-envelope', 'wcl-mechanics-pack', 'graphql-hostility-enums', 'single-query-fast-path', 'full-event-coordinate-stream', 'fight-scoped-friendly-players', 'partial-replay', '429-lock-only', 'resume-cache'] }, 200, origin);
     }
 
     if (url.pathname === '/raidplan' && request.method === 'GET') {

@@ -12,23 +12,27 @@ class MemoryCache {
 globalThis.caches={default:new MemoryCache()};
 
 let mode='normal', gqlCalls=0, oneShotCalls=0, quotaCalls=0, reportCalls=0, eventCalls=0, quotaSpent=100;
+const eventQueries=[];
 const fightFor=code=>({
   code,title:`Report ${code}`,startTime:1700000000000,endTime:1700000010000,
-  fights:[{id:10,encounterID:3420,originalEncounterID:3420,name:'Sszorak',difficulty:4,kill:true,startTime:0,endTime:900,inProgress:false,size:20,friendlyPlayers:[9001],maps:[{id:2609}]}],
+  fights:[{id:10,encounterID:53445,originalEncounterID:53445,name:"Blood of Ula'tek / Breath of Ula'tek",difficulty:4,kill:true,startTime:0,endTime:900,inProgress:false,size:18,friendlyPlayers:[9001],maps:[{id:2608}]}],
   // Regression: report-wide masterData may contain hundreds of players from other fights.
   // Replay must use this fight's friendlyPlayers, not the full 500-entry actor table.
   masterData:{actors:[...Array.from({length:500},(_,i)=>({id:1000+i,name:`Other ${i+1}`,type:'Player',subType:'Mage'})),{id:99,name:'Boss',type:'NPC',subType:'Boss'}]}
 });
 const quota=()=>({limitPerHour:1000,pointsSpentThisHour:quotaSpent,pointsResetIn:1800});
-function page(start=0){
+
+// This intentionally models the production failure from 2.1.4:
+// Casts-only pages contain valid casts but no resource x/y samples. Generic event
+// pages contain the resource snapshots needed for movement plus hostile casts.
+function page(start=0,{castsOnly=false}={}){
   const next=start<300?300:null;
-  return {
-    data:[
-      {timestamp:start+50,type:'cast',sourceID:9001,resourceActor1:9001,x:100+start,y:200+start,nextX:110+start,nextY:210+start,nextTimestamp:start+120,mapID:2609,abilityGameID:111},
-      {timestamp:start+160,type:'begincast',sourceID:99,targetID:9001,abilityGameID:1287072,abilityName:'Буря',mapID:2609}
-    ],
-    nextPageTimestamp:next
-  };
+  const data=[];
+  if(!castsOnly){
+    data.push({timestamp:start+50,type:'applybuff',sourceID:9001,resourceActor1:9001,x:100+start,y:200+start,nextX:110+start,nextY:210+start,nextTimestamp:start+120,mapID:2608,abilityGameID:777});
+  }
+  data.push({timestamp:start+160,type:'begincast',sourceID:99,targetID:9001,resourceActor2:9001,abilityGameID:1287072,abilityName:'Буря',mapID:2608});
+  return {data,nextPageTimestamp:next};
 }
 
 globalThis.fetch=async (url,opts={})=>{
@@ -42,7 +46,7 @@ globalThis.fetch=async (url,opts={})=>{
       if(mode==='rate') return new Response('rate limited',{status:429,headers:{'Retry-After':'120'}});
       quotaSpent+=10;
       const report=fightFor(vars.code);
-      report.events=page(Number(vars.start)||0);
+      report.events=page(Number(vars.start)||0,{castsOnly:true});
       return new Response(JSON.stringify({data:{rateLimitData:quota(),reportData:{report}}}),{status:200,headers:{'Content-Type':'application/json'}});
     }
     if(q.includes('RaidRUReport')){
@@ -54,9 +58,11 @@ globalThis.fetch=async (url,opts={})=>{
       return new Response(JSON.stringify({data:{rateLimitData:quota()}}),{status:200,headers:{'Content-Type':'application/json'}});
     }
     if(q.includes('RaidRUEvents')){
-      eventCalls++;
+      eventCalls++; eventQueries.push(q);
+      if(mode==='rate') return new Response('rate limited',{status:429,headers:{'Retry-After':'120'}});
       quotaSpent+=10;
-      return new Response(JSON.stringify({data:{rateLimitData:quota(),reportData:{report:{events:page(Number(vars.start)||0)}}}}),{status:200,headers:{'Content-Type':'application/json'}});
+      const castsOnly=q.includes('dataType: Casts');
+      return new Response(JSON.stringify({data:{rateLimitData:quota(),reportData:{report:{events:page(Number(vars.start)||0,{castsOnly})}}}}),{status:200,headers:{'Content-Type':'application/json'}});
     }
   }
   throw new Error(`Unexpected fetch ${url}`);
@@ -65,51 +71,49 @@ globalThis.fetch=async (url,opts={})=>{
 const source=await fs.readFile(new URL('./src/index.js',import.meta.url),'utf8');
 const mod=await import(`data:text/javascript;base64,${Buffer.from(source).toString('base64')}`);
 const worker=mod.default;
-const env={WCL_CLIENT_ID:'id',WCL_CLIENT_SECRET:'secret',WCL_EVENT_PAGE_LIMIT:'10000'};
+const env={WCL_CLIENT_ID:'id',WCL_CLIENT_SECRET:'secret',WCL_EVENT_PAGE_LIMIT:'10000',WCL_MAX_PAGES_PER_REQUEST:'16'};
 const req=(code='g2TestAA',fight='10',modeArg='smart')=>new Request(`https://worker.test/wcl/replay?code=${code}&fight=${fight}&mode=${modeArg}`,{headers:{Origin:'https://natalikh.github.io'}});
 
-// Numeric fight fast path: exactly one WCL GraphQL call per button press, with no report/quota preflight.
-let before=gqlCalls;
+// 2.1.5 regression: normal/smart numeric import must NOT use the Casts-only one-shot.
+let before=gqlCalls, beforeEvents=eventCalls, beforeOneShot=oneShotCalls;
 let r=await worker.fetch(req(),env,{}), b=await r.json();
-ok('first press returns usable partial replay',r.status===206&&b.partial===true&&b.stats?.oneShot===true&&b.positions.length>=1);
-ok('first press makes exactly one GraphQL request',gqlCalls-before===1&&oneShotCalls===1);
-ok('numeric fast path has no report preflight',reportCalls===0);
-ok('numeric fast path has no quota preflight',quotaCalls===0);
-ok('boss cast compacted',b.events.some(e=>e.abilityID===1287072));
-ok('map id survives one-shot import',String(Object.keys(b.mapIDs||{})).includes('2609'));
+ok('smart replay completes',r.status===200&&b.partial===false);
+ok('smart replay uses generic event pages',eventCalls-beforeEvents===2&&oneShotCalls===beforeOneShot&&eventQueries.slice(-2).every(q=>!q.includes('dataType: Casts')));
+ok('fight-scoped roster survives 500 report actors',Array.isArray(b.actors)&&b.actors.length===1&&b.actors[0].id===9001);
+ok('full event stream produces coordinates',b.positions.length>=2&&b.stats?.compactPositionPoints>=2&&b.stats?.actorCoverage===1);
+ok('boss cast compacted into timeline',b.events.some(e=>e.abilityID===1287072));
+ok('map id survives full-event import',String(Object.keys(b.mapIDs||{})).includes('2608'));
+ok('smart fetch mode is full',b.stats?.fetchMode==='all'&&b.quality==='full');
+ok('smart path used report metadata plus event pages',gqlCalls-before>=3&&reportCalls>=1);
 
-before=gqlCalls;
-r=await worker.fetch(req(),env,{}); b=await r.json();
-ok('second press resumes and completes',r.status===200&&b.partial===false&&b.stats?.oneShot===true);
-ok('resume costs one additional GraphQL request only',gqlCalls-before===1&&oneShotCalls===2);
 const beforeCache=gqlCalls;
 r=await worker.fetch(req(),env,{}); b=await r.json();
-ok('completed replay is cache-only',r.status===200&&b.cache==='hit'&&gqlCalls===beforeCache);
+ok('completed smart replay is cache-only',r.status===200&&b.cache==='hit'&&gqlCalls===beforeCache);
 
-// Canonical endpoint returns the Browser Replay v2 public envelope.
+// Canonical endpoint must expose the same non-empty Browser Replay v2 envelope.
 const reqExact=(code='ExactTestAA',fight='10',modeArg='smart')=>new Request(`https://worker.test/wcl/exact-replay?code=${code}&fight=${fight}&mode=${modeArg}`,{headers:{Origin:'https://natalikh.github.io'}});
-before=gqlCalls;
 r=await worker.fetch(reqExact(),env,{}); b=await r.json();
-ok('exact endpoint returns Browser Replay v2 envelope',r.status===206&&b.format==='raidru-wcl-replay-browser'&&b.version===2&&Array.isArray(b.timeline)&&b.positionsByActor);
+ok('exact endpoint returns Browser Replay v2 envelope',r.status===200&&b.format==='raidru-wcl-replay-browser'&&b.version===2&&Array.isArray(b.timeline)&&b.positionsByActor);
 ok('exact endpoint scopes actors to fight friendlyPlayers',Array.isArray(b.actors)&&b.actors.length===1&&b.actors[0].id===9001&&b.actors[0].name==='Игрок 9001');
-ok('exact endpoint preserves map IDs',String(Object.keys(b.mapIDs||{})).includes('2609'));
-ok('500 report-wide players do not erase coordinates',b.positions.length>=1&&b.stats?.compactPositionPoints>=1);
-ok('exact endpoint is still one GraphQL request per click',gqlCalls-before===1);
+ok('exact endpoint has non-zero coordinates',b.positions.length>=2&&b.stats?.compactPositionPoints>=2);
+ok('exact endpoint has boss timeline',b.timeline.some(e=>e.abilityID===1287072));
+ok('exact endpoint reports full event source',b.source?.fetchMode==='all'&&b.quality==='full');
 
-// A real 429 is one attempt, then cached Retry-After blocks later clicks without touching WCL.
+// Casts-only remains available only when explicitly requested as mode=fast.
+const beforeFastOneShot=oneShotCalls, beforeFast=gqlCalls;
+r=await worker.fetch(req('FastDiagnosticAA','10','fast'),env,{}); b=await r.json();
+ok('explicit fast mode keeps legacy one-shot diagnostic',oneShotCalls===beforeFastOneShot+1&&gqlCalls===beforeFast+1);
+ok('fast diagnostic may be coordinate-empty without affecting smart mode',Array.isArray(b.positions)&&b.positions.length===0);
+
+// A real 429 on the full event page is cached and blocks later clicks without hammering WCL.
 mode='rate';
 const beforeRate=gqlCalls;
 r=await worker.fetch(req('RateTestAA'),env,{}); b=await r.json();
 ok('real 429 becomes pause',r.status===202&&b.error==='wcl_rate_limited'&&b.retryAfter>=120);
-ok('429 used one WCL request',gqlCalls===beforeRate+1);
+ok('429 happens after metadata plus one event attempt',gqlCalls===beforeRate+2);
 const beforeLocked=gqlCalls;
 r=await worker.fetch(req('RateTestAA'),env,{}); b=await r.json();
-ok('click during Retry-After does not call WCL',r.status===202&&b.error==='wcl_rate_limited'&&gqlCalls===beforeLocked);
+ok('click during Retry-After does not call WCL again',r.status===202&&b.error==='wcl_rate_limited'&&gqlCalls===beforeLocked);
 
-// Full mode keeps the older richer multi-page pipeline as an explicit opt-in.
 mode='normal';
-const beforeFull=gqlCalls;
-r=await worker.fetch(req('FullTestAA','10','full'),env,{}); b=await r.json();
-ok('full mode still uses legacy pipeline',gqlCalls>beforeFull&&(reportCalls>0||eventCalls>0));
-
-console.log('WCL One-Shot Worker mock tests: OK');
+console.log('WCL Full Event Replay 2.1.5 Worker mock tests: OK');
