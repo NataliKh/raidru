@@ -2,7 +2,7 @@
  * Direct Warcraft Logs URL -> cached, quota-aware Worker replay.
  */
 (() => {
-  const VERSION='2.1.8-graphql-resource-replay';
+  const VERSION='2.2.0-browser-bridge';
   const API=(window.RAIDRU_WCL_API||'https://raidru-raidplan.raidru-wcl.workers.dev').replace(/\/$/,'');
   let ui={state:'idle',message:'',quota:null,report:null,url:'',fight:null,code:null,loops:0,partial:false,quality:null};
 
@@ -71,42 +71,46 @@
 
   async function loadWclFight200(code,fight,mode='smart'){
     const sameFight=String(ui.code||'')===String(code)&&String(ui.fight||'')===String(fight);
-    if(!sameFight){try{stopReplay()}catch(_){}const rr=replayState();rr.data=null;window.__raidruExactReplay208=null;replayClock=0;save();}
-    let attempts=0;
-    while(attempts++<64){
-      setUi('loading',attempts===1?'Загружаю события и координаты через официальный WCL API…':'Догружаю следующую страницу WCL API из кэша/Warcraft Logs…',{fight,code,partial:false});
-      const res=await apiJson(`/wcl/exact-replay?code=${encodeURIComponent(code)}&fight=${encodeURIComponent(fight)}&mode=${encodeURIComponent(mode)}`),b=res.body||{};
-      if(res.networkError){setUi('error',`${b.message||'Не удалось связаться с Worker'} API: ${res.url}`);return}
-      if(res.status===202&&b.error==='batch_yield'){
-        ui.quota=b.quota||ui.quota;setUi('loading',`WCL API: загружено страниц ${b.pages||0}. Координаты и механики собираются из event stream с includeResources…`,{quota:ui.quota});await new Promise(r=>setTimeout(r,450));continue;
-      }
-      if(res.status===202){
-        ui.quota=b.quota||ui.quota;
-        if(b.error==='wcl_rate_limited'){
-          setUi('paused',`Warcraft Logs сам вернул 429. RaidRU не делает повторных запросов. Продолжить через ${waitText(b.retryAfter)}.`,{quota:ui.quota});
-        }else if(b.error==='wcl_quota_empty'){
-          const q=ui.quota,tail=q&&q.limitPerHour?` Сейчас ${Math.round(q.remaining||0)} points из ${Math.round(q.limitPerHour)}.`:'';
-          setUi('paused',`У WCL практически закончились реальные API points.${tail} Это не блокировка RaidRU — уже загруженное остаётся доступно.`,{quota:ui.quota});
-        }else{
-          setUi('paused',b.message||`WCL временно не может продолжить. Повтори через ${waitText(b.retryAfter)}.`,{quota:ui.quota});
-        }
-        return;
-      }
-      if(!res.ok){setUi('error',b.error==='wcl_not_configured'?'Нужно один раз добавить WCL OAuth secrets в Cloudflare Worker.':`WCL: ${b.message||b.error||'ошибка загрузки'}`);return}
-      const raw=b,detected=bossFromWcl(raw?.source?.bossId||raw?.fight?.bossId);
-      if(detected&&detected!==current)chooseBoss(detected);
-      const normalized=enrichReplay(normalizeExactReplay200(raw));
-      if((normalized?.actors?.length||0)>0&&!(normalized?.positions?.length||0)){
-        {const rr=replayState();rr.data=null;window.__raidruExactReplay208=null;save();setUi('error',`WCL API вернул ${normalized.actors.length} участников, но 0 координат. Пустой результат очищен, чтобы старый Replay не выглядел как новый.`);return;}
-      }
-      const r=replayState();r.url=ui.url||inputValue();r.source='wcl-url';r.data=normalized;window.__raidruExactReplay208=compactExactMeta200(raw);r.mapId=replayPrimaryMapId(r.data);r.mapSource=r.mapId?'wcl':'fallback';replayClock=0;autoCalibrateReplay();save();ui.quota=raw.quota||ui.quota;
-      const isPartial=!!raw.partial,quality=raw.quality||raw?.source?.fetchMode||'fast';
-      const coverage=Math.round((raw?.stats?.actorCoverage||0)*100);
-      const cacheText=raw.message||(raw.cache==='hit'||raw.cache==='legacy-hit'?'Из кэша — WCL API не потрачен.':(isPartial?'Часть боя уже доступна.':'Replay загружен и закэширован.'));
-      const qualityText=isPartial?'частичный':(quality==='full'?'полный':'быстрый');
-      setUi(isPartial?'partial':'done',`${cacheText} ${qualityText} Replay · ${r.data.actors?.length||0} игроков · ${(r.data.positions?.length||0).toLocaleString('ru-RU')} точек${coverage?` · охват ${coverage}%`:''}${r.mapId?` · WCL mapID ${r.mapId}`:''}.`,{fight,code,partial:isPartial,quality});render();return;
+    if(!sameFight){try{stopReplay()}catch(_){}const rr=replayState();rr.data=null;window.__raidruExactReplay208=null;window.__raidruWclSelection220=null;replayClock=0;save();}
+
+    // 2.2.0: metadata/mechanics stay on the documented GraphQL API, while exact
+    // coordinates are captured in the user's WCL tab by the local Browser Bridge.
+    // Do NOT silently fall back to GraphQL coordinates: production proved that a
+    // complete events(includeResources:true) stream may legitimately contain 0 x/y.
+    let report=ui.report&&String(ui.report.code||'')===String(code)?ui.report:null;
+    if(!report){report=await loadReport200({code});if(!report)return;}
+    let selected=(report.fights||[]).find(f=>String(f.id)===String(fight));
+    if(!selected&&String(fight)==='last')selected=(report.fights||[]).slice().sort((a,b)=>b.id-a.id)[0];
+    if(!selected){setUi('error','Выбранный пул не найден в отчёте.',{code,fight});return;}
+
+    const numericFight=String(selected.id),bossId=typeof replayBossId220==='function'?replayBossId220(selected):(+selected.replayBossId||0);
+    ui.code=code;ui.fight=numericFight;ui.report=report;ui.partial=false;ui.quality='exact-browser';
+    window.__raidruWclSelection220={code,fight:numericFight,bossId,duration:Math.max(1,(+selected.endTime||0)-(+selected.startTime||0)),fightMeta:selected,reportMeta:report,url:ui.url||inputValue()};
+    const detected=bossFromWcl(bossId||selected.encounterID||selected.originalEncounterID);if(detected&&detected!==current)chooseBoss(detected);
+
+    const bridge=typeof wclBridgeStatus220==='function'?await wclBridgeStatus220():{ok:false,error:'WCL_BRIDGE_CLIENT_MISSING'};
+    if(!bridge?.ok){
+      setUi('bridge-required','Состав и механики доступны через официальный WCL API. Для точных координат установи RaidRU WCL Bridge один раз — после этого ссылка загружается обычной кнопкой без JSON.',{code,fight:numericFight,quality:'mechanics-only'});
+      try{window.decorateWclWorkspace208?.()}catch(_){}
+      return;
     }
-    setUi('error','Загрузка разбита на слишком много порций. Нажми «Продолжить» — уже полученные страницы останутся в кэше.');
+
+    setUi('loading','WCL Bridge найден. Получаю точные координаты внутри браузерной вкладки Warcraft Logs…',{code,fight:numericFight,partial:false,quality:'exact-browser'});
+    let raw;
+    try{raw=await captureWclReplayBridge220(report,selected,ui.url||inputValue())}
+    catch(err){
+      setUi('error',`WCL Bridge: ${String(err?.message||err)}. Механики при этом можно загружать отдельно — они не зависят от координат.`,{code,fight:numericFight,quality:'mechanics-only'});
+      try{window.decorateWclWorkspace208?.()}catch(_){}
+      return;
+    }
+    const normalized=enrichReplay(normalizeExactReplay200(raw));
+    if((normalized?.actors?.length||0)>0&&!(normalized?.positions?.length||0)){
+      const rr=replayState();rr.data=null;window.__raidruExactReplay208=null;save();
+      setUi('error',`WCL Bridge вернул ${normalized.actors.length} участников, но 0 координат. Результат не сохранён.`,{code,fight:numericFight});return;
+    }
+    const r=replayState();r.url=ui.url||inputValue();r.source='wcl-url';r.data=normalized;window.__raidruExactReplay208=compactExactMeta200(raw);r.mapId=replayPrimaryMapId(r.data);r.mapSource=r.mapId?'wcl':'fallback';replayClock=0;autoCalibrateReplay();save();
+    const coverage=raw?.stats?.compactPositionPoints?Math.round((new Set(raw.positions.map(p=>String(p.actorId))).size/Math.max(1,raw.actors.length))*100):0;
+    setUi('done',`${raw.message||'Replay готов.'} ${r.data.actors.length} игроков · ${r.data.positions.length.toLocaleString('ru-RU')} точек${coverage?` · охват ${coverage}%`:''}${r.mapId?` · WCL mapID ${r.mapId}`:''}.`,{fight:numericFight,code,partial:false,quality:'exact-browser'});render();
   }
 
   async function loadWclReplay200(){
@@ -141,18 +145,18 @@
   }
 
   function statusHtml(){
-    if(!ui.message&&!ui.quota)return '<span class="wclStatusText200">Обычный импорт использует официальный WCL GraphQL event stream с includeResources. resourceActor правильно связывает x/y с source или target, а механики собираются в том же проходе.</span>';
+    if(!ui.message&&!ui.quota)return '<span class="wclStatusText200">2.2.0: официальный WCL API используется для состава и механик; точные координаты Replay получает локальный RaidRU WCL Bridge внутри браузера.</span>';
     return `<div class="wclStatus200 ${ui.state}"><i></i><span>${esc(ui.message||'')}</span>${ui.quota?`<small>${esc(qText(ui.quota))}</small>`:''}</div>`;
   }
   function decorateReplay200(){
     if(typeof view==='undefined'||view!=='replay')return;const card=document.querySelector('.replayImport.card');if(!card)return;
     const d=replayState().data,currentUrl=ui.url||replayState().url||'';
-    card.innerHTML=`<div class="wclImportHead200"><div><small>RAIDRU 2.1.8 · WCL GRAPHQL RESOURCE REPLAY</small><h3>Warcraft Logs → Replay</h3><p>RaidRU использует официальный WCL GraphQL event stream с includeResources. resourceActor=1 означает координаты sourceID, resourceActor=2 — targetID. Приватный ReplaySegment больше не используется обычным импортом, поэтому HTML/challenge-ответ WCL не ломает загрузку.</p></div><span class="wclSafeBadge200">⚡ координаты + таймлайн</span></div><div class="wclUrlRow200 ${d||currentUrl?'hasReset':''}"><input id="wclUrl200" value="${esc(currentUrl)}" placeholder="https://www.warcraftlogs.com/reports/…?fight=10" onkeydown="if(event.key==='Enter')loadWclReplay200()"><button class="primary" onclick="loadWclReplay200()">${ui.state==='paused'||ui.state==='partial'?'↻ Продолжить':'▶ Загрузить бой'}</button>${d||currentUrl?'<button class="wclReset200" onclick="clearWclReplay200()">＋ Новый бой</button>':''}</div>${statusHtml()}<div class="replayButtons wclSecondary200"><button onclick="loadDemoReplay()">Демо из плана</button><label class="importBtn">Диагностика: replay JSON<input type="file" accept="application/json,.json" onchange="importReplayJson(this.files[0])"></label>${d?'<button onclick="exportReplayJson()">Экспорт replay JSON</button><button class="rehearse" onclick="createPlanFromReplay()">✦ Создать WCL-черновик</button>':''}${d&&ui.code&&ui.fight&&!ui.partial&&ui.quality!=='full'?`<button title="Не обязательно. Запрашивает более тяжёлый поток WCL." onclick="loadWclFight200('${esc(ui.code)}','${esc(ui.fight)}','full')">Высокая точность</button>`:''}</div>`;
+    card.innerHTML=`<div class="wclImportHead200"><div><small>RAIDRU 2.2.0 · WCL HYBRID BRIDGE</small><h3>Warcraft Logs → Replay</h3><p>Состав и механики идут через официальный WCL API. Точные координаты берутся локально из Replay Warcraft Logs через WCL Bridge — cookies и ReplaySegment не проходят через Cloudflare Worker.</p></div><span class="wclSafeBadge200">⚡ Browser Replay + API mechanics</span></div><div class="wclUrlRow200 ${d||currentUrl?'hasReset':''}"><input id="wclUrl200" value="${esc(currentUrl)}" placeholder="https://www.warcraftlogs.com/reports/…?fight=10" onkeydown="if(event.key==='Enter')loadWclReplay200()"><button class="primary" onclick="loadWclReplay200()">${ui.state==='paused'||ui.state==='partial'?'↻ Продолжить':'▶ Загрузить бой'}</button>${d||currentUrl?'<button class="wclReset200" onclick="clearWclReplay200()">＋ Новый бой</button>':''}</div>${statusHtml()}<div class="replayButtons wclSecondary200"><button onclick="loadDemoReplay()">Демо из плана</button><label class="importBtn">Диагностика: replay JSON<input type="file" accept="application/json,.json" onchange="importReplayJson(this.files[0])"></label>${d?'<button onclick="exportReplayJson()">Экспорт replay JSON</button><button class="rehearse" onclick="createPlanFromReplay()">✦ Создать WCL-черновик</button>':''}</div>`;
     const empty=document.querySelector('.emptyReplay');if(empty&&!d)empty.innerHTML='<b>Вставь ссылку Warcraft Logs выше</b><p>Если в ссылке нет <code>fight=</code>, RaidRU покажет список пулов из отчёта.</p>';
   }
 
   const coreRender200=render;
-  render=function(){coreRender200();decorateReplay200();const version=document.querySelector('aside .version');if(version)version.textContent='RaidRU 2.1.8 · WCL GraphQL Resource Replay'};
+  render=function(){coreRender200();decorateReplay200();const version=document.querySelector('aside .version');if(version)version.textContent='RaidRU 2.2.0 · WCL Hybrid Bridge'};
   loadWclReplay=loadWclReplay200;
   Object.assign(window,{loadWclReplay200,wclPickFight200,loadWclFight200,clearWclReplay200,wclUiState200:()=>ui});
   render();

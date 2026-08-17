@@ -363,6 +363,7 @@ function publicReport(report, quota = null, cache = 'miss') {
     endTime: numeric(report.endTime) || 0,
     fights: (report.fights || []).map(f => ({
       id: safeInt(f.id), encounterID: safeInt(f.encounterID) || 0, originalEncounterID: safeInt(f.originalEncounterID) || 0,
+      replayBossId: replayBossIdForFight(f),
       name: f.name || `Бой #${f.id}`, difficulty: f.difficulty ?? null, kill: !!f.kill,
       startTime: numeric(f.startTime) || 0, endTime: numeric(f.endTime) || 0, inProgress: !!f.inProgress,
       size: safeInt(f.size) || null, friendlyPlayers: (f.friendlyPlayers || []).map(x => safeInt(x)).filter(Boolean), mapIDs: (f.maps || []).map(m => safeInt(m?.id)).filter(Boolean)
@@ -372,7 +373,7 @@ function publicReport(report, quota = null, cache = 'miss') {
   };
 }
 
-function reportCacheName(code) { return `wcl/report-v218/${code}`; }
+function reportCacheName(code) { return `wcl/report-v220/${code}`; }
 
 async function getReport(env, code, { forceQuota = false } = {}) {
   const cacheName = reportCacheName(code);
@@ -1243,8 +1244,8 @@ query RaidRUMechanics($code: String!, $limit: Int!, $needCasts: Boolean!, $needD
 }`;
 }
 
-function mechanicsProgressName(code, fightId) { return `wcl/mechanics-v218-progress/${code}/${fightId}`; }
-function mechanicsFinalName(code, fightId) { return `wcl/mechanics-v218/${code}/${fightId}`; }
+function mechanicsProgressName(code, fightId) { return `wcl/mechanics-v220-progress/${code}/${fightId}`; }
+function mechanicsFinalName(code, fightId) { return `wcl/mechanics-v220/${code}/${fightId}`; }
 
 function mechanicsAbility(e) {
   return safeInt(e?.abilityGameID ?? e?.abilityID ?? e?.ability?.gameID ?? e?.ability?.guid ?? e?.ability?.id) || 0;
@@ -1298,9 +1299,9 @@ function mechanicsPack(meta, fight, progress, quota, { cache='miss', partial=fal
   return {
     format: 'raidru-wcl-mechanics', version: 1, createdAt: new Date().toISOString(), cache,
     partial, complete: !partial,
-    source: { reportCode: meta.code, fight: String(fight.id), bossId: fight.encounterID || fight.originalEncounterID || 0 },
+    source: { reportCode: meta.code, fight: String(fight.id), bossId: replayBossIdForFight(fight) },
     report: { code: meta.code, title: meta.title || '' },
-    fight: { id:fight.id, name:fight.name, bossId:fight.encounterID || fight.originalEncounterID || 0, startTime:fight.startTime, endTime:fight.endTime, duration:Math.max(1,fight.endTime-fight.startTime), difficulty:fight.difficulty, kill:fight.kill },
+    fight: { id:fight.id, name:fight.name, bossId:replayBossIdForFight(fight), startTime:fight.startTime, endTime:fight.endTime, duration:Math.max(1,fight.endTime-fight.startTime), difficulty:fight.difficulty, kill:fight.kill },
     actors: meta.actors || [], timeline, cursors,
     stats: { total: timeline.length, casts: counts.casts||0, debuffs: counts.debuffs||0, summons: counts.summons||0, deaths: counts.deaths||0, pages:Number(progress?.pages)||0, eventLimit:Number(progress?.eventLimit)||0 },
     quota: normalizeQuota(quota),
@@ -1309,18 +1310,6 @@ function mechanicsPack(meta, fight, progress, quota, { cache='miss', partial=fal
 }
 
 async function buildMechanics(env, code, fightId) {
-  const officialReplayHit = await cacheGet(`wcl/replay-v218/full/${code}/${fightId}`);
-  if (officialReplayHit && Array.isArray(officialReplayHit.events)) {
-    const timeline = dedupeReplayTimeline(officialReplayHit.events);
-    const counts={};for(const e of timeline){const f=e.family||'other';counts[f]=(counts[f]||0)+1;}
-    return {status:200,body:{format:'raidru-wcl-mechanics',version:1,createdAt:new Date().toISOString(),cache:'graphql-replay',partial:false,complete:true,source:{reportCode:code,fight:String(fightId),bossId:officialReplayHit.source?.bossId||officialReplayHit.fight?.bossId||0},report:officialReplayHit.report||{code},fight:officialReplayHit.fight||{id:fightId},actors:officialReplayHit.actors||[],timeline,stats:{total:timeline.length,casts:counts.casts||0,debuffs:counts.debuffs||0,summons:counts.summons||0,deaths:counts.deaths||0,pages:officialReplayHit.stats?.pages||0,eventLimit:officialReplayHit.stats?.eventPageLimit||0},quota:officialReplayHit.quota||null,message:'Механики взяты из уже загруженного официального WCL GraphQL replay-кэша — второй проход не нужен.'}};
-  }
-  const replayHit = await cacheGet(replaySegmentFinalName(code, fightId));
-  if (replayHit && Array.isArray(replayHit.events)) {
-    const timeline = dedupeReplayTimeline(replayHit.events);
-    const counts={};for(const e of timeline){const f=e.family||'other';counts[f]=(counts[f]||0)+1;}
-    return {status:200,body:{format:'raidru-wcl-mechanics',version:1,createdAt:new Date().toISOString(),cache:'replaysegment',partial:false,complete:true,source:{reportCode:code,fight:String(fightId),bossId:replayHit.source?.bossId||replayHit.fight?.bossId||0},report:replayHit.report||{code},fight:replayHit.fight||{id:fightId},actors:replayHit.actors||[],timeline,stats:{total:timeline.length,casts:counts.casts||0,debuffs:counts.debuffs||0,summons:counts.summons||0,deaths:counts.deaths||0,pages:replayHit.stats?.pages||0,eventLimit:0},quota:replayHit.quota||null,message:'Механики взяты из уже загруженного WCL replaysegment-кэша — дополнительный GraphQL-запрос не нужен.'}};
-  }
   const finalName = mechanicsFinalName(code, fightId);
   const final = await cacheGet(finalName);
   if (final) return { status:200, body:{...final, cache:'hit'} };
@@ -1393,11 +1382,11 @@ export default {
     if (origin && !ALLOWED_ORIGINS.has(origin)) return new Response(JSON.stringify({ error: 'origin_not_allowed', origin, allowed: [...ALLOWED_ORIGINS] }), { status: 403, headers: { 'Content-Type': 'application/json; charset=utf-8', ...cors(origin, { echo: true }), 'X-RaidRU-Origin': origin } });
 
     if (url.pathname === '/wcl/ping') {
-      return json({ ok: true, service: 'raidru-edge', version: '2.1.8-graphql-resource-replay', origin: origin || null, wclConfigured: wclConfigured(env) }, 200, origin, { 'X-RaidRU-WCL-Safe': '1' });
+      return json({ ok: true, service: 'raidru-edge', version: '2.2.0-wcl-hybrid-bridge', origin: origin || null, wclConfigured: wclConfigured(env) }, 200, origin, { 'X-RaidRU-WCL-Safe': '1' });
     }
 
     if (url.pathname === '/health') {
-      return json({ ok: true, service: 'raidru-edge', version: '2.1.8-graphql-resource-replay', wclConfigured: wclConfigured(env), features: ['raidplan','wcl-report','wcl-graphql-resource-replay','wcl-browser-v2-envelope','wcl-mechanics-from-replay','fight-scoped-friendly-players','resourceActor-1-source-2-target','resume-cache','segment-diagnostic'] }, 200, origin);
+      return json({ ok: true, service: 'raidru-edge', version: '2.2.0-wcl-hybrid-bridge', wclConfigured: wclConfigured(env), features: ['raidplan','wcl-report','wcl-mechanics-independent','wcl-browser-bridge-meta','fight-scoped-friendly-players','replay-boss-id','graphql-no-coordinate-contract'] }, 200, origin);
     }
 
     if (url.pathname === '/raidplan' && request.method === 'GET') {
@@ -1433,19 +1422,19 @@ export default {
       const requestedMode = (url.searchParams.get('mode') || 'smart').trim().toLowerCase();
       if (!validCode(code)) return json({ error: 'invalid_report_code' }, 400, origin);
       if (!(fight === 'last' || safeInt(fight))) return json({ error: 'invalid_fight' }, 400, origin);
-      if (!['smart','fast','full'].includes(requestedMode)) return json({ error: 'invalid_mode' }, 400, origin);
-      const key = `exact-replay:${requestedMode}:${code}:${fight}`;
+      if (requestedMode !== 'fast') {
+        return json({
+          error:'wcl_browser_bridge_required',
+          message:'Exact Replay coordinates are not a public GraphQL contract. RaidRU 2.2.0 captures them locally in the user browser with WCL Bridge; use /wcl/report for metadata and /wcl/mechanics for mechanics.',
+          transport:'browser-bridge'
+        },409,origin,{'X-RaidRU-WCL-Safe':'1'});
+      }
+      const key = `exact-replay:fast:${code}:${fight}`;
       try {
-        const result = await withInflight(key, () => buildReplay(env, code, fight, requestedMode));
+        const result = await withInflight(key, () => buildReplay(env, code, fight, 'fast'));
         const body = (result.status === 200 || result.status === 206) ? toBrowserReplayV2(result.body) : result.body;
         return json(body, result.status, origin, { 'X-RaidRU-WCL-Safe': '1', 'X-RaidRU-Replay-Format': 'raidru-wcl-replay-browser-v2' });
-      } catch (e) {
-        if (e instanceof WclRateError || e?.code === 'wcl_rate_limited') {
-          const b = await setBackoff(code, safeInt(fight), e.retryAfter, 'wcl_rate_limited', null);
-          return json({ error: 'wcl_rate_limited', retryAfter: b.retryAfter, cachedProgress: true }, 202, origin);
-        }
-        return json(wclErrorBody(e), e?.code === 'wcl_not_configured' ? 503 : 502, origin);
-      }
+      } catch (e) { return json(wclErrorBody(e), e?.code === 'wcl_not_configured' ? 503 : 502, origin); }
     }
 
 
@@ -1467,19 +1456,11 @@ export default {
       const requestedMode = (url.searchParams.get('mode') || 'smart').trim().toLowerCase();
       if (!validCode(code)) return json({ error: 'invalid_report_code' }, 400, origin);
       if (!(fight === 'last' || safeInt(fight))) return json({ error: 'invalid_fight' }, 400, origin);
-      if (!['smart','fast','full'].includes(requestedMode)) return json({ error: 'invalid_mode' }, 400, origin);
-      const key = `replay:${requestedMode}:${code}:${fight}`;
-      try {
-        const result = await withInflight(key, () => buildReplay(env, code, fight, requestedMode));
-        return json(result.body, result.status, origin, { 'X-RaidRU-WCL-Safe': '1' });
-      } catch (e) {
-        if (e instanceof WclRateError || e?.code === 'wcl_rate_limited') {
-          const b = await setBackoff(code, safeInt(fight), e.retryAfter, 'wcl_rate_limited', null);
-          return json({ error: 'wcl_rate_limited', retryAfter: b.retryAfter, cachedProgress: true }, 202, origin);
-        }
-        return json(wclErrorBody(e), e?.code === 'wcl_not_configured' ? 503 : 502, origin);
-      }
+      if (requestedMode !== 'fast') return json({error:'wcl_browser_bridge_required',message:'RaidRU 2.2.0 does not request exact coordinates from GraphQL. Use WCL Browser Bridge.',transport:'browser-bridge'},409,origin);
+      try { const result=await buildReplay(env,code,fight,'fast'); return json(result.body,result.status,origin,{'X-RaidRU-WCL-Safe':'1'}); }
+      catch(e){ return json(wclErrorBody(e),e?.code==='wcl_not_configured'?503:502,origin); }
     }
+
 
     return json({ error: 'not_found' }, 404, origin);
   }

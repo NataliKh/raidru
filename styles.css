@@ -1166,3 +1166,8 @@
 @media(max-width:760px){
   .playerPage .eventRail{max-height:260px}
 }
+
+/* RaidRU 2.2.0 — WCL Browser Bridge install */
+.wclBridgeInstall220{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-top:10px;padding:11px 13px;border:1px solid rgba(255,255,255,.1);border-radius:12px;background:rgba(255,255,255,.035)}
+.wclBridgeInstall220 a{display:inline-flex;align-items:center;justify-content:center;min-height:38px;padding:0 14px;border-radius:9px;background:rgba(255,255,255,.12);color:#fff;text-decoration:none;font-weight:800}
+.wclBridgeInstall220 span{font-size:12px;color:var(--muted)}

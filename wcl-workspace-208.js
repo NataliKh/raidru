@@ -6,13 +6,14 @@
   const ui208=()=>typeof wclUiState200==='function'?wclUiState200():{};
   const d208=()=>replayState()?.data||null;
   const raw208=()=>window.__raidruExactReplay208||null;
+  const sel208=()=>window.__raidruWclSelection220||null;
   const count208=n=>(Number(n)||0).toLocaleString('ru-RU');
   const diff208=v=>({1:'Обычный',2:'Героический',3:'Эпохальный',4:'Эпохальный',normal:'Обычный',heroic:'Героический',mythic:'Эпохальный'}[v]||'');
   const quota208=q=>q&&q.limitPerHour?`${Math.round(q.pointsSpentThisHour||0)}/${Math.round(q.limitPerHour)} WCL pts`:'';
 
   function source208(d){
     const r=raw208(),src=r?.source||d?.source||{},fight=r?.fight||d?.fight||{},report=r?.report||d?.report||{};
-    return {code:src.reportCode||report.code||'',fight:String(src.fight||fight.id||''),bossId:+(src.bossId||fight.bossId||0)||0,name:fight.name||bossName(current),duration:+(r?.time?.duration||fight.duration||d?.duration||0)||0,difficulty:fight.difficulty,kill:!!fight.kill,partial:!!(r?.partial||d?.partial),quality:r?.quality||d?.quality||src.quality||'fast',cache:r?.cache||'',mapId:replayPrimaryMapId(d)};
+    const sel=sel208()||{};return {code:src.reportCode||report.code||sel.code||'',fight:String(src.fight||fight.id||sel.fight||''),bossId:+(src.bossId||fight.bossId||sel.bossId||0)||0,name:fight.name||sel.fightMeta?.name||bossName(current),duration:+(r?.time?.duration||fight.duration||d?.duration||sel.duration||0)||0,difficulty:fight.difficulty??sel.fightMeta?.difficulty,kill:!!(fight.kill??sel.fightMeta?.kill),partial:!!(r?.partial||d?.partial),quality:r?.quality||d?.quality||src.quality||'fast',cache:r?.cache||'',mapId:d?replayPrimaryMapId(d):null};
   }
 
   function badge208(d){
@@ -60,8 +61,13 @@
     if(typeof view==='undefined'||view!=='replay')return;document.querySelectorAll('.wclIntro095').forEach(x=>x.style.display='none');
     const card=document.querySelector('.replayImport.card');if(!card)return;const d=d208(),u=ui208(),s=d?source208(d):null,currentUrl=u?.url||replayState()?.url||'';
     if(!d){
-      card.className='replayImport card wclImportCard208';card.innerHTML=`<div class="wclUpload208"><div><small>WARCRAFT LOGS</small><h2>Загрузить бой</h2><p>Вставь ссылку на отчёт или конкретный пул. RaidRU сам получает Replay — JSON и браузерные скрипты для обычной работы не нужны.</p></div><span class="wclSafeBadge208">⚡ безопасный импорт</span></div><div class="wclInput208"><input id="wclUrl200" value="${esc(currentUrl)}" placeholder="https://www.warcraftlogs.com/reports/…?fight=10" onkeydown="if(event.key==='Enter')loadWclReplay200()"><button class="primary" onclick="loadWclReplay200()">${u?.state==='paused'?'↻ Продолжить':'▶ Загрузить бой'}</button>${diagnostics208(null)}</div>${statusHtml208()||'<div class="wclHint208">Ссылка без <b>fight=</b> откроет выбор пулов. Повторное открытие готового боя берётся из серверного кэша.</div>'}`;
-      document.querySelectorAll('.wclFightShell208,.wclAnalysis208,.wclPlan208,.wclInfo208').forEach(x=>x.remove());const empty=document.querySelector('.emptyReplay');if(empty)empty.innerHTML='<b>Здесь появится Replay боя</b><p>После загрузки можно переключаться между Replay, автоматическим разбором и созданием плана.</p>';return;
+      const sel=sel208(),hasSelection=!!(sel?.code&&sel?.fight),mech=typeof window.wclMechanicsPack209==='function'?window.wclMechanicsPack209():null;
+      card.className='replayImport card wclImportCard208';card.innerHTML=`<div class="wclUpload208"><div><small>WARCRAFT LOGS</small><h2>Загрузить бой</h2><p>Состав и механики RaidRU получает через официальный WCL API. Точные координаты Replay — через локальный WCL Bridge в браузере.</p></div><span class="wclSafeBadge208">⚡ hybrid import</span></div><div class="wclInput208"><input id="wclUrl200" value="${esc(currentUrl)}" placeholder="https://www.warcraftlogs.com/reports/…?fight=10" onkeydown="if(event.key==='Enter')loadWclReplay200()"><button class="primary" onclick="loadWclReplay200()">${u?.state==='paused'?'↻ Продолжить':'▶ Загрузить бой'}</button>${diagnostics208(null)}</div>${statusHtml208()||'<div class="wclHint208">Bridge ставится один раз. Без него механики всё равно доступны, но точные позиции игроков не загружаются.</div>'}${u?.state==='bridge-required'?'<div class="wclBridgeInstall220"><a href="RaidRU-WCL-Bridge-2.2.0.zip" download>↓ Скачать WCL Bridge</a><span>Распакуй → chrome://extensions → Режим разработчика → Загрузить распакованное.</span></div>':''}${hasSelection?`<div class="wclHint208"><b>${esc(sel.code)} · пул #${esc(sel.fight)}</b> · выбран. <button onclick="loadWclMechanics209()">⚡ ${mech?'Обновить механики':'Загрузить механики'}</button></div>`:''}`;
+      document.querySelectorAll('.wclFightShell208,.wclAnalysis208,.wclPlan208,.wclInfo208').forEach(x=>x.remove());
+      if(hasSelection&&typeof window.wclMechanicsAnalysis209==='function'){
+        const holder=document.createElement('div');holder.innerHTML=window.wclMechanicsAnalysis209(null);card.insertAdjacentElement('afterend',holder.firstElementChild);
+      }
+      const empty=document.querySelector('.emptyReplay');if(empty)empty.innerHTML=hasSelection?'<b>Координаты Replay ещё не загружены</b><p>Разбор механик ниже работает независимо. Для движения игроков нужен RaidRU WCL Bridge.</p>':'<b>Здесь появится Replay боя</b><p>После выбора пула механики доступны даже до загрузки координат.</p>';return;
     }
     const st=badge208(d),difficulty=diff208(s.difficulty);
     card.className='replayImport card wclLoadedCard208';card.innerHTML=`<div class="wclLoaded208"><div class="wclLoadedTitle208"><small>WARCRAFT LOGS · ${esc(s.code||'REPORT')}${s.fight?` · ПУЛ #${esc(s.fight)}`:''}</small><h2>${esc(s.name)}</h2><p>${[difficulty,fmtTime(s.duration/1000),`${replayActors(d).length} игроков`,s.kill?'Kill':''].filter(Boolean).join(' · ')}</p></div><div class="wclLoadedActions208"><span class="wclReplayBadge208 ${st.cls}">${st.label}</span>${s.partial&&s.code&&s.fight?`<button class="primary" onclick="loadWclFight200('${esc(s.code)}','${esc(s.fight)}')">↻ Догрузить ещё</button>`:''}<button onclick="refreshWclReplay208()">↻ Обновить</button><button class="wclNewFight208" onclick="clearWclReplay200()">＋ Новый бой</button>${diagnostics208(d)}</div></div>${statusHtml208()}${infoHtml208(d)}`;
@@ -70,8 +76,8 @@
     const grid=document.querySelector('.replayGrid');if(grid)grid.style.display=wclTab208==='replay'?'grid':'none';document.querySelectorAll('.wclAnalysis208,.wclPlan208').forEach(x=>x.remove());if(wclTab208!=='replay'){const holder=document.createElement('div');holder.innerHTML=wclTab208==='analysis'?analysisHtml208(d):planHtml208(d);shell.insertAdjacentElement('afterend',holder.firstElementChild)}
   }
 
-  const oldRender208=render;render=function(){oldRender208();decorateWclWorkspace208();const version=document.querySelector('aside .version');if(version)version.textContent='RaidRU 2.1.0 · Performance Core'};
-  const oldClear208=clearWclReplay200;clearWclReplay200=function(){wclTab208='replay';wclInfo208=false;window.__raidruExactReplay208=null;oldClear208()};
+  const oldRender208=render;render=function(){oldRender208();decorateWclWorkspace208();const version=document.querySelector('aside .version');if(version)version.textContent='RaidRU 2.2.0 · WCL Hybrid Bridge'};
+  const oldClear208=clearWclReplay200;clearWclReplay200=function(){wclTab208='replay';wclInfo208=false;window.__raidruExactReplay208=null;window.__raidruWclSelection220=null;oldClear208()};
   Object.assign(window,{setWclTab208,toggleWclInfo208,refreshWclReplay208,exportReplayV2208,decorateWclWorkspace208});
   render();
 })();

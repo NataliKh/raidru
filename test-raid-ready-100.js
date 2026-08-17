@@ -12,5 +12,5 @@ const must=[
 ];
 for(const x of must)if(!js.includes(x))throw new Error('missing '+x);
 if(!html.includes('raid-ready-100.js?v=2.1.0-performance'))throw new Error('1.0 script not connected');
-if(!/(raidru-v10[01]-|raidru-v20[0-9]-|raidru-v21[0-8]-)/.test(sw))throw new Error('service worker cache not bumped');
+if(!/(raidru-v10[01]-|raidru-v20[0-9]-|raidru-v21[0-8]-|raidru-v220-)/.test(sw))throw new Error('service worker cache not bumped');
 console.log('RaidRU 1.0 static checks: OK');

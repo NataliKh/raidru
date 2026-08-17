@@ -1,3 +1,7 @@
+# RaidRU 2.2.0 — WCL Hybrid Browser Bridge
+
+> Exact WCL Replay coordinates больше не строятся через speculative GraphQL и не проксируются через Cloudflare. Состав/механики идут через официальный WCL API, а позиции — через локальный `wcl-bridge-extension` в браузерной сессии WCL. См. `RELEASE-2.2.0-WCL-HYBRID-BRIDGE.md`.
+
 # RaidRU 2.1.8 — WCL GraphQL Resource Replay
 
 Русскоязычный визуальный планировщик рейдов World of Warcraft: сцены, таймлайн, назначения, импорт RaidPlan и создание черновика тактики по реальным позициям Warcraft Logs.
