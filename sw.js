@@ -1,18 +1,18 @@
-const CACHE='raidru-v212-plan-viewer';
+const CACHE='raidru-v213-neutral-roles';
 const CORE=[
 './',
 './index.html',
-'./styles.css?v=2.1.2-plan-viewer',
-'./app.js?v=2.1.0-performance',
+'./styles.css?v=2.1.3-neutral-roles',
+'./app.js?v=2.1.3-neutral-roles',
 './raidplan-importer.js?v=1.0.0',
 './workspace-095.js?v=2.1.0-performance',
 './raid-ready-100.js?v=2.1.0-performance',
-'./ui-101.js?v=1.0.1',
+'./ui-101.js?v=2.1.3-neutral-roles',
 './wcl-safe-200.js?v=2.1.0-performance',
 './wcl-workspace-208.js?v=2.1.0-performance',
 './wcl-mechanics-209.js?v=2.1.0-performance',
 './navigation-211.js?v=2.1.1-navigation',
-'./viewer-212.js?v=2.1.2-plan-viewer',
+'./viewer-212.js?v=2.1.3-neutral-roles',
 './manifest.webmanifest',
 './icon.svg'
 ];

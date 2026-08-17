@@ -107,7 +107,7 @@
         const key=(oc.match(/setView\('([^']+)'\)/)||[])[1];
         if(key&&primaryKeys.includes(key)){nav.appendChild(node);continue}
         if(key&&['workspace','player','glossary','readiness','replay','assignments'].includes(key)){drop.appendChild(node);continue}
-        if(node.matches?.('.priest,.raidplanHeaderBtn,.importBtn')||/sharePlan\(|exportPlan\(/.test(oc)){tools.appendChild(node);continue}
+        if(node.matches?.('.raidplanHeaderBtn,.importBtn')||/sharePlan\(|exportPlan\(/.test(oc)){tools.appendChild(node);continue}
         if(node.tagName==='BUTTON'){drop.appendChild(node);continue}
         if(node.classList?.contains('workspaceStatus095'))continue;
       }

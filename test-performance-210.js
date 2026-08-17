@@ -20,5 +20,5 @@ ok(wcl.includes('compactExactMeta200')&&wcl.includes('window.__raidruExactReplay
 ok(sw.includes("const CORE=[")&&!sw.includes("'./assets/palette/encounter/game/spells/spell-43.png'"),'Service worker still eagerly precaches palette');
 ok(sw.includes('if(isStatic)')&&sw.includes('caches.match(e.request).then(hit=>hit||fetch'),'Static cache-first strategy missing');
 ok(css.includes('content-visibility:auto'),'offscreen rendering optimization missing');
-ok(html.includes('RaidRU 2.1.0 — Performance Core'),'performance build not connected');
+ok(html.includes('app.js?v=2.1.3-neutral-roles')&&html.includes('wcl-safe-200.js?v=2.1.0-performance'),'performance build not connected');
 console.log('RaidRU 2.1.0 performance regression checks: OK');

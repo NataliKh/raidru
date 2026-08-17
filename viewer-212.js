@@ -5,7 +5,7 @@
 (() => {
   function syncPlayerRail212(){
     const version=document.querySelector('aside .version');
-    if(version)version.textContent='RaidRU 2.1.2 · Plan Viewer';
+    if(version)version.textContent='RaidRU 2.1.3 · Neutral Roles';
     if(typeof view!=='undefined'&&view!=='player')return;
     const rail=document.querySelector('.playerPage .eventRail');
     if(!rail)return;
