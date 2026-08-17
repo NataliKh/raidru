@@ -60,4 +60,4 @@ const beforeFast=oneShotCalls;
 r=await worker.fetch(request('/wcl/exact-replay?code=FastTestAA&fight=10&mode=fast'),env,{});b=await r.json();
 ok('explicit fast diagnostic remains available',oneShotCalls===beforeFast+1&&r.status===200);
 
-console.log('WCL Hybrid Bridge 2.2.0 Worker mock tests: OK');
+console.log('WCL Hybrid Bridge 2.2.1 Worker mock tests: OK');

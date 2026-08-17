@@ -2,7 +2,7 @@
  * Direct Warcraft Logs URL -> cached, quota-aware Worker replay.
  */
 (() => {
-  const VERSION='2.2.0-browser-bridge';
+  const VERSION='2.2.1-browser-bridge';
   const API=(window.RAIDRU_WCL_API||'https://raidru-raidplan.raidru-wcl.workers.dev').replace(/\/$/,'');
   let ui={state:'idle',message:'',quota:null,report:null,url:'',fight:null,code:null,loops:0,partial:false,quality:null};
 
@@ -73,7 +73,7 @@
     const sameFight=String(ui.code||'')===String(code)&&String(ui.fight||'')===String(fight);
     if(!sameFight){try{stopReplay()}catch(_){}const rr=replayState();rr.data=null;window.__raidruExactReplay208=null;window.__raidruWclSelection220=null;replayClock=0;save();}
 
-    // 2.2.0: metadata/mechanics stay on the documented GraphQL API, while exact
+    // 2.2.1: metadata/mechanics stay on the documented GraphQL API, while exact
     // coordinates are captured in the user's WCL tab by the local Browser Bridge.
     // Do NOT silently fall back to GraphQL coordinates: production proved that a
     // complete events(includeResources:true) stream may legitimately contain 0 x/y.
@@ -145,18 +145,18 @@
   }
 
   function statusHtml(){
-    if(!ui.message&&!ui.quota)return '<span class="wclStatusText200">2.2.0: официальный WCL API используется для состава и механик; точные координаты Replay получает локальный RaidRU WCL Bridge внутри браузера.</span>';
+    if(!ui.message&&!ui.quota)return '<span class="wclStatusText200">2.2.1: официальный WCL API используется для состава и механик; точные координаты Replay получает локальный RaidRU WCL Bridge внутри браузера.</span>';
     return `<div class="wclStatus200 ${ui.state}"><i></i><span>${esc(ui.message||'')}</span>${ui.quota?`<small>${esc(qText(ui.quota))}</small>`:''}</div>`;
   }
   function decorateReplay200(){
     if(typeof view==='undefined'||view!=='replay')return;const card=document.querySelector('.replayImport.card');if(!card)return;
     const d=replayState().data,currentUrl=ui.url||replayState().url||'';
-    card.innerHTML=`<div class="wclImportHead200"><div><small>RAIDRU 2.2.0 · WCL HYBRID BRIDGE</small><h3>Warcraft Logs → Replay</h3><p>Состав и механики идут через официальный WCL API. Точные координаты берутся локально из Replay Warcraft Logs через WCL Bridge — cookies и ReplaySegment не проходят через Cloudflare Worker.</p></div><span class="wclSafeBadge200">⚡ Browser Replay + API mechanics</span></div><div class="wclUrlRow200 ${d||currentUrl?'hasReset':''}"><input id="wclUrl200" value="${esc(currentUrl)}" placeholder="https://www.warcraftlogs.com/reports/…?fight=10" onkeydown="if(event.key==='Enter')loadWclReplay200()"><button class="primary" onclick="loadWclReplay200()">${ui.state==='paused'||ui.state==='partial'?'↻ Продолжить':'▶ Загрузить бой'}</button>${d||currentUrl?'<button class="wclReset200" onclick="clearWclReplay200()">＋ Новый бой</button>':''}</div>${statusHtml()}<div class="replayButtons wclSecondary200"><button onclick="loadDemoReplay()">Демо из плана</button><label class="importBtn">Диагностика: replay JSON<input type="file" accept="application/json,.json" onchange="importReplayJson(this.files[0])"></label>${d?'<button onclick="exportReplayJson()">Экспорт replay JSON</button><button class="rehearse" onclick="createPlanFromReplay()">✦ Создать WCL-черновик</button>':''}</div>`;
+    card.innerHTML=`<div class="wclImportHead200"><div><small>RAIDRU 2.2.1 · WCL BRIDGE FINAL AUDIT</small><h3>Warcraft Logs → Replay</h3><p>Состав и механики идут через официальный WCL API. Точные координаты берутся локально из Replay Warcraft Logs через WCL Bridge — cookies и ReplaySegment не проходят через Cloudflare Worker.</p></div><span class="wclSafeBadge200">⚡ Browser Replay + API mechanics</span></div><div class="wclUrlRow200 ${d||currentUrl?'hasReset':''}"><input id="wclUrl200" value="${esc(currentUrl)}" placeholder="https://www.warcraftlogs.com/reports/…?fight=10" onkeydown="if(event.key==='Enter')loadWclReplay200()"><button class="primary" onclick="loadWclReplay200()">${ui.state==='paused'||ui.state==='partial'?'↻ Продолжить':'▶ Загрузить бой'}</button>${d||currentUrl?'<button class="wclReset200" onclick="clearWclReplay200()">＋ Новый бой</button>':''}</div>${statusHtml()}<div class="replayButtons wclSecondary200"><button onclick="loadDemoReplay()">Демо из плана</button><label class="importBtn">Диагностика: replay JSON<input type="file" accept="application/json,.json" onchange="importReplayJson(this.files[0])"></label>${d?'<button onclick="exportReplayJson()">Экспорт replay JSON</button><button class="rehearse" onclick="createPlanFromReplay()">✦ Создать WCL-черновик</button>':''}</div>`;
     const empty=document.querySelector('.emptyReplay');if(empty&&!d)empty.innerHTML='<b>Вставь ссылку Warcraft Logs выше</b><p>Если в ссылке нет <code>fight=</code>, RaidRU покажет список пулов из отчёта.</p>';
   }
 
   const coreRender200=render;
-  render=function(){coreRender200();decorateReplay200();const version=document.querySelector('aside .version');if(version)version.textContent='RaidRU 2.2.0 · WCL Hybrid Bridge'};
+  render=function(){coreRender200();decorateReplay200();const version=document.querySelector('aside .version');if(version)version.textContent='RaidRU 2.2.1 · WCL Bridge Final Audit'};
   loadWclReplay=loadWclReplay200;
   Object.assign(window,{loadWclReplay200,wclPickFight200,loadWclFight200,clearWclReplay200,wclUiState200:()=>ui});
   render();

@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "RaidRU WCL Bridge",
-  "version": "2.2.0",
+  "version": "2.2.1",
   "description": "Локальный мост RaidRU к Replay Warcraft Logs. Получает только координаты выбранного боя в браузере пользователя.",
   "permissions": ["tabs"],
   "background": {

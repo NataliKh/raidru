@@ -5,7 +5,7 @@
 (() => {
   function syncPlayerRail212(){
     const version=document.querySelector('aside .version');
-    if(version)version.textContent='RaidRU 2.1.8 · WCL GraphQL Resource Replay';
+    if(version)version.textContent='RaidRU 2.2.1 · WCL Bridge Final Audit';
     if(typeof view!=='undefined'&&view!=='player')return;
     const rail=document.querySelector('.playerPage .eventRail');
     if(!rail)return;

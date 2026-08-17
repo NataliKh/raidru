@@ -1,4 +1,4 @@
-const BRIDGE_VERSION = '2.2.0';
+const BRIDGE_VERSION = '2.2.1';
 const WCL_TAB_PATTERN = 'https://*.warcraftlogs.com/reports/*';
 
 function validCode(v){ return /^[A-Za-z0-9_-]{6,32}$/.test(String(v||'')); }

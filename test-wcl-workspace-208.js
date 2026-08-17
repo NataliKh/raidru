@@ -17,5 +17,5 @@ ok(ui.includes('loadWclMechanics209()'),'mechanics must be available without Rep
 ok(ui.includes('function analysis208'),'local movement analysis missing');
 ok(css.includes('.wclFightShell208')&&css.includes('.wclMetricGrid208'),'WCL workspace styles missing');
 ok(html.includes('wcl-workspace-208.js?v=2.1.0-performance'),'workspace script missing');
-ok(sw.includes('raidru-v220-wcl-hybrid-bridge')&&sw.includes('wcl-workspace-208.js?v=2.1.0-performance'),'service worker cache missing');
-console.log('WCL Workspace 2.2.0 hybrid regression checks: OK');
+ok(sw.includes('raidru-v221-wcl-bridge-final-audit')&&sw.includes('wcl-workspace-208.js?v=2.1.0-performance'),'service worker cache missing');
+console.log('WCL Workspace 2.2.1 final-audit regression checks: OK');

@@ -1,19 +1,19 @@
-const CACHE='raidru-v220-wcl-hybrid-bridge';
+const CACHE='raidru-v221-wcl-bridge-final-audit';
 const CORE=[
 './',
 './index.html',
-'./styles.css?v=2.2.0-wcl-hybrid-bridge',
-'./app.js?v=2.2.0-wcl-hybrid-bridge',
+'./styles.css?v=2.2.1-wcl-bridge-final-audit',
+'./app.js?v=2.2.1-wcl-bridge-final-audit',
 './raidplan-importer.js?v=1.0.0',
 './workspace-095.js?v=2.1.0-performance',
 './raid-ready-100.js?v=2.1.0-performance',
-'./ui-101.js?v=2.2.0-wcl-hybrid-bridge',
-'./wcl-bridge-220.js?v=2.2.0-wcl-hybrid-bridge',
-'./wcl-safe-200.js?v=2.2.0-wcl-hybrid-bridge',
+'./ui-101.js?v=2.2.1-wcl-bridge-final-audit',
+'./wcl-bridge-220.js?v=2.2.1-wcl-bridge-final-audit',
+'./wcl-safe-200.js?v=2.2.1-wcl-bridge-final-audit',
 './wcl-workspace-208.js?v=2.1.0-performance',
 './wcl-mechanics-209.js?v=2.1.0-performance',
 './navigation-211.js?v=2.1.1-navigation',
-'./viewer-212.js?v=2.2.0-wcl-hybrid-bridge',
+'./viewer-212.js?v=2.2.1-wcl-bridge-final-audit',
 './manifest.webmanifest',
 './icon.svg'
 ];

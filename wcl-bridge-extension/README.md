@@ -1,4 +1,4 @@
-# RaidRU WCL Bridge 2.2.0
+# RaidRU WCL Bridge 2.2.1
 
 Локальное Chrome/Chromium-расширение для получения **координат Replay** непосредственно в браузерной сессии Warcraft Logs.
 
@@ -6,7 +6,7 @@
 
 Публичный WCL GraphQL API подходит для состава и механик, но на реальном тестовом отчёте `v3Qdp9M24hxy1bRg` завершает полный `events(includeResources:true)` без координат. При этом экран Replay WCL в браузере получает десятки тысяч координат через `/reports/replaysegment/...`.
 
-Cloudflare Worker не должен обращаться к этому внутреннему web-route: серверный запрос может получить HTML/challenge вместо JSON. Bridge выполняет тот же запрос **same-origin внутри вкладки Warcraft Logs** и передаёт RaidRU только компактные координаты выбранных `friendlyPlayers`.
+Cloudflare Worker не должен обращаться к этому внутреннему web-route: серверный запрос может получить HTML/challenge вместо JSON. Bridge выполняет тот же запрос **same-origin внутри вкладки Warcraft Logs** и передаёт RaidRU компактные coordinate tracks выбранного боя. Если Replay actor IDs не совпадают с GraphQL `friendlyPlayers`, 2.2.1 сверяет их с `masterData` Player actors и WCL friendliness flags; питомцы и NPC затем отбрасываются.
 
 ## Установка для разработки
 
@@ -26,4 +26,4 @@ Cloudflare Worker не должен обращаться к этому внут�
 - `https://natalikh.github.io/raidru/*`;
 - localhost/127.0.0.1 для локальной разработки.
 
-Worker/OAuth по-прежнему используется для metadata и Mechanics Pack. Cookies Warcraft Logs не передаются RaidRU или Worker.
+Bridge 2.2.1 также извлекает из того же ReplaySegment компактный tactical timeline (casts, debuffs, summons, deaths). Worker/OAuth остаётся независимым fallback для Mechanics Pack. Cookies Warcraft Logs не передаются RaidRU или Worker.

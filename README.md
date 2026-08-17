@@ -1,13 +1,37 @@
-# RaidRU 2.2.0 — WCL Hybrid Browser Bridge
+# RaidRU 2.2.1 — WCL Bridge Final Audit
 
-> Exact WCL Replay coordinates больше не строятся через speculative GraphQL и не проксируются через Cloudflare. Состав/механики идут через официальный WCL API, а позиции — через локальный `wcl-bridge-extension` в браузерной сессии WCL. См. `RELEASE-2.2.0-WCL-HYBRID-BRIDGE.md`.
+Русскоязычный визуальный планировщик рейдов World of Warcraft: сцены, таймлайн, назначения, импорт RaidPlan и разбор реальных боёв Warcraft Logs.
 
-# RaidRU 2.1.8 — WCL GraphQL Resource Replay
-
-Русскоязычный визуальный планировщик рейдов World of Warcraft: сцены, таймлайн, назначения, импорт RaidPlan и создание черновика тактики по реальным позициям Warcraft Logs.
-
-**Текущая версия:** `2.1.8 — WCL GraphQL Resource Replay`  
+**Текущая версия:** `2.2.1 — WCL Bridge Final Audit`  
 **Сайт:** https://natalikh.github.io/raidru/
+
+## 2.2.1 — WCL Bridge Final Audit
+
+Версия закрывает реальный production-сценарий `WCL_BRIDGE_ZERO_COORDINATES`, который проявился уже после перехода на Browser Bridge 2.2.0.
+
+Причина была в слишком ранней фильтрации координат: Bridge сравнивал actor IDs из ReplaySegment только с `fight.friendlyPlayers` из GraphQL. На составном encounter эти два набора идентификаторов могут не совпасть, хотя ReplaySegment содержит полноценные позиции. В таком случае 2.2.0 сам выбрасывал все валидные точки.
+
+В 2.2.1:
+
+- ReplaySegment сначала сохраняет coordinate tracks, которые WCL явно помечает как friendly;
+- если `friendlyPlayers` не пересекается с Replay actor IDs, используется fallback через `masterData.actors` с `type=Player`;
+- `resourceActor=1/2` остаётся главным правилом владельца координаты, а при неполном payload используются `sourceIsFriendly/targetIsFriendly` и Player metadata;
+- питомцы и остальные friendly entities отбрасываются на клиенте, остаются только реальные Player tracks текущего Replay;
+- `fight.size` ограничивает число выбранных player tracks, поэтому report-wide masterData снова не может превратиться в «500 игроков»;
+- тот же Browser Replay сразу отдаёт компактный timeline механик (casts, debuffs, summons, deaths);
+- `/wcl/mechanics` остаётся fallback, больше не зависит от `HostilityType` и автоматически продолжает несколько страниц за одно нажатие;
+- исправлен жёстко прописанный footer `RaidRU 2.1.8`, который вводил в заблуждение даже на сборке 2.2.0;
+- Service Worker/cache namespace поднят до `v221`.
+
+Regression-тест намеренно моделирует проблемный случай: GraphQL roster IDs не пересекаются с Replay IDs, координаты одного Player не имеют friendliness flags, в потоке есть Pet и hostile boss coordinate. Итог обязан сохранить только реальные Player tracks, не приписать игроку координату босса и одновременно получить tactical timeline.
+
+Подробнее: `RELEASE-2.2.1-WCL-BRIDGE-FINAL-AUDIT.md`.
+
+## 2.2.0 — WCL Hybrid Browser Bridge
+
+2.2.0 разделил источники данных: metadata/механики через официальный WCL API, exact coordinates через локальный Chrome/Chromium Bridge в браузерной сессии Warcraft Logs. Это остаётся базовой архитектурой; 2.2.1 исправляет participant resolution внутри Bridge.
+
+Подробнее: `RELEASE-2.2.0-WCL-HYBRID-BRIDGE.md`.
 
 ## 2.1.8 — WCL GraphQL Resource Replay
 
