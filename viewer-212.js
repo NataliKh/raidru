@@ -5,7 +5,7 @@
 (() => {
   function syncPlayerRail212(){
     const version=document.querySelector('aside .version');
-    if(version)version.textContent='RaidRU 2.1.6 · WCL ReplaySegment Core';
+    if(version)version.textContent='RaidRU 2.1.8 · WCL GraphQL Resource Replay';
     if(typeof view!=='undefined'&&view!=='player')return;
     const rail=document.querySelector('.playerPage .eventRail');
     if(!rail)return;

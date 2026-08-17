@@ -1,16 +1,30 @@
-# RaidRU 2.1.7 — WCL Replay Boss Resolver
-
-Исправлена ошибка `WCL_REPLAY_BOSS_ID_MISSING`: ReplaySegment использует отдельный Replay boss ID, а не сырой GraphQL `encounterID`. Для Entombed Sentinels при `encounterID=0/null` теперь работает fallback по имени и используется Replay ID `53445`. Обычные encounter ID автоматически переводятся в Replay namespace (`+50000`).
-
-# RaidRU
+# RaidRU 2.1.8 — WCL GraphQL Resource Replay
 
 Русскоязычный визуальный планировщик рейдов World of Warcraft: сцены, таймлайн, назначения, импорт RaidPlan и создание черновика тактики по реальным позициям Warcraft Logs.
 
-**Текущая версия:** `2.1.6 — WCL ReplaySegment Core`  
+**Текущая версия:** `2.1.8 — WCL GraphQL Resource Replay`  
 **Сайт:** https://natalikh.github.io/raidru/
 
+## 2.1.8 — WCL GraphQL Resource Replay
 
+Версия 2.1.7 показала, что приватный web endpoint Warcraft Logs `reports/replaysegment/...` нельзя считать надёжным серверным API: Cloudflare Worker может получить успешный HTTP-ответ, который не является JSON, что проявлялось как `WCL_REPLAYSEGMENT_INVALID_JSON`.
 
+Обычный `smart/full` импорт теперь снова использует официальный GraphQL `Report.events`, но уже с исправленной обработкой resource snapshots:
+
+- `includeResources: true`;
+- `resourceActor = 1` → координаты относятся к `sourceID`;
+- `resourceActor = 2` → координаты относятся к `targetID`;
+- `nextX / nextY / nextTimestamp` сохраняются за тем же actor;
+- `ability.guid` поддерживается как spell ID;
+- casts, debuffs, summons и deaths собираются из того же полного event stream;
+- готовая механика читается из Replay cache без второго большого GraphQL-прохода;
+- загрузка продолжается страницами через checkpoint / `202 batch_yield`;
+- private ReplaySegment оставлен только как явный диагностический `mode=segment` и обычным UI не вызывается;
+- пустой итог `игроки > 0 / координаты = 0` не кэшируется как успешный Replay.
+
+Regression mock специально возвращает `text/html` challenge для ReplaySegment: обычный smart-import обязан его вообще не вызывать и построить координаты/механику только из GraphQL resource events.
+
+Подробнее: `RELEASE-2.1.8-WCL-GRAPHQL-RESOURCE-REPLAY.md`.
 
 ## 2.1.6 — WCL ReplaySegment Core
 

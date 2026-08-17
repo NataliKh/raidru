@@ -6,6 +6,6 @@ const sw=fs.readFileSync('sw.js','utf8');
 for(const x of ['breadcrumbs211','navBack211','navForward211','navBoss211','activeWclTab211','altKey'])if(!nav.includes(x))throw new Error('missing '+x);
 if(!css.includes('.contextNav211')||!css.includes('position:sticky')||!css.includes('.bossPager211'))throw new Error('navigation CSS missing');
 if(!html.includes('navigation-211.js?v=2.1.1-navigation'))throw new Error('navigation script not loaded');
-if(!html.includes('styles.css?v=2.1.7-wcl-replay-boss-resolver'))throw new Error('css bust missing');
-if(!(sw.includes("raidru-v213-neutral-roles")||sw.includes("raidru-v214-wcl-fight-scope")||sw.includes("raidru-v215-wcl-full-event-replay")||sw.includes("raidru-v217-wcl-replay-boss-resolver"))||!sw.includes('navigation-211.js?v=2.1.1-navigation'))throw new Error('service worker bust missing');
+if(!html.includes('styles.css?v=2.1.8-wcl-graphql-resource-replay'))throw new Error('css bust missing');
+if(!(sw.includes("raidru-v213-neutral-roles")||sw.includes("raidru-v214-wcl-fight-scope")||sw.includes("raidru-v215-wcl-full-event-replay")||sw.includes("raidru-v218-wcl-graphql-resource-replay"))||!sw.includes('navigation-211.js?v=2.1.1-navigation'))throw new Error('service worker bust missing');
 console.log('navigation 2.1.1 regression: OK');

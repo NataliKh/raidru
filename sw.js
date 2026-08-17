@@ -1,18 +1,18 @@
-const CACHE='raidru-v217-wcl-replay-boss-resolver';
+const CACHE='raidru-v218-wcl-graphql-resource-replay';
 const CORE=[
 './',
 './index.html',
-'./styles.css?v=2.1.7-wcl-replay-boss-resolver',
-'./app.js?v=2.1.7-wcl-replay-boss-resolver',
+'./styles.css?v=2.1.8-wcl-graphql-resource-replay',
+'./app.js?v=2.1.8-wcl-graphql-resource-replay',
 './raidplan-importer.js?v=1.0.0',
 './workspace-095.js?v=2.1.0-performance',
 './raid-ready-100.js?v=2.1.0-performance',
-'./ui-101.js?v=2.1.7-wcl-replay-boss-resolver',
-'./wcl-safe-200.js?v=2.1.7-wcl-replay-boss-resolver',
+'./ui-101.js?v=2.1.8-wcl-graphql-resource-replay',
+'./wcl-safe-200.js?v=2.1.8-wcl-graphql-resource-replay',
 './wcl-workspace-208.js?v=2.1.0-performance',
 './wcl-mechanics-209.js?v=2.1.0-performance',
 './navigation-211.js?v=2.1.1-navigation',
-'./viewer-212.js?v=2.1.7-wcl-replay-boss-resolver',
+'./viewer-212.js?v=2.1.8-wcl-graphql-resource-replay',
 './manifest.webmanifest',
 './icon.svg'
 ];

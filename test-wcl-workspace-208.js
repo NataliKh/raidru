@@ -16,5 +16,5 @@ ok(ui.includes('Экспорт Replay v2 JSON'),'diagnostic export missing');
 ok(ui.includes('function analysis208'),'local analysis missing');
 ok(css.includes('.wclFightShell208')&&css.includes('.wclMetricGrid208'),'WCL workspace styles missing');
 ok(/wcl-workspace-208\.js\?v=(2\.0\.(8-wcl-workspace|9-mechanics)|2\.1\.0-performance)/.test(html),'workspace script missing');
-ok(/raidru-v(208-wcl-workspace|209-mechanics-analysis|210-performance-core|211-mechanics-readability|211-navigation|213-neutral-roles|214-wcl-fight-scope|215-wcl-full-event-replay|216-wcl-replaysegment-core|217-wcl-replay-boss-resolver)/.test(sw)&&/wcl-workspace-208\.js\?v=(2\.0\.(8-wcl-workspace|9-mechanics)|2\.1\.0-performance)/.test(sw),'service worker cache missing');
+ok(/raidru-v(208-wcl-workspace|209-mechanics-analysis|210-performance-core|211-mechanics-readability|211-navigation|213-neutral-roles|214-wcl-fight-scope|215-wcl-full-event-replay|216-wcl-replaysegment-core|218-wcl-graphql-resource-replay)/.test(sw)&&/wcl-workspace-208\.js\?v=(2\.0\.(8-wcl-workspace|9-mechanics)|2\.1\.0-performance)/.test(sw),'service worker cache missing');
 console.log('WCL Workspace 2.0.8 regression checks: OK');
