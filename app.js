@@ -21,7 +21,29 @@ const presetTimelines = {"nekzali":[[0,"Воспламенение Колодц�
 function bossPresetScenes(id){return JSON.parse(JSON.stringify(presetScenes[id]||[defaultScene()]));
 }
 
-const state=JSON.parse(localStorage.getItem('raidru-standalone')||'{}');
+const RAIDRU_STORAGE_KEY='raidru-standalone';
+const state=JSON.parse(localStorage.getItem(RAIDRU_STORAGE_KEY)||'{}');
+// 2.1 performance: Replay payloads can contain tens of thousands of coordinates.
+// Keep them in memory/server cache, not inside the monolithic localStorage state.
+// Returning null from the replacer prevents JSON.stringify from traversing replay.data.
+function raidruPersistentStateJson(){
+  return JSON.stringify(state,function(key,value){
+    if(key==='data'&&this&&typeof this==='object'&&Object.prototype.hasOwnProperty.call(this,'cal')&&Object.prototype.hasOwnProperty.call(this,'source')&&Object.prototype.hasOwnProperty.call(this,'url'))return null;
+    return value;
+  });
+}
+let raidruPersistTimer=null;
+function raidruPersistNow(){
+  if(raidruPersistTimer){clearTimeout(raidruPersistTimer);raidruPersistTimer=null}
+  try{localStorage.setItem(RAIDRU_STORAGE_KEY,raidruPersistentStateJson())}catch(e){console.warn('RaidRU localStorage',e)}
+}
+function raidruSchedulePersist(delay=320){
+  clearTimeout(raidruPersistTimer);raidruPersistTimer=setTimeout(raidruPersistNow,Math.max(0,+delay||0));
+}
+window.addEventListener('pagehide',raidruPersistNow);
+document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='hidden')raidruPersistNow()});
+// One-time compaction for users upgrading from builds that stored the complete Replay in localStorage.
+if(raid.some(b=>state?.[b.id]?.replay?.data))setTimeout(raidruPersistNow,0);
 const RAIDRU_SCHEMA='0.7.4-map-calibration';
 const VASHNIK_PLAN_VERSION='0.8.2-vashnik-russian-ui-v2';
 const NEKZALI_PLAN_VERSION='0.8.4-nekzali-wcl-heroic-v1';
@@ -269,7 +291,7 @@ function runStartupMigrations(){
     state._difficultyPlansVersion=DIFFICULTY_PLANS_VERSION;changed=true;
   }
   if(state._raidPlanTabsVersion!==RAIDPLAN_TABS_VERSION){state._raidPlanTabsVersion=RAIDPLAN_TABS_VERSION;changed=true}
-  if(changed)localStorage.setItem('raidru-standalone',JSON.stringify(state));
+  if(changed)raidruPersistNow();
 }
 function orderedRaid(){return [...raid].sort((a,b)=>a.order-b.order)}
 let current=state.current||'nekzali', role=state.role||'all', diff=state.diff||'heroic', view=(state.view||'dashboard'), priestMode=state.priestMode!==false, sceneIndex=0;
@@ -278,8 +300,24 @@ let pendingDifficultySwitch=null;
 let rehearsalTimer=null, playbackTimer=null, playerSceneIndex=0, playerPlaying=false, playerSpeed=1, showPaths=state.showPaths!==false;
 let routeEdit=false, routeTokenId=null;
 let plannerPaletteTab=state.plannerPaletteTab||'main', plannerSpawnMode=state.plannerSpawnMode||'drag', plannerArenaSnap=state.plannerArenaSnap!==false, plannerIconTab=state.plannerIconTab||'encounter', plannerIconQuery='';
-let replayClock=0, replayPlaying=false, replaySpeed=1, replayRAF=null, replayLastTs=0;
+let replayClock=0, replayPlaying=false, replaySpeed=1, replayRAF=null, replayLastTs=0, replayLastPaintTs=0;
 let replaySelectedActor='all';
+// Hot-path indexes are kept out of the Replay object so they are never serialized.
+const replayPerfCache=new WeakMap();
+function replayIndex(data){
+  if(!data||typeof data!=='object')return {positionsByActor:new Map(),bounds:{minX:0,maxX:100,minY:0,maxY:100},mapCounts:{}};
+  let c=replayPerfCache.get(data);if(c)return c;
+  const positionsByActor=new Map(),mapCounts={};let minX=Infinity,maxX=-Infinity,minY=Infinity,maxY=-Infinity;
+  for(const p of data.positions||[]){
+    const k=String(p.actorId);let arr=positionsByActor.get(k);if(!arr){arr=[];positionsByActor.set(k,arr)}arr.push(p);
+    const x=+p.x,y=+p.y;if(Number.isFinite(x)&&Number.isFinite(y)){if(x<minX)minX=x;if(x>maxX)maxX=x;if(y<minY)minY=y;if(y>maxY)maxY=y}
+    const mid=+p.mapID;if(Number.isFinite(mid)&&mid>0)mapCounts[mid]=(mapCounts[mid]||0)+1;
+  }
+  if(!Number.isFinite(minX)||minX===maxX){minX=0;maxX=100}if(!Number.isFinite(minY)||minY===maxY){minY=0;maxY=100}
+  const px=(maxX-minX)*.035,py=(maxY-minY)*.035;
+  c={positionsByActor,bounds:{minX:minX-px,maxX:maxX+px,minY:minY-py,maxY:maxY+py},mapCounts};
+  replayPerfCache.set(data,c);return c;
+}
 const replayRoleClasses={
   Priest:'healer',Shaman:'healer',Druid:'healer',Paladin:'healer',Evoker:'healer',Monk:'healer',
   Warrior:'melee',Rogue:'melee',DeathKnight:'melee',DemonHunter:'melee',
@@ -777,7 +815,7 @@ function migrateBuiltInScenes(){
   state._builtinSceneVersion=BUILTIN_SCENE_VERSION;
   // Force the hard-mask pass once more after replacing authored geometry.
   state._arenaMaskVersion='';
-  localStorage.setItem('raidru-standalone',JSON.stringify(state));
+  raidruPersistNow();
   return changed;
 }
 const BUILTIN_SCENES_MIGRATED=migrateBuiltInScenes();
@@ -786,7 +824,7 @@ if(state._arenaMaskVersion!==ARENA_MASK_VERSION){
   let adjusted=0;
   for(const b of raid){const saved=state[b.id];if(!saved?.scenes)continue;for(const sc of saved.scenes)adjusted+=correctStoredSceneGeometry(sc,b.id)}
   state._arenaMaskVersion=ARENA_MASK_VERSION;state._arenaMaskAdjusted=adjusted;
-  localStorage.setItem('raidru-standalone',JSON.stringify(state));
+  raidruPersistNow();
 }
 
 const eventTypes={raid:'Урон по рейду',tank:'Танковская механика',move:'Перемещение',adds:'Адды',burst:'Бурст / героизм',heal:'Хил-КД'};
@@ -1012,13 +1050,7 @@ function replayDuration(data){return Math.max(1,Number(data?.duration)||Number(d
 function replayActors(data){return (data?.actors||[]).filter(a=>!a.type||String(a.type).toLowerCase().includes('player'))}
 function replayRole(a){if(a.role&&['tank','healer','ranged','melee'].includes(a.role))return a.role;return replayRoleClasses[a.subType]||'ranged'}
 function shortActorName(n){const s=String(n||'?').split('-')[0];return s.length>9?s.slice(0,8)+'…':s}
-function replayBounds(data){
- const pts=data?.positions||[];if(!pts.length)return {minX:0,maxX:100,minY:0,maxY:100};
- let minX=Infinity,maxX=-Infinity,minY=Infinity,maxY=-Infinity;
- pts.forEach(p=>{const x=+p.x,y=+p.y;if(Number.isFinite(x)&&Number.isFinite(y)){minX=Math.min(minX,x);maxX=Math.max(maxX,x);minY=Math.min(minY,y);maxY=Math.max(maxY,y)}});
- if(!Number.isFinite(minX)||minX===maxX){minX=0;maxX=100} if(!Number.isFinite(minY)||minY===maxY){minY=0;maxY=100}
- const px=(maxX-minX)*.035,py=(maxY-minY)*.035;return {minX:minX-px,maxX:maxX+px,minY:minY-py,maxY:maxY+py};
-}
+function replayBounds(data){return replayIndex(data).bounds}
 function replayPoint(data,x,y){
  const b=replayBounds(data),c=replayState().cal||defaultReplayCal(data);
  const spanX=Math.max(1,b.maxX-b.minX),spanY=Math.max(1,b.maxY-b.minY),midX=(b.minX+b.maxX)/2,midY=(b.minY+b.maxY)/2;
@@ -1039,11 +1071,16 @@ function replayPoint(data,x,y){
  return {x:Math.max(0,Math.min(100,nx)),y:Math.max(0,Math.min(100,ny))};
 }
 function positionAt(data,actorId,t){
- const arr=(data?.positions||[]).filter(p=>String(p.actorId)===String(actorId));if(!arr.length)return null;
- let a=arr[0],b=arr[arr.length-1];for(let i=1;i<arr.length;i++){if(arr[i].t>=t){a=arr[i-1];b=arr[i];break}}
- if(t<=arr[0].t)return arr[0];if(t>=arr[arr.length-1].t)return arr[arr.length-1];const span=Math.max(1,b.t-a.t),q=Math.max(0,Math.min(1,(t-a.t)/span));return {actorId,t,x:a.x+(b.x-a.x)*q,y:a.y+(b.y-a.y)*q,alive:b.alive!==false,mapID:q<.5?(a.mapID||b.mapID||null):(b.mapID||a.mapID||null),facing:q<.5?(a.facing??b.facing):(b.facing??a.facing)};
+ const arr=replayIndex(data).positionsByActor.get(String(actorId))||[];if(!arr.length)return null;
+ if(t<=arr[0].t)return arr[0];if(t>=arr[arr.length-1].t)return arr[arr.length-1];
+ let lo=1,hi=arr.length-1;while(lo<hi){const mid=(lo+hi)>>1;if(arr[mid].t<t)lo=mid+1;else hi=mid}
+ const b=arr[lo],a=arr[lo-1],span=Math.max(1,b.t-a.t),q=Math.max(0,Math.min(1,(t-a.t)/span));
+ return {actorId,t,x:a.x+(b.x-a.x)*q,y:a.y+(b.y-a.y)*q,alive:b.alive!==false,mapID:q<.5?(a.mapID||b.mapID||null):(b.mapID||a.mapID||null),facing:q<.5?(a.facing??b.facing):(b.facing??a.facing)};
 }
-function replayEventNear(data,t){const ev=data?.events||[];let best=null,d=1e12;ev.forEach(e=>{const x=Math.abs((+e.t||0)-t);if(x<d){d=x;best=e}});return d<2500?best:null}
+function replayEventNear(data,t){
+ const ev=data?.events||[];if(!ev.length)return null;let lo=0,hi=ev.length;while(lo<hi){const mid=(lo+hi)>>1;if((+ev[mid].t||0)<t)lo=mid+1;else hi=mid}
+ let best=null,d=1e12;for(const i of [lo-1,lo])if(i>=0&&i<ev.length){const x=Math.abs((+ev[i].t||0)-t);if(x<d){d=x;best=ev[i]}}return d<2500?best:null;
+}
 function normalizeReplayPayload(raw){
  if(!raw)throw new Error('Пустой ответ');if(raw.replay)raw=raw.replay;
  const mapIDs={};
@@ -1074,17 +1111,15 @@ function resetReplayCal(){const r=replayState();r.cal=defaultReplayCal(r.data,r.
 function setReplayTime(v){stopReplay();replayClock=Math.max(0,Math.min(replayDuration(replayState().data),+v||0));updateReplayDom(true)}
 function setReplaySpeed(v){replaySpeed=+v||1}
 function replayStep(ms){setReplayTime(replayClock+ms)}
-function stopReplay(){replayPlaying=false;if(replayRAF)cancelAnimationFrame(replayRAF);replayRAF=null;replayLastTs=0}
+function stopReplay(){replayPlaying=false;if(replayRAF)cancelAnimationFrame(replayRAF);replayRAF=null;replayLastTs=0;replayLastPaintTs=0}
 function toggleReplay(){if(replayPlaying){stopReplay();updateReplayDom(true);return}const d=replayState().data;if(!d)return toast('Сначала загрузи replay');if(replayClock>=replayDuration(d)-50)replayClock=0;replayPlaying=true;replayLastTs=performance.now();replayRAF=requestAnimationFrame(replayTick);updateReplayPlayButton()}
-function replayTick(now){if(!replayPlaying)return;const dt=(now-replayLastTs)*replaySpeed;replayLastTs=now;replayClock+=dt;const dur=replayDuration(replayState().data);if(replayClock>=dur){replayClock=dur;stopReplay()}updateReplayDom(false);if(replayPlaying)replayRAF=requestAnimationFrame(replayTick)}
+function replayTick(now){if(!replayPlaying)return;const dt=(now-replayLastTs)*replaySpeed;replayLastTs=now;replayClock+=dt;const dur=replayDuration(replayState().data);if(replayClock>=dur){replayClock=dur;stopReplay()}if(!replayLastPaintTs||now-replayLastPaintTs>=33||!replayPlaying){replayLastPaintTs=now;updateReplayDom(false)}if(replayPlaying)replayRAF=requestAnimationFrame(replayTick)}
 function updateReplayPlayButton(){const b=el('#replayPlay');if(b)b.textContent=replayPlaying?'■ Пауза':'▶ Играть'}
 function replayActorHtml(a,data,t){const p=positionAt(data,a.id,t);if(!p)return '';const q=data.normalizedPercent?{x:p.x,y:p.y}:replayPoint(data,p.x,p.y);const role=replayRole(a),ck=detectClassKey(a.subType||a.class||''),c=wowClass(ck);return `<div class="replayActor ${role}${c?' hasClassIcon':''}" data-actor="${a.id}" style="left:${q.x}%;top:${q.y}%" title="${esc(a.name)}${c?' · '+esc(c.name):''}">${c?`<img src="${c.icon}" alt="">`:''}<b>${esc(shortActorName(a.name))}</b></div>`}
 function replayMapCounts(data){
- const counts={};const add=(id,n=1)=>{id=+id;if(Number.isFinite(id)&&id>0)counts[id]=(counts[id]||0)+Math.max(1,+n||1)};
+ const counts={...replayIndex(data).mapCounts};const add=(id,n=1)=>{id=+id;if(Number.isFinite(id)&&id>0)counts[id]=(counts[id]||0)+Math.max(1,+n||1)};
  if(data?.mapIDs&&typeof data.mapIDs==='object')Object.entries(data.mapIDs).forEach(([id,n])=>add(id,n));
- (data?.positions||[]).forEach(p=>add(p.mapID,1));
- (data?.fight?.mapIDs||[]).forEach(id=>add(id,1));
- add(data?.source?.mapID||data?.source?.mapId,1);return counts;
+ (data?.fight?.mapIDs||[]).forEach(id=>add(id,1));add(data?.source?.mapID||data?.source?.mapId,1);return counts;
 }
 function replayPrimaryMapId(data){
  const counts=replayMapCounts(data),known=Object.entries(counts).filter(([id])=>raidMaps[+id]);
@@ -1114,9 +1149,14 @@ function replayMapHtml(data){
  const src=replayMapSource();return `<div class="arenaMap replayLegacyMap" data-map-source="fallback"><img id="replayMapImage" class="arenaMapImage" src="${src}" draggable="false"></div>`;
 }
 function updateReplayDom(force=false){
- const d=replayState().data;if(!d)return;const dur=replayDuration(d);const slider=el('#replaySlider');if(slider){slider.max=dur;slider.value=replayClock}const tm=el('#replayTime');if(tm)tm.textContent=`${fmtTime(replayClock/1000)} / ${fmtTime(dur/1000)}`;const ev=replayEventNear(d,replayClock),evn=el('#replayNow');if(evn)evn.innerHTML=ev?`<b>${esc(ev.label)}</b><small>${esc(ev.type)}</small>`:'<b>Движение рейда</b><small>между событиями</small>';
- const layer=el('#replayActors');if(layer){const actors=replayActors(d).filter(a=>replaySelectedActor==='all'||String(a.id)===String(replaySelectedActor));layer.innerHTML=actors.map(a=>replayActorHtml(a,d,replayClock)).join('')}
- const im=el('#replayMapImage');if(im&&im.getAttribute('src')!==replayMapSource())im.setAttribute('src',replayMapSource());updateReplayPlayButton();
+ const d=replayState().data;if(!d)return;const dur=replayDuration(d),slider=el('#replaySlider');if(slider){slider.max=dur;slider.value=replayClock}
+ const tm=el('#replayTime');if(tm)tm.textContent=`${fmtTime(replayClock/1000)} / ${fmtTime(dur/1000)}`;const ev=replayEventNear(d,replayClock),evn=el('#replayNow');if(evn)evn.innerHTML=ev?`<b>${esc(ev.label)}</b><small>${esc(ev.type)}</small>`:'<b>Движение рейда</b><small>между событиями</small>';
+ const layer=el('#replayActors');if(layer){
+   const actors=replayActors(d).filter(a=>replaySelectedActor==='all'||String(a.id)===String(replaySelectedActor)),sig=actors.map(a=>String(a.id)).join('|');
+   if(layer.dataset.actorSig!==sig){layer.innerHTML=actors.map(a=>replayActorHtml(a,d,replayClock)).join('');layer.dataset.actorSig=sig;layer._raidruActorNodes=new Map([...layer.querySelectorAll('.replayActor')].map(n=>[String(n.dataset.actor),n]))}
+   const nodes=layer._raidruActorNodes||new Map();for(const a of actors){const n=nodes.get(String(a.id));if(!n)continue;const p=positionAt(d,a.id,replayClock);if(!p){n.hidden=true;continue}n.hidden=false;const q=d.normalizedPercent?{x:p.x,y:p.y}:replayPoint(d,p.x,p.y);n.style.left=q.x+'%';n.style.top=q.y+'%'}
+ }
+ if(force||current==='ulatek'){const im=el('#replayMapImage'),src=replayMapSource();if(im&&im.getAttribute('src')!==src)im.setAttribute('src',src)}updateReplayPlayButton();
 }
 function selectReplayActor(v){replaySelectedActor=v;updateReplayDom(true)}
 function createPlanFromReplay(){
@@ -1132,7 +1172,7 @@ function exportBossStateForDifficulty(id,difficulty=diff,includeRaidPlan=true){
 }
 function buildShareUrl(){const data=exportBossStateForDifficulty(current,diff,false);const payload={v:7,boss:current,diff,role,data};return location.origin+location.pathname+'#share='+safeB64Encode(payload)}
 function restoreFromHash(){try{if(!location.hash.startsWith('#share='))return;const p=safeB64Decode(location.hash.slice(7));if(p?.boss&&p?.data){const d=p.diff||'heroic',root=bossStateRaw(p.boss);root.favorite=!!p.data.favorite;root.progress=+p.data.progress||0;root.note=p.data.note||root.note||'';if(d==='heroic'){root.scenes=deep(p.data.scenes||[]);root.timelineV3=deep(p.data.timelineV3||[]);root.cooldowns=deep(p.data.cooldowns||[]);root.assignments=deep(p.data.assignments||[])}else replaceDifficultyPlan(p.boss,d,{_initialized:true,scenes:deep(p.data.scenes||[]),timelineV3:deep(p.data.timelineV3||[]),cooldowns:deep(p.data.cooldowns||[]),assignments:deep(p.data.assignments||[])});current=p.boss;diff=d;role=p.role||role;setScenarioSourceFor(current,'raidru',diff);toast(`Стратегия загружена · ${difficultyLabels[diff]}`)}}catch(e){console.warn(e)}}
-function save(){state.current=current;state.role=role;state.diff=diff;state.view=view;state.priestMode=priestMode;state.showPaths=showPaths;state.plannerPaletteTab=plannerPaletteTab;state.plannerSpawnMode=plannerSpawnMode;state.plannerArenaSnap=plannerArenaSnap;state.plannerIconTab=plannerIconTab;localStorage.setItem('raidru-standalone',JSON.stringify(state))}
+function save(){state.current=current;state.role=role;state.diff=diff;state.view=view;state.priestMode=priestMode;state.showPaths=showPaths;state.plannerPaletteTab=plannerPaletteTab;state.plannerSpawnMode=plannerSpawnMode;state.plannerArenaSnap=plannerArenaSnap;state.plannerIconTab=plannerIconTab;raidruSchedulePersist()}
 function render(){
   save();const b=raid.find(x=>x.id===current),bs=bossState(current);
   el('#app').innerHTML=`<div class="shell"><aside><div class="brand"><div class="mark">R</div><div><b>RaidRU</b><small>рейдовые тактики по-русски</small></div></div><div class="season"><small>Midnight · Сезон 2</small><b>Ядовитая бездна</b></div><input class="search" placeholder="Найти босса…" oninput="filterBoss(this.value)"><div class="bosses">${orderedRaid().map(x=>`<button data-name="${esc((x.name+' '+x.en).toLowerCase())}" class="${x.id===current?'on':''}" onclick="chooseBoss('${x.id}')"><i>${x.order}</i><span><b>${x.name}</b><small>Босс ${x.order}</small></span><em>${bossState(x.id).favorite?'★':''}</em></button>`).join('')}</div><div class="version">RaidRU 0.9.5 · Raid Workspace + WCL Draft</div></aside><main><header>${[['dashboard','Рейд'],['guide','Тактика'],['player','План: просмотр'],['planner','Планировщик'],['timeline','Таймлайн'],['roster','Состав'],['notes','Заметки'],['glossary','Словарь']].map(x=>`<button class="${view===x[0]?'on':''}" onclick="setView('${x[0]}')">${x[1]}</button>`).join('')}<span></span><button class="priest ${priestMode?'on':''}" onclick="togglePriest()">♥ Холи-прист</button><button class="raidplanHeaderBtn" onclick="openRaidPlanImport()">⇄ RaidPlan</button><button onclick="sharePlan()">↗ Поделиться</button><button onclick="exportPlan()">⇩ Экспорт</button><label class="importBtn">⇧ Импорт<input type="file" accept="application/json,.json" onchange="importPlanFile(this.files[0])"></label></header>${view==='dashboard'?dashboardHero():`<section class="hero"><div><small>MIDNIGHT / ЯДОВИТАЯ БЕЗДНА / БОСС ${b.order}</small><div class="title"><h1>${b.name}</h1><button onclick="fav()">${bs.favorite?'★':'☆'}</button></div><p>${b.summary}</p></div><div class="heroRight"><div class="diff">${[['normal','Обычный'],['heroic','Героический'],['mythic','Эпохальный']].map(x=>`<button class="${diff===x[0]?'on':''}" onclick="setDiff('${x[0]}')">${x[1]}</button>`).join('')}</div><label>Освоение <b>${bs.progress}%</b><input type="range" min="0" max="100" step="10" value="${bs.progress}" oninput="setProgress(this.value)"></label></div></section>`}${content(b,bs)}<footer class="siteCredit">Карты и ресурсы для планирования: <a href="https://raidplan.io/" target="_blank" rel="noopener noreferrer">RaidPlan.io</a> · Карты по mapID Heroic Replay (2606/2607/2608/2609) и тайминги: Warcraft Logs/RPGLogs · Иконки планировщика: локальные ассеты RaidRU · Голосовые таймеры: NSRT Heroic BossTimelines · Рейдовые значки: игровые ресурсы сообщества</footer></main></div>`;

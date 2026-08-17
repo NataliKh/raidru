@@ -21,6 +21,6 @@ ok(ui.includes('Создать план из механик'),'mechanics-to-plan
 ok(ui.includes('richBrowser209'),'browser JSON local reuse missing');
 ok(ws.includes("window.wclMechanicsAnalysis209"),'analysis hook missing');
 ok(css.includes('.wclMechTimeline209')&&css.includes('.wclMechanicCard209'),'mechanics styles missing');
-ok(html.includes('wcl-mechanics-209.js?v=2.0.9-mechanics'),'mechanics script not loaded');
-ok(sw.includes("raidru-v209-mechanics-analysis")&&sw.includes('wcl-mechanics-209.js?v=2.0.9-mechanics'),'SW cache not bumped');
+ok(/wcl-mechanics-209\.js\?v=(2\.0\.(9-mechanics|11-readability)|2\.1\.0-performance)/.test(html),'mechanics script not loaded');
+ok(/raidru-v(209-mechanics-analysis|210-performance-core|211-mechanics-readability)/.test(sw)&&/wcl-mechanics-209\.js\?v=(2\.0\.(9-mechanics|11-readability)|2\.1\.0-performance)/.test(sw),'SW cache not bumped');
 console.log('WCL Mechanics Analysis 2.0.9 regression checks: OK');

@@ -60,7 +60,7 @@
       ws.migrated=true;
     }
     workspaceEnsureSlot(current,diff,{apply:false});
-    localStorage.setItem('raidru-standalone',JSON.stringify(state));
+    raidruPersistNow();
   }
   function workspaceTrimHistory(p){
     p.history=Array.isArray(p.history)?p.history:[];
@@ -76,7 +76,7 @@
     workspaceFlushSync();const p=workspaceCurrentPlan();if(!p)return;workspacePushHistory(p,reason,workspaceCapture());workspacePersist();
   }
   let syncTimer=null;
-  function workspacePersist(){try{localStorage.setItem('raidru-standalone',JSON.stringify(state))}catch(e){console.warn('RaidRU workspace localStorage',e)}}
+  function workspacePersist(){try{raidruPersistNow()}catch(e){console.warn('RaidRU workspace localStorage',e)}}
   function workspaceSyncNow({autoHistory=true}={}){
     const p=workspaceCurrentPlan();if(!p)return;
     const next=workspaceCapture(),prev=p.data||{};let changed=false;

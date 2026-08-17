@@ -1088,3 +1088,12 @@
   .wclMechLane209{grid-template-columns:92px minmax(0,1fr);min-height:56px}
   .wclMechLane209>b{padding:0 7px;font-size:10px}
 }
+
+/* RaidRU 2.1.0 — Performance Core */
+.wclMechanicCard209,
+.bossCards article{
+  content-visibility:auto;
+  contain-intrinsic-size:auto 112px;
+}
+.replayActors{contain:layout paint style}
+.replayActor{will-change:left,top}

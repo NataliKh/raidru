@@ -30,7 +30,7 @@
   }
 
   function exportReplayV2208(){
-    const d=d208();if(!d)return toast('Replay ещё не загружен');const payload=raw208()||canonical208(d),s=source208(d),blob=new Blob([JSON.stringify(payload,null,2)],{type:'application/json'}),a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=`wcl-${s.code||'report'}-fight-${s.fight||'replay'}.raidru-replay.json`;a.click();setTimeout(()=>URL.revokeObjectURL(a.href),1200);
+    const d=d208();if(!d)return toast('Replay ещё не загружен');const raw=raw208();let payload;if(raw?.positions?.length)payload=raw;else{payload=canonical208(d);if(raw?.timeline?.length){payload.timeline=raw.timeline;payload.stats={...(payload.stats||{}),...(raw.stats||{}),timelineEvents:raw.timeline.length}}}const s=source208(d),blob=new Blob([JSON.stringify(payload,null,2)],{type:'application/json'}),a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=`wcl-${s.code||'report'}-fight-${s.fight||'replay'}.raidru-replay.json`;a.click();setTimeout(()=>URL.revokeObjectURL(a.href),1200);
   }
   function setWclTab208(v){wclTab208=['replay','analysis','plan'].includes(v)?v:'replay';decorateWclWorkspace208()}
   function toggleWclInfo208(){wclInfo208=!wclInfo208;decorateWclWorkspace208()}
@@ -70,7 +70,7 @@
     const grid=document.querySelector('.replayGrid');if(grid)grid.style.display=wclTab208==='replay'?'grid':'none';document.querySelectorAll('.wclAnalysis208,.wclPlan208').forEach(x=>x.remove());if(wclTab208!=='replay'){const holder=document.createElement('div');holder.innerHTML=wclTab208==='analysis'?analysisHtml208(d):planHtml208(d);shell.insertAdjacentElement('afterend',holder.firstElementChild)}
   }
 
-  const oldRender208=render;render=function(){oldRender208();decorateWclWorkspace208();const version=document.querySelector('aside .version');if(version)version.textContent='RaidRU 2.0.9 · Mechanics Analysis'};
+  const oldRender208=render;render=function(){oldRender208();decorateWclWorkspace208();const version=document.querySelector('aside .version');if(version)version.textContent='RaidRU 2.1.0 · Performance Core'};
   const oldClear208=clearWclReplay200;clearWclReplay200=function(){wclTab208='replay';wclInfo208=false;window.__raidruExactReplay208=null;oldClear208()};
   Object.assign(window,{setWclTab208,toggleWclInfo208,refreshWclReplay208,exportReplayV2208,decorateWclWorkspace208});
   render();

@@ -36,7 +36,7 @@
     p.history=Array.isArray(p.history)?p.history:[];
     p.history.push({id:uid(),at:nowIso(),reason:String(title).slice(0,80),data:deep100(p.data)});
     while(p.history.length>12)p.history.shift();p.lastHistoryAt=Date.now();p.updatedAt=nowIso();
-    localStorage.setItem('raidru-standalone',JSON.stringify(state));
+    raidruPersistNow();
     render();toast(`Снимок создан: ${title}`);
   }
   function workspaceSnapshot100(reason){const p=activeWorkspace100();if(!p)return toast('Сначала открой план из «Мои планы»');workspaceSnapshotPlan100(p.id,reason)}
