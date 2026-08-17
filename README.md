@@ -2,8 +2,26 @@
 
 Русскоязычный визуальный планировщик рейдов World of Warcraft: сцены, таймлайн, назначения, импорт RaidPlan и создание черновика тактики по реальным позициям Warcraft Logs.
 
-**Текущая версия:** `2.0.4 Preview — WCL Adaptive Import`  
+**Текущая версия:** `2.1.4 — WCL Fight Scope`  
 **Сайт:** https://natalikh.github.io/raidru/
+
+
+## 2.1.4 — WCL Fight Scope
+
+Исправлен случай, когда большой Warcraft Logs report мог показывать в RaidRU **500 игроков и 0 координат**, хотя официальный Replay отображал обычный рейд. Причина: `masterData.actors` относится ко всему report и может быть большой таблицей, а Replay должен брать участников конкретного боя из `fight.friendlyPlayers`.
+
+Теперь Worker:
+
+- получает `friendlyPlayers` вместе с fight metadata;
+- строит список игроков только по IDs текущего боя;
+- фильтрует координаты тем же fight-scoped набором IDs;
+- создаёт нейтральное имя `Игрок <id>`, если подробности участника не попали в masterData;
+- использует новые cache namespaces `v214`, поэтому повреждённый старый Replay `500 игроков / 0 точек` не возвращается из кэша после деплоя;
+- сохраняет правило «один WCL GraphQL-запрос на шаг» для numeric fight fast path.
+
+Regression mock: report-wide таблица из 500 Player actors + `friendlyPlayers: [9001]` должна вернуть ровно одного игрока и ненулевые координаты.
+
+Подробнее: `RELEASE-2.1.4-WCL-FIGHT-SCOPE.md`.
 
 ## 2.0.4 Preview — WCL Adaptive Import
 

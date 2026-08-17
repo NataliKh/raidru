@@ -14,16 +14,18 @@ globalThis.caches={default:new MemoryCache()};
 let mode='normal', gqlCalls=0, oneShotCalls=0, quotaCalls=0, reportCalls=0, eventCalls=0, quotaSpent=100;
 const fightFor=code=>({
   code,title:`Report ${code}`,startTime:1700000000000,endTime:1700000010000,
-  fights:[{id:10,encounterID:3420,originalEncounterID:3420,name:'Sszorak',difficulty:4,kill:true,startTime:0,endTime:900,inProgress:false,size:20,maps:[{id:2609}]}],
-  masterData:{actors:[{id:1,name:'Player One',type:'Player',subType:'Priest'},{id:99,name:'Boss',type:'NPC',subType:'Boss'}]}
+  fights:[{id:10,encounterID:3420,originalEncounterID:3420,name:'Sszorak',difficulty:4,kill:true,startTime:0,endTime:900,inProgress:false,size:20,friendlyPlayers:[9001],maps:[{id:2609}]}],
+  // Regression: report-wide masterData may contain hundreds of players from other fights.
+  // Replay must use this fight's friendlyPlayers, not the full 500-entry actor table.
+  masterData:{actors:[...Array.from({length:500},(_,i)=>({id:1000+i,name:`Other ${i+1}`,type:'Player',subType:'Mage'})),{id:99,name:'Boss',type:'NPC',subType:'Boss'}]}
 });
 const quota=()=>({limitPerHour:1000,pointsSpentThisHour:quotaSpent,pointsResetIn:1800});
 function page(start=0){
   const next=start<300?300:null;
   return {
     data:[
-      {timestamp:start+50,type:'cast',sourceID:1,resourceActor1:1,x:100+start,y:200+start,nextX:110+start,nextY:210+start,nextTimestamp:start+120,mapID:2609,abilityGameID:111},
-      {timestamp:start+160,type:'begincast',sourceID:99,targetID:1,abilityGameID:1287072,abilityName:'Буря',mapID:2609}
+      {timestamp:start+50,type:'cast',sourceID:9001,resourceActor1:9001,x:100+start,y:200+start,nextX:110+start,nextY:210+start,nextTimestamp:start+120,mapID:2609,abilityGameID:111},
+      {timestamp:start+160,type:'begincast',sourceID:99,targetID:9001,abilityGameID:1287072,abilityName:'Буря',mapID:2609}
     ],
     nextPageTimestamp:next
   };
@@ -89,7 +91,9 @@ const reqExact=(code='ExactTestAA',fight='10',modeArg='smart')=>new Request(`htt
 before=gqlCalls;
 r=await worker.fetch(reqExact(),env,{}); b=await r.json();
 ok('exact endpoint returns Browser Replay v2 envelope',r.status===206&&b.format==='raidru-wcl-replay-browser'&&b.version===2&&Array.isArray(b.timeline)&&b.positionsByActor);
-ok('exact endpoint preserves actors and map IDs',Array.isArray(b.actors)&&b.actors.some(a=>a.name==='Player One')&&String(Object.keys(b.mapIDs||{})).includes('2609'));
+ok('exact endpoint scopes actors to fight friendlyPlayers',Array.isArray(b.actors)&&b.actors.length===1&&b.actors[0].id===9001&&b.actors[0].name==='Игрок 9001');
+ok('exact endpoint preserves map IDs',String(Object.keys(b.mapIDs||{})).includes('2609'));
+ok('500 report-wide players do not erase coordinates',b.positions.length>=1&&b.stats?.compactPositionPoints>=1);
 ok('exact endpoint is still one GraphQL request per click',gqlCalls-before===1);
 
 // A real 429 is one attempt, then cached Retry-After blocks later clicks without touching WCL.

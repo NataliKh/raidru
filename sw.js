@@ -1,18 +1,18 @@
-const CACHE='raidru-v213-neutral-roles';
+const CACHE='raidru-v214-wcl-fight-scope';
 const CORE=[
 './',
 './index.html',
-'./styles.css?v=2.1.3-neutral-roles',
-'./app.js?v=2.1.3-neutral-roles',
+'./styles.css?v=2.1.4-wcl-fight-scope',
+'./app.js?v=2.1.4-wcl-fight-scope',
 './raidplan-importer.js?v=1.0.0',
 './workspace-095.js?v=2.1.0-performance',
 './raid-ready-100.js?v=2.1.0-performance',
-'./ui-101.js?v=2.1.3-neutral-roles',
-'./wcl-safe-200.js?v=2.1.0-performance',
+'./ui-101.js?v=2.1.4-wcl-fight-scope',
+'./wcl-safe-200.js?v=2.1.4-wcl-fight-scope',
 './wcl-workspace-208.js?v=2.1.0-performance',
 './wcl-mechanics-209.js?v=2.1.0-performance',
 './navigation-211.js?v=2.1.1-navigation',
-'./viewer-212.js?v=2.1.3-neutral-roles',
+'./viewer-212.js?v=2.1.4-wcl-fight-scope',
 './manifest.webmanifest',
 './icon.svg'
 ];

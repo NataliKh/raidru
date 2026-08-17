@@ -151,7 +151,7 @@ async function wclToken(env) {
       'Authorization': `Basic ${basic}`,
       'Content-Type': 'application/x-www-form-urlencoded',
       'Accept': 'application/json',
-      'User-Agent': 'RaidRU/2.0.10 Mechanics Enum Fix'
+      'User-Agent': 'RaidRU/2.1.4 Fight Scoped Replay'
     },
     body: 'grant_type=client_credentials'
   });
@@ -178,7 +178,7 @@ async function wclGraphql(env, query, variables = {}) {
       'Authorization': `Bearer ${token}`,
       'Content-Type': 'application/json',
       'Accept': 'application/json',
-      'User-Agent': 'RaidRU/2.0.10 Mechanics Enum Fix'
+      'User-Agent': 'RaidRU/2.1.4 Fight Scoped Replay'
     },
     body: JSON.stringify({ query, variables })
   });
@@ -209,6 +209,7 @@ query RaidRUReport($code: String!) {
       code title startTime endTime
       fights {
         id encounterID originalEncounterID name difficulty kill startTime endTime inProgress size
+        friendlyPlayers
         maps { id }
       }
       masterData {
@@ -252,6 +253,7 @@ query RaidRUOneShot($code: String!, $limit: Int!${hasStart ? ', $start: Float!' 
       code title startTime endTime
       fights {
         id encounterID originalEncounterID name difficulty kill startTime endTime inProgress size
+        friendlyPlayers
         maps { id }
       }
       masterData { actors { id name type subType } }
@@ -361,15 +363,17 @@ function publicReport(report, quota = null, cache = 'miss') {
       id: safeInt(f.id), encounterID: safeInt(f.encounterID) || 0, originalEncounterID: safeInt(f.originalEncounterID) || 0,
       name: f.name || `Бой #${f.id}`, difficulty: f.difficulty ?? null, kill: !!f.kill,
       startTime: numeric(f.startTime) || 0, endTime: numeric(f.endTime) || 0, inProgress: !!f.inProgress,
-      size: safeInt(f.size) || null, mapIDs: (f.maps || []).map(m => safeInt(m?.id)).filter(Boolean)
+      size: safeInt(f.size) || null, friendlyPlayers: (f.friendlyPlayers || []).map(x => safeInt(x)).filter(Boolean), mapIDs: (f.maps || []).map(m => safeInt(m?.id)).filter(Boolean)
     })).filter(f => f.id),
     actors: (report.masterData?.actors || []).map(a => ({ id: a.id, name: a.name || `Actor ${a.id}`, type: a.type || '', subType: a.subType || '' })),
     quota: normalizeQuota(quota), cache
   };
 }
 
+function reportCacheName(code) { return `wcl/report-v214/${code}`; }
+
 async function getReport(env, code, { forceQuota = false } = {}) {
-  const cacheName = `wcl/report/${code}`;
+  const cacheName = reportCacheName(code);
   const cached = await cacheGet(cacheName);
   if (cached && !forceQuota) return { ...cached, cache: 'hit' };
   const data = await wclGraphql(env, REPORT_QUERY, { code });
@@ -395,7 +399,7 @@ async function getQuota(env, { force = false } = {}) {
 }
 
 function pageCacheName(code, fightId, start, mode = 'casts') {
-  return `wcl/page-v203/${mode}/${code}/${fightId}/${Math.round(start)}`;
+  return `wcl/page-v214/${mode}/${code}/${fightId}/${Math.round(start)}`;
 }
 
 function positionCandidate(e, fightStart, playerIds, defaultMapID) {
@@ -418,8 +422,23 @@ function positionCandidate(e, fightStart, playerIds, defaultMapID) {
   return out;
 }
 
+function fightPlayerIds(meta, fight) {
+  const scoped = (fight?.friendlyPlayers || []).map(x => safeInt(x)).filter(Boolean);
+  if (scoped.length) return new Set(scoped.map(String));
+  return new Set((meta.actors || []).filter(a => String(a.type).toLowerCase() === 'player').map(a => String(a.id)));
+}
+
+function fightActors(meta, fight) {
+  const ids = [...fightPlayerIds(meta, fight)];
+  const byId = new Map((meta.actors || []).map(a => [String(a.id), a]));
+  return ids.map(id => {
+    const a = byId.get(String(id));
+    return { id: safeInt(id) || id, name: a?.name || `Игрок ${id}`, type: 'Player', subType: a?.subType || '' };
+  });
+}
+
 function compactWclPage(events, meta, fight) {
-  const playerIds = new Set((meta.actors || []).filter(a => String(a.type).toLowerCase() === 'player').map(a => String(a.id)));
+  const playerIds = fightPlayerIds(meta, fight);
   const fightStart = Number(fight.startTime) || 0, defaultMapID = fight.mapIDs?.[0] || null;
   const positions = [], casts = [];
   let scanned = 0;
@@ -524,7 +543,7 @@ async function setBackoff(code, fightId, retryAfter, reason, quota) {
   return value;
 }
 
-function progressCacheName(code, fightId) { return `wcl/progress/${code}/${fightId}`; }
+function progressCacheName(code, fightId) { return `wcl/progress-v214/${code}/${fightId}`; }
 
 async function loadProgress(code, fight) {
   const p = await cacheGet(progressCacheName(code, fight.id));
@@ -548,7 +567,7 @@ function replayBodyFromProgress(meta, fight, progress, quota, { partial = false,
   const positions = Array.isArray(progress?.positions) ? progress.positions : [];
   const casts = Array.isArray(progress?.casts) ? progress.casts : [];
   const thin = thinPositions(positions), timeline = dedupeCasts(casts);
-  const actors = (meta.actors || []).filter(a => String(a.type).toLowerCase() === 'player').map(a => ({ id: a.id, name: a.name, type: 'Player', subType: a.subType || '' }));
+  const actors = fightActors(meta, fight);
   const mapIDs = {};
   for (const p of thin) if (p.mapID) mapIDs[p.mapID] = (mapIDs[p.mapID] || 0) + 1;
   if (!Object.keys(mapIDs).length) for (const id of fight.mapIDs || []) mapIDs[id] = 1;
@@ -570,7 +589,7 @@ function replayBodyFromProgress(meta, fight, progress, quota, { partial = false,
       bossId: fight.encounterID || fight.originalEncounterID || 0,
       startTime: fight.startTime, endTime: fight.endTime,
       duration: Math.max(1, fight.endTime - fight.startTime),
-      difficulty: fight.difficulty, kill: fight.kill, inProgress: fight.inProgress
+      difficulty: fight.difficulty, kill: fight.kill, inProgress: fight.inProgress, size: fight.size || null, friendlyPlayers: [...fightPlayerIds(meta, fight)].map(x => safeInt(x) || x)
     },
     actors, positions: thin, events: timeline,
     duration: Math.max(1, fight.endTime - fight.startTime), mapIDs,
@@ -667,18 +686,13 @@ function partialOrPause(meta, fight, progress, quota, { reason = 'wcl_quota_empt
 
 
 async function buildReplayOneShot(env, code, fightId, requestedMode = 'smart') {
-  const finalName = `wcl/replay-v205/fast/${code}/${fightId}`;
+  const finalName = `wcl/replay-v214/fast/${code}/${fightId}`;
   const finalHit = await cacheGet(finalName);
   if (finalHit) return { status: 200, body: { ...finalHit, cache: 'hit' } };
 
-  // Reuse any already-completed replay from older builds before touching WCL.
-  for (const legacyName of [
-    `wcl/replay-v203/fast/${code}/${fightId}`,
-    `wcl/replay/${code}/${fightId}`
-  ]) {
-    const legacy = await cacheGet(legacyName);
-    if (legacy && !legacy.partial) return { status: 200, body: { ...legacy, cache: 'legacy-hit', quality: legacy.quality || 'fast' } };
-  }
+  // 2.1.4 deliberately does not reuse older replay envelopes here. Previous
+  // caches could contain report-wide actor tables (often capped at 500 entries),
+  // which makes a fight look like 500 players and can discard every coordinate.
 
   // Read the checkpoint directly. New 2.0.5 checkpoints carry metadata snapshots,
   // so continuation never needs a separate report/quota preflight request.
@@ -686,7 +700,7 @@ async function buildReplayOneShot(env, code, fightId, requestedMode = 'smart') {
   const rawProgress = await cacheGet(progressCacheName(code, fightId));
   if (rawProgress) progress = rawProgress;
 
-  let cachedMeta = await cacheGet(`wcl/report/${code}`);
+  let cachedMeta = await cacheGet(reportCacheName(code));
   let cachedFight = cachedMeta ? selectFight(cachedMeta, String(fightId)) : null;
   if (!cachedMeta && progress?.reportSnapshot) cachedMeta = progress.reportSnapshot;
   if (!cachedFight && progress?.fightSnapshot) cachedFight = progress.fightSnapshot;
@@ -731,7 +745,7 @@ async function buildReplayOneShot(env, code, fightId, requestedMode = 'smart') {
   const meta = publicReport(reportRaw, data.rateLimitData, 'miss');
   const fight = selectFight(meta, String(fightId));
   if (!fight) return { status: 404, body: { error: 'fight_not_found', fights: meta.fights } };
-  await cachePut(`wcl/report/${code}`, meta, fight.inProgress ? REPORT_TTL : COMPLETE_FIGHT_TTL);
+  await cachePut(reportCacheName(code), meta, fight.inProgress ? REPORT_TTL : COMPLETE_FIGHT_TTL);
 
   const raw = reportRaw.events;
   if (!raw || !Array.isArray(raw.data)) { const e = new Error('WCL_EVENTS_EMPTY'); e.code = 'wcl_events_unavailable'; throw e; }
@@ -769,7 +783,7 @@ async function buildReplayOneShot(env, code, fightId, requestedMode = 'smart') {
   body.stats.eventPageLimit = limit;
   const ttl = fight.inProgress ? LIVE_FIGHT_TTL : COMPLETE_FIGHT_TTL;
   await cachePut(finalName, body, ttl);
-  await cachePut(`wcl/replay-v203/fast/${code}/${fightId}`, body, ttl);
+  
   await cacheDelete(progressCacheName(code, fightId));
   return { status: 200, body };
 }
@@ -780,26 +794,20 @@ async function buildReplay(env, code, fightParam, requestedMode = 'smart') {
     return buildReplayOneShot(env, code, directFightId, requestedMode);
   }
   const modeKey = requestedMode === 'full' ? 'full' : 'fast';
-  const finalName = `wcl/replay-v203/${modeKey}/${code}/${fightParam}`;
+  const finalName = `wcl/replay-v214/${modeKey}/${code}/${fightParam}`;
   const cachedFinal = await cacheGet(finalName);
   if (cachedFinal) return { status: 200, body: { ...cachedFinal, cache: 'hit' } };
 
-  // Reuse a completed 2.0.2 replay if it already exists. This costs zero WCL points.
-  const legacyFinal = await cacheGet(`wcl/replay/${code}/${fightParam}`);
-  if (legacyFinal && !legacyFinal.partial) {
-    return { status: 200, body: { ...legacyFinal, cache: 'legacy-hit', quality: legacyFinal.quality || 'full' } };
-  }
+  // Old replay caches are intentionally bypassed in 2.1.4 because actor scope semantics changed.
 
   const meta = await getReport(env, code);
   const fight = selectFight(meta, fightParam);
   if (!fight) return { status: 404, body: { error: 'fight_not_found', fights: meta.fights } };
 
-  const actualFinalName = `wcl/replay-v203/${modeKey}/${code}/${fight.id}`;
+  const actualFinalName = `wcl/replay-v214/${modeKey}/${code}/${fight.id}`;
   if (actualFinalName !== finalName) {
     const hit = await cacheGet(actualFinalName);
     if (hit) return { status: 200, body: { ...hit, cache: 'hit' } };
-    const legacyHit = await cacheGet(`wcl/replay/${code}/${fight.id}`);
-    if (legacyHit && !legacyHit.partial) return { status: 200, body: { ...legacyHit, cache: 'legacy-hit', quality: legacyHit.quality || 'full' } };
   }
 
   let progress = await loadProgress(code, fight);
@@ -967,6 +975,7 @@ query RaidRUMechanics($code: String!, $limit: Int!, $needCasts: Boolean!, $needD
       code title startTime endTime
       fights {
         id encounterID originalEncounterID name difficulty kill startTime endTime inProgress size
+        friendlyPlayers
         maps { id }
       }
       masterData {
@@ -1087,7 +1096,7 @@ async function buildMechanics(env, code, fightId) {
   const meta = publicReport(reportRaw, data.rateLimitData, 'miss');
   const fight = selectFight(meta, String(fightId));
   if (!fight) return { status:404, body:{ error:'fight_not_found', fights:meta.fights } };
-  await cachePut(`wcl/report/${code}`, meta, fight.inProgress ? REPORT_TTL : COMPLETE_FIGHT_TTL);
+  await cachePut(reportCacheName(code), meta, fight.inProgress ? REPORT_TTL : COMPLETE_FIGHT_TTL);
 
   const actorIds = new Map((meta.actors||[]).map(a=>[String(a.id),a.name||'']));
   const abilityNames = new Map((reportRaw?.masterData?.abilities||[]).map(a=>[String(a.gameID||a.id||''),a.name||'']));
@@ -1128,11 +1137,11 @@ export default {
     if (origin && !ALLOWED_ORIGINS.has(origin)) return new Response(JSON.stringify({ error: 'origin_not_allowed', origin, allowed: [...ALLOWED_ORIGINS] }), { status: 403, headers: { 'Content-Type': 'application/json; charset=utf-8', ...cors(origin, { echo: true }), 'X-RaidRU-Origin': origin } });
 
     if (url.pathname === '/wcl/ping') {
-      return json({ ok: true, service: 'raidru-edge', version: '2.0.10-mechanics-enum-fix', origin: origin || null, wclConfigured: wclConfigured(env) }, 200, origin, { 'X-RaidRU-WCL-Safe': '1' });
+      return json({ ok: true, service: 'raidru-edge', version: '2.1.4-fight-scoped-replay', origin: origin || null, wclConfigured: wclConfigured(env) }, 200, origin, { 'X-RaidRU-WCL-Safe': '1' });
     }
 
     if (url.pathname === '/health') {
-      return json({ ok: true, service: 'raidru-edge', version: '2.0.10-mechanics-enum-fix', wclConfigured: wclConfigured(env), features: ['raidplan', 'wcl-report', 'wcl-one-shot-replay', 'wcl-browser-v2-envelope', 'wcl-mechanics-pack', 'graphql-hostility-enums', 'single-query-fast-path', 'fast-casts-sampler', 'partial-replay', '429-lock-only', 'resume-cache'] }, 200, origin);
+      return json({ ok: true, service: 'raidru-edge', version: '2.1.4-fight-scoped-replay', wclConfigured: wclConfigured(env), features: ['raidplan', 'wcl-report', 'wcl-one-shot-replay', 'wcl-browser-v2-envelope', 'wcl-mechanics-pack', 'graphql-hostility-enums', 'single-query-fast-path', 'fast-casts-sampler', 'fight-scoped-friendly-players', 'partial-replay', '429-lock-only', 'resume-cache'] }, 200, origin);
     }
 
     if (url.pathname === '/raidplan' && request.method === 'GET') {

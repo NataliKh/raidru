@@ -2,7 +2,7 @@
  * Direct Warcraft Logs URL -> cached, quota-aware Worker replay.
  */
 (() => {
-  const VERSION='2.1.0-performance-core';
+  const VERSION='2.1.4-fight-scope';
   const API=(window.RAIDRU_WCL_API||'https://raidru-raidplan.raidru-wcl.workers.dev').replace(/\/$/,'');
   let ui={state:'idle',message:'',quota:null,report:null,url:'',fight:null,code:null,loops:0,partial:false,quality:null};
 
@@ -141,12 +141,12 @@
   function decorateReplay200(){
     if(typeof view==='undefined'||view!=='replay')return;const card=document.querySelector('.replayImport.card');if(!card)return;
     const d=replayState().data,currentUrl=ui.url||replayState().url||'';
-    card.innerHTML=`<div class="wclImportHead200"><div><small>RAIDRU 2.1.0 · WCL PERFORMANCE IMPORT</small><h3>Warcraft Logs → Replay</h3><p>Обычная загрузка делает максимум один WCL GraphQL-запрос за нажатие. После просмотра нажми «Новый бой» — текущий Replay очистится, а серверный кэш останется для экономии WCL quota.</p></div><span class="wclSafeBadge200">⚡ 1 запрос / шаг</span></div><div class="wclUrlRow200 ${d||currentUrl?'hasReset':''}"><input id="wclUrl200" value="${esc(currentUrl)}" placeholder="https://www.warcraftlogs.com/reports/…?fight=10" onkeydown="if(event.key==='Enter')loadWclReplay200()"><button class="primary" onclick="loadWclReplay200()">${ui.state==='paused'||ui.state==='partial'?'↻ Продолжить':'▶ Загрузить бой'}</button>${d||currentUrl?'<button class="wclReset200" onclick="clearWclReplay200()">＋ Новый бой</button>':''}</div>${statusHtml()}<div class="replayButtons wclSecondary200"><button onclick="loadDemoReplay()">Демо из плана</button><label class="importBtn">Диагностика: replay JSON<input type="file" accept="application/json,.json" onchange="importReplayJson(this.files[0])"></label>${d?'<button onclick="exportReplayJson()">Экспорт replay JSON</button><button class="rehearse" onclick="createPlanFromReplay()">✦ Создать WCL-черновик</button>':''}${d&&ui.code&&ui.fight&&!ui.partial&&ui.quality!=='full'?`<button title="Не обязательно. Запрашивает более тяжёлый поток WCL." onclick="loadWclFight200('${esc(ui.code)}','${esc(ui.fight)}','full')">Высокая точность</button>`:''}</div>`;
+    card.innerHTML=`<div class="wclImportHead200"><div><small>RAIDRU 2.1.4 · WCL FIGHT SCOPE</small><h3>Warcraft Logs → Replay</h3><p>Обычная загрузка делает максимум один WCL GraphQL-запрос за нажатие. После просмотра нажми «Новый бой» — текущий Replay очистится, а серверный кэш останется для экономии WCL quota.</p></div><span class="wclSafeBadge200">⚡ 1 запрос / шаг</span></div><div class="wclUrlRow200 ${d||currentUrl?'hasReset':''}"><input id="wclUrl200" value="${esc(currentUrl)}" placeholder="https://www.warcraftlogs.com/reports/…?fight=10" onkeydown="if(event.key==='Enter')loadWclReplay200()"><button class="primary" onclick="loadWclReplay200()">${ui.state==='paused'||ui.state==='partial'?'↻ Продолжить':'▶ Загрузить бой'}</button>${d||currentUrl?'<button class="wclReset200" onclick="clearWclReplay200()">＋ Новый бой</button>':''}</div>${statusHtml()}<div class="replayButtons wclSecondary200"><button onclick="loadDemoReplay()">Демо из плана</button><label class="importBtn">Диагностика: replay JSON<input type="file" accept="application/json,.json" onchange="importReplayJson(this.files[0])"></label>${d?'<button onclick="exportReplayJson()">Экспорт replay JSON</button><button class="rehearse" onclick="createPlanFromReplay()">✦ Создать WCL-черновик</button>':''}${d&&ui.code&&ui.fight&&!ui.partial&&ui.quality!=='full'?`<button title="Не обязательно. Запрашивает более тяжёлый поток WCL." onclick="loadWclFight200('${esc(ui.code)}','${esc(ui.fight)}','full')">Высокая точность</button>`:''}</div>`;
     const empty=document.querySelector('.emptyReplay');if(empty&&!d)empty.innerHTML='<b>Вставь ссылку Warcraft Logs выше</b><p>Если в ссылке нет <code>fight=</code>, RaidRU покажет список пулов из отчёта.</p>';
   }
 
   const coreRender200=render;
-  render=function(){coreRender200();decorateReplay200();const version=document.querySelector('aside .version');if(version)version.textContent='RaidRU 2.1.0 · Performance Core'};
+  render=function(){coreRender200();decorateReplay200();const version=document.querySelector('aside .version');if(version)version.textContent='RaidRU 2.1.4 · WCL Fight Scope'};
   loadWclReplay=loadWclReplay200;
   Object.assign(window,{loadWclReplay200,wclPickFight200,loadWclFight200,clearWclReplay200,wclUiState200:()=>ui});
   render();

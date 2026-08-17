@@ -5,7 +5,7 @@ assert(worker.includes("'/wcl/replay'"),'worker must expose /wcl/replay');
 assert(worker.includes('rateLimitData'),'worker must inspect WCL rateLimitData');
 assert(worker.includes('wcl_quota_empty'),'worker must distinguish truly exhausted quota');
 assert(worker.includes('wcl/backoff/'),'worker must persist backoff state');
-assert(worker.includes('wcl/page-v203/'),'worker must cache resumable event pages');
+assert(worker.includes('wcl/page-v214/'),'worker must cache resumable event pages in the fight-scope namespace');
 assert(worker.includes("status: 202"),'worker must pause instead of hammering WCL');
 assert(!worker.includes('setTimeout('),'worker must not retry 429 in a loop');
 assert(client.includes('Warcraft Logs → Replay'),'client must expose URL-first import');
@@ -26,4 +26,4 @@ assert(worker.includes('adaptiveEventLimit'),'worker must downshift page size in
 assert(!worker.includes("setBackoff(code, fight.id, retry, 'wcl_budget_guard'"),'synthetic budget guard must not create backoff');
 assert(!worker.includes('setTimeout')&&!worker.includes('retryWcl'),'worker must not automatically retry WCL 429');
 
-console.log('WCL Safe Import 2.0 static checks: OK');
+console.log('WCL Safe Import 2.1.4 static checks: OK');
