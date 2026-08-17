@@ -1,8 +1,8 @@
-const CACHE='raidru-v211-navigation';
+const CACHE='raidru-v212-plan-viewer';
 const CORE=[
 './',
 './index.html',
-'./styles.css?v=2.1.1-navigation',
+'./styles.css?v=2.1.2-plan-viewer',
 './app.js?v=2.1.0-performance',
 './raidplan-importer.js?v=1.0.0',
 './workspace-095.js?v=2.1.0-performance',
@@ -12,6 +12,7 @@ const CORE=[
 './wcl-workspace-208.js?v=2.1.0-performance',
 './wcl-mechanics-209.js?v=2.1.0-performance',
 './navigation-211.js?v=2.1.1-navigation',
+'./viewer-212.js?v=2.1.2-plan-viewer',
 './manifest.webmanifest',
 './icon.svg'
 ];
