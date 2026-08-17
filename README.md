@@ -1,501 +1,53 @@
-# RaidRU 2.2.1 — WCL Bridge Final Audit
+# RaidRU 3
 
-Русскоязычный визуальный планировщик рейдов World of Warcraft: сцены, таймлайн, назначения, импорт RaidPlan и разбор реальных боёв Warcraft Logs.
+Russian World of Warcraft raid tactics and visual planning tool.
 
-**Текущая версия:** `2.2.1 — WCL Bridge Final Audit`  
-**Сайт:** https://natalikh.github.io/raidru/
+**Current development build:** `3.0.0-alpha.1 — Architecture Core`
 
-## 2.2.1 — WCL Bridge Final Audit
+This branch is the clean rewrite of RaidRU. The 2.x site should stay production until the new architecture reaches feature parity.
 
-Версия закрывает реальный production-сценарий `WCL_BRIDGE_ZERO_COORDINATES`, который проявился уже после перехода на Browser Bridge 2.2.0.
+## Run locally
 
-Причина была в слишком ранней фильтрации координат: Bridge сравнивал actor IDs из ReplaySegment только с `fight.friendlyPlayers` из GraphQL. На составном encounter эти два набора идентификаторов могут не совпасть, хотя ReplaySegment содержит полноценные позиции. В таком случае 2.2.0 сам выбрасывал все валидные точки.
+```bash
+npm install
+npm run dev
+```
 
-В 2.2.1:
+Production build:
 
-- ReplaySegment сначала сохраняет coordinate tracks, которые WCL явно помечает как friendly;
-- если `friendlyPlayers` не пересекается с Replay actor IDs, используется fallback через `masterData.actors` с `type=Player`;
-- `resourceActor=1/2` остаётся главным правилом владельца координаты, а при неполном payload используются `sourceIsFriendly/targetIsFriendly` и Player metadata;
-- питомцы и остальные friendly entities отбрасываются на клиенте, остаются только реальные Player tracks текущего Replay;
-- `fight.size` ограничивает число выбранных player tracks, поэтому report-wide masterData снова не может превратиться в «500 игроков»;
-- тот же Browser Replay сразу отдаёт компактный timeline механик (casts, debuffs, summons, deaths);
-- `/wcl/mechanics` остаётся fallback, больше не зависит от `HostilityType` и автоматически продолжает несколько страниц за одно нажатие;
-- исправлен жёстко прописанный footer `RaidRU 2.1.8`, который вводил в заблуждение даже на сборке 2.2.0;
-- Service Worker/cache namespace поднят до `v221`.
+```bash
+npm run build
+```
 
-Regression-тест намеренно моделирует проблемный случай: GraphQL roster IDs не пересекаются с Replay IDs, координаты одного Player не имеют friendliness flags, в потоке есть Pet и hostile boss coordinate. Итог обязан сохранить только реальные Player tracks, не приписать игроку координату босса и одновременно получить tactical timeline.
+The Vite base path is `/raidru/` for GitHub Pages.
 
-Подробнее: `RELEASE-2.2.1-WCL-BRIDGE-FINAL-AUDIT.md`.
-
-## 2.2.0 — WCL Hybrid Browser Bridge
-
-2.2.0 разделил источники данных: metadata/механики через официальный WCL API, exact coordinates через локальный Chrome/Chromium Bridge в браузерной сессии Warcraft Logs. Это остаётся базовой архитектурой; 2.2.1 исправляет participant resolution внутри Bridge.
-
-Подробнее: `RELEASE-2.2.0-WCL-HYBRID-BRIDGE.md`.
-
-## 2.1.8 — WCL GraphQL Resource Replay
-
-Версия 2.1.7 показала, что приватный web endpoint Warcraft Logs `reports/replaysegment/...` нельзя считать надёжным серверным API: Cloudflare Worker может получить успешный HTTP-ответ, который не является JSON, что проявлялось как `WCL_REPLAYSEGMENT_INVALID_JSON`.
-
-Обычный `smart/full` импорт теперь снова использует официальный GraphQL `Report.events`, но уже с исправленной обработкой resource snapshots:
-
-- `includeResources: true`;
-- `resourceActor = 1` → координаты относятся к `sourceID`;
-- `resourceActor = 2` → координаты относятся к `targetID`;
-- `nextX / nextY / nextTimestamp` сохраняются за тем же actor;
-- `ability.guid` поддерживается как spell ID;
-- casts, debuffs, summons и deaths собираются из того же полного event stream;
-- готовая механика читается из Replay cache без второго большого GraphQL-прохода;
-- загрузка продолжается страницами через checkpoint / `202 batch_yield`;
-- private ReplaySegment оставлен только как явный диагностический `mode=segment` и обычным UI не вызывается;
-- пустой итог `игроки > 0 / координаты = 0` не кэшируется как успешный Replay.
-
-Regression mock специально возвращает `text/html` challenge для ReplaySegment: обычный smart-import обязан его вообще не вызывать и построить координаты/механику только из GraphQL resource events.
-
-Подробнее: `RELEASE-2.1.8-WCL-GRAPHQL-RESOURCE-REPLAY.md`.
-
-## 2.1.6 — WCL ReplaySegment Core
-
-Исправлена корневая причина пустых координат в прямом импорте Warcraft Logs. Рабочий Browser Replay получал позиции не из GraphQL `events(includeResources: true)`, а из внутреннего потока WCL Replay `reports/replaysegment/...`. В этих событиях поле `resourceActor` задаёт владельца координат: `1 = sourceID`, `2 = targetID`.
-
-Теперь обычный `smart` Replay:
-
-- GraphQL использует только для metadata боя и `friendlyPlayers`;
-- Worker запрашивает тот же ReplaySegment-поток WCL, но режет бой на 30-секундные окна: наблюдаемый 240-секундный сырой сегмент может весить около 100 МБ, что слишком рискованно для памяти Worker;
-- каждый сегмент кэшируется отдельно и загружается по одному за Worker-вызов;
-- `x/y`, `nextX/nextY`, `nextTimestamp`, `facing`, `mapID` разбираются по реальной семантике `resourceActor`;
-- из тех же сегментов сразу сохраняются hostile casts, debuffs, summons и deaths, поэтому раздел «Механики» не делает второй GraphQL-запрос после готового Replay;
-- старые cache namespaces заменены на `v216`;
-- исправлено `numeric(null)`: `null` больше не превращается в `0` и не создаёт ложный cursor/continuation;
-- при новой загрузке старый Replay очищается, чтобы не оставалось визуального состояния «18 игроков / 0 точек» от предыдущего запроса.
-
-Regression-тест использует реальную форму ReplaySegment JSON (`events[]`, `resourceActor: 1|2`, `ability.guid`, `nextX/nextY`) и отдельно проверяет, что координаты target при `resourceActor=2` не приписываются source-игроку.
-
-Подробнее: `RELEASE-2.1.6-WCL-REPLAYSEGMENT-CORE.md`.
-
-## 2.1.5 — WCL Full Event Replay
-
-Исправлен второй этап бага прямого импорта Warcraft Logs: после `2.1.4` состав боя уже определялся правильно, но Replay мог показывать реальных участников и при этом оставаться с **0 координат** и пустым таймлайном.
-
-Причина оказалась независимой от participant scope. Обычный `smart`-импорт всё ещё использовал `dataType: Casts` как дешёвую выборку событий. Для некоторых отчётов WCL такой поток содержит касты, но не содержит resource snapshots с `x/y`, поэтому список игроков был правильным, а движение построить было невозможно.
-
-В `2.1.5`:
-
-- обычный `smart` / direct URL Replay использует полный event stream с `includeResources: true`;
-- `dataType: Casts` оставлен только как явный диагностический `mode=fast`, но больше не используется обычной кнопкой загрузки;
-- полный поток читается страницами до 10 000 событий и автоматически продолжается с серверного checkpoint;
-- из полного потока сохраняются только координаты участников текущего fight и вражеские `cast` / `begincast`, поэтому в браузер не отправляются сотни тысяч сырых событий;
-- client не сохраняет payload, если WCL вернул участников, но после нормализации координат всё ещё `0`;
-- Mechanics Pack тоже ограничен `fight.friendlyPlayers`;
-- все WCL report/page/progress/replay/mechanics caches переведены на namespace `v215`, чтобы старые нулевые результаты не возвращались после деплоя.
-
-Regression mock специально воспроизводит этот сценарий: Casts-only страница содержит **0 coordinate samples**, а generic event page содержит resource coordinates. `smart` обязан вернуть ненулевые позиции и timeline.
-
-Подробнее: `RELEASE-2.1.5-WCL-FULL-EVENT-REPLAY.md`.
-
-## 2.1.4 — WCL Fight Scope
-
-Исправлен случай, когда большой Warcraft Logs report мог показывать в RaidRU **500 игроков и 0 координат**, хотя официальный Replay отображал обычный рейд. Причина: `masterData.actors` относится ко всему report и может быть большой таблицей, а Replay должен брать участников конкретного боя из `fight.friendlyPlayers`.
-
-Теперь Worker:
-
-- получает `friendlyPlayers` вместе с fight metadata;
-- строит список игроков только по IDs текущего боя;
-- фильтрует координаты тем же fight-scoped набором IDs;
-- создаёт нейтральное имя `Игрок <id>`, если подробности участника не попали в masterData;
-- использует новые cache namespaces `v214`, поэтому повреждённый старый Replay `500 игроков / 0 точек` не возвращается из кэша после деплоя;
-- сохраняет правило «один WCL GraphQL-запрос на шаг» для numeric fight fast path.
-
-Regression mock: report-wide таблица из 500 Player actors + `friendlyPlayers: [9001]` должна вернуть ровно одного игрока и ненулевые координаты.
-
-Подробнее: `RELEASE-2.1.4-WCL-FIGHT-SCOPE.md`.
-
-## 2.0.4 Preview — WCL Adaptive Import
-
-Обычный сценарий остаётся простым: вставить публичную ссылку Warcraft Logs и получить Replay. Worker хранит OAuth secret, кэширует metadata, event pages, checkpoint и финальный Replay.
-
-Исторически в 2.0.4 по умолчанию использовалась дешёвая выборка `Casts + includeResources`. В 2.1.5 это решение отменено: на части WCL reports Casts-only не содержит координатных resource snapshots, поэтому обычный Replay теперь использует полный event stream. Страница поднята до 10000 событий, чтобы не дробить один бой на десятки GraphQL-запросов. Soft threshold теперь только влияет на режим детализации; настоящий hard guard стоит у 97% и сохраняет небольшой аварийный резерв.
-
-Если лимит всё же становится опасно близким после нескольких страниц, Worker возвращает **частичный Replay (HTTP 206)** вместо пустой блокировки: карту, уже полученные позиции и события можно использовать сразу, а недостающую точность догрузить позже с checkpoint. Реальный `429` по-прежнему никогда не ретраится автоматически.
-
-Подробнее: `RELEASE-2.0.4-WCL-ADAPTIVE.md`.
-
-> Live WCL API из среды сборки не вызывается, потому что здесь нет пользовательских OAuth credentials. Worker и клиент проверены синтаксически, regression-тестами и mock-тестом квоты/429/partial replay.
-
-## Что изменилось в 0.9.5
-
-`0.9.5` — первый крупный релиз ветки **Raid Workspace**. Главная цель версии — перестать воспринимать RaidRU как одну текущую карту и сделать из него рабочее место РЛа, в котором тактика хранится как отдельный проект.
-
-### 0.9.0 — Мои планы и история
-
-Добавлен раздел **«Мои планы»**.
-
-Каждый план хранит:
-
-- босса;
-- сложность;
-- собственное название;
-- сцены RaidRU;
-- таймлайн;
-- назначения и КД;
-- состав рейда;
-- заметку;
-- историю изменений.
-
-Доступные действия:
-
-- открыть план;
-- создать новый вариант из текущего;
-- дублировать;
-- переименовать;
-- удалить;
-- экспортировать один план;
-- сделать резервную копию всех Workspace-планов;
-- импортировать Workspace backup.
-
-Существующие данные `0.8.x` автоматически мигрируют в Workspace. Для каждого босса существующий Heroic-план становится первым проектом и не удаляется.
-
-### Автосохранение и история
-
-Активный Workspace-план синхронизируется с редактором автоматически.
-
-RaidRU создаёт контрольные точки:
-
-- периодически при редактировании;
-- перед удалением сцены;
-- перед сбросом сцены;
-- перед пересозданием таймлайна;
-- перед загрузкой готового шаблона босса;
-- перед импортом RaidPlan;
-- при создании WCL-черновика новый проект получает собственную стартовую контрольную точку;
-- перед восстановлением старой версии.
-
-История ограничивается по количеству и объёму, чтобы не переполнить `localStorage`.
-
-### 0.9.1 — режим показа тактики
-
-В режиме **«План: просмотр»** добавлена кнопка полноэкранного показа.
-
-В режиме презентации скрываются редакторские панели и остаются:
-
-- карта;
-- текущая сцена;
-- описание сцены;
-- следующий ключевой кадр;
-- таймлайн;
-- назначения текущего кадра;
-- управление воспроизведением.
-
-Это режим для объяснения тактики перед пуллом или на втором мониторе.
-
-### 0.9.2 — визуальный таймлайн
-
-Раздел **«Таймлайн»** теперь содержит визуальную шкалу боя.
-
-На ней отображаются:
-
-- время;
-- ключевые события;
-- тип механики;
-- привязанная сцена;
-- назначения события.
-
-Клик по событию сразу открывает соответствующий кадр в режиме просмотра.
-
-Старый редактируемый список событий сохранён — время, название, тип и привязку к сцене по-прежнему можно менять вручную.
-
-### 0.9.3 — назначения и рейдовые КД
-
-Добавлен отдельный раздел **«Назначения»**.
-
-Назначение можно привязать к событию таймлайна и указать:
-
-- игрока или весь рейд;
-- хил-КД;
-- внешний или личный сейв;
-- soak / группу;
-- кик / контроль;
-- utility;
-- героизм;
-- произвольное действие;
-- комментарий.
-
-Назначения отображаются и на таймлайне, и в режиме показа тактики.
-
-Назначения хранятся отдельно для **Обычного / Героического / Эпохального** режима.
-
-### 0.9.4 — WCL → черновик сцен
-
-Экспериментальный Replay превращён в отдельный рабочий раздел **«WCL → черновик»**.
-
-Поддерживается локальный формат:
+## Repository layout
 
 ```text
-raidru-wcl-replay-browser
+apps/web            React application
+apps/wcl-bridge     preserved browser bridge, not wired in alpha.1
+workers/wcl         preserved Worker, not wired in alpha.1
+packages/shared-types
+packages/replay-core
+packages/mechanics-core
+packages/raidplan-core
+docs/architecture
+docs/migration
+docs/releases
 ```
 
-В том числе JSON, выгруженные Browser Replay Exporter для текущих тестов Sszorak и The Twin Fangs.
+Read `docs/architecture/ARCHITECTURE.md` before adding features. New code must not recreate the 2.x patch-chain pattern.
 
-RaidRU:
+## Recommended Git workflow
 
-1. читает реальные координатные точки игроков;
-2. определяет friendly actor IDs по WCL timeline;
-3. отделяет устойчивые player tracks от коротких треков питомцев и призывов;
-4. если заполнен состав RaidRU — ограничивает найденные треки размером текущего состава и подставляет его имена/роли;
-5. извлекает вражеские `cast` / `begincast`, убирает melee и близкие дубли одного spell ID;
-6. отмечает известные ключевые механики по Heroic/NSRT spell ID и использует русские названия;
-7. по `source.bossId` автоматически определяет босса, если для него есть профиль RaidRU/NSRT;
-8. выбирает до 12 ключевых кадров реального боя;
-9. создаёт редактируемые сцены с реальными позициями игроков;
-10. строит WCL-таймлайн ключевых механик и привязывает события к ближайшим созданным кадрам;
-11. сохраняет результат **как новый Workspace-план**, не перезаписывая исходную тактику.
+Keep production `main` intact for now:
 
-Вместо создания десятков или сотен почти одинаковых сцен из каждого события получается компактный тактический черновик. Исходный план остаётся отдельным проектом.
-
-Если в Browser Replay нет имён игроков, RaidRU использует текущий состав для выбранных player tracks. Если состав не заполнен, создаются нейтральные подписи `Игрок 1`, `Игрок 2` и т. д.
-
-На реальных regression-файлах текущей разработки:
-
-- Sszorak — 11 устойчивых player tracks, 12 сцен черновика;
-- The Twin Fangs — 16 устойчивых player tracks, 12 сцен черновика.
-
-### 0.9.5 — обмен и резервные копии
-
-Обновлены форматы экспорта:
-
-```text
-raidru-<boss>-<difficulty>-v095.json
-raidru-backup-v095.json
-raidru-<boss>-<difficulty>-workspace-095.json
-raidru-workspace-backup-0.9.5.json
+```bash
+git switch -c raidru-3
+# copy this project into the repository while keeping .git
+git add -A
+git commit -m "Start RaidRU 3 architecture core"
+git push -u origin raidru-3
 ```
 
-Обычная share-ссылка теперь также переносит `cooldowns` и `assignments`.
-
-Workspace backup предназначен для библиотеки пользовательских вариантов тактик. Обычный RaidRU backup по-прежнему содержит всё локальное состояние приложения.
-
----
-
-## Основные возможности RaidRU
-
-- визуальный редактор рейдовых сцен;
-- несколько пользовательских планов одного босса;
-- автосохранение и история версий;
-- отдельные планы для **Обычного / Героического / Эпохального** режима;
-- отдельные вкладки **RaidRU** и **RaidPlan**;
-- импорт RaidPlan по обычной ссылке;
-- перенос текста, ролей, маркеров, мобов, зон, линий, стрелок и freehand path;
-- сохранение оригинального фона RaidPlan;
-- фильтрация скрытых и служебных RaidPlan-объектов;
-- маршруты игроков и траектории между сценами;
-- визуальный и редактируемый таймлайн;
-- назначения игроков и рейдовых КД;
-- полноэкранный режим показа тактики;
-- состав рейда;
-- заметки и NSRT voice export;
-- WCL Browser Replay → черновик сцен;
-- локальное хранение данных;
-- share URL, импорт и экспорт.
-
-## RaidPlan import
-
-Схема импорта:
-
-```text
-RaidPlan URL
-    ↓
-RaidRU
-    ↓
-Cloudflare Worker /raidplan
-    ↓
-userdata.raidplan.io
-    ↓
-RaidPlan JSON v2
-    ↓
-raidplan-importer.js
-    ↓
-отдельная вкладка RaidPlan выбранной сложности
-```
-
-Импортированный RaidPlan **не заменяет** основной сценарий RaidRU и сохраняется отдельно для активной сложности.
-
-### Что фильтруется
-
-Импортёр отбрасывает объекты, которых пользователь не видит в оригинальном RaidPlan:
-
-- `visible: false`;
-- hidden/helper/mask/viewport/selection;
-- `opacity = 0`;
-- объекты с нулевым масштабом;
-- внутреннюю геометрию арены при наличии настоящего фонового изображения;
-- неизвестные служебные RaidPlan v2 nodes;
-- вырожденные freehand path из одной повторяющейся точки.
-
-### Линии, стрелки и Path
-
-Стабилизированная ветка renderer `native-v18-v2-canvas-line-endpoints` сохраняется без изменений в `0.9.5`.
-
-Она поддерживает:
-
-- `line` с `endType: drawn` как настоящую векторную стрелку;
-- обычную SVG-line;
-- stroke-only freehand path;
-- цвет кисти из `fill`, если RaidPlan хранит его там;
-- Fabric `attr.angle`, `attr.scaleX`, `attr.scaleY`;
-- `attr.points` для RaidPlan v2 freehand;
-- `meta.pos / meta.size / meta.scale`;
-- частично off-canvas линии и path без искусственного прижатия к краю;
-- реальный canvas RaidPlan v2, включая `1200×675`;
-- Fabric line endpoints вокруг `(0,0)` с корректным clipping по границе доски.
-
-## Структура проекта
-
-```text
-raidru/
-├─ index.html
-├─ app.js                    # основной интерфейс и редактор
-├─ workspace-095.js          # Raid Workspace 0.9.5
-├─ test-workspace-095.js     # smoke/regression test Workspace + WCL Browser Replay
-├─ RELEASE-0.9.5.md          # release notes + deploy checklist
-├─ raidplan-importer.js      # isolated RaidPlan v2 renderer/importer
-├─ styles.css
-├─ sw.js
-├─ manifest.webmanifest
-├─ icon.svg
-├─ assets/
-├─ src/                      # Cloudflare Worker
-├─ tools/
-├─ wrangler.toml
-└─ deploy.ps1
-```
-
-`workspace-095.js` намеренно отделён от `raidplan-importer.js`: развитие Workspace/WCL не должно менять проверенную геометрию импорта RaidPlan.
-
-## Локальный запуск
-
-Сборщик не требуется.
-
-```powershell
-python -m http.server 8080
-```
-
-Открыть:
-
-```text
-http://localhost:8080/
-```
-
-## Проверка JavaScript
-
-```powershell
-node --check app.js
-node --check workspace-095.js
-node --check raidplan-importer.js
-node --check sw.js
-node test-workspace-095.js
-```
-
-Для проверки на реальных Browser Replay JSON можно передать файлы аргументами:
-
-```powershell
-node test-workspace-095.js .\sszorak.raidru-replay.json .\twin-fangs.raidru-replay.json
-```
-
-## Деплой GitHub Pages
-
-Для `0.9.5` изменены статические файлы. Wrangler для этого релиза **не нужен**, если `src/` и Worker не менялись.
-
-```powershell
-git add app.js workspace-095.js test-workspace-095.js styles.css index.html manifest.webmanifest raidplan-importer.js sw.js README.md RELEASE-0.9.5.md
-git commit -m "Release RaidRU 0.9.5 Raid Workspace"
-git push
-```
-
-После публикации:
-
-```text
-Ctrl + F5
-```
-
-Если браузер всё ещё держит старую версию, в DevTools → Application удалить старый Service Worker / Cache Storage и перезагрузить страницу.
-
-## Когда нужен deploy.ps1
-
-Только при изменениях Cloudflare Worker:
-
-```powershell
-powershell -ExecutionPolicy Bypass -File .\deploy.ps1
-```
-
-Изменения `app.js`, `workspace-095.js`, `styles.css`, `index.html`, `manifest.webmanifest`, `sw.js` и `raidplan-importer.js` публикуются через GitHub Pages.
-
-## Регрессионная проверка перед push
-
-### RaidPlan
-
-Эталонные fixtures в репозитории:
-
-```text
-test-rp-scene3-paths.json
-test-rp-scene4-lines.json
-test-rp-offcanvas-vector.md
-```
-
-Проверить:
-
-- фон совпадает;
-- нет лишних белых масок/зон;
-- текст не меняет размер без причины;
-- freehand path остаётся линией;
-- стрелки сохраняют наклон;
-- off-canvas объекты корректно обрезаются;
-- режимы сложности не смешиваются.
-
-### Workspace
-
-Проверить:
-
-- старые Heroic сцены и текущий состав появились в «Моих планах»;
-- дубликат плана редактируется отдельно;
-- переключение босса возвращает последний активный вариант;
-- история восстанавливает сцены и таймлайн;
-- назначения сохраняются после reload;
-- назначения Normal/Heroic/Mythic не смешиваются;
-- share/export переносит назначения;
-- открытие другого Workspace-плана возвращает его собственный состав.
-
-### WCL Draft
-
-Проверить на Browser Replay JSON:
-
-- JSON принимается без конвертации вручную;
-- определяется ненулевое число игроков;
-- отображаются реальные координаты;
-- питомцы/призывы не превращаются в игроков;
-- известный `bossId` автоматически открывает правильного босса;
-- не выводятся тысячи сырых timeline events;
-- создаётся компактный набор до 12 ключевых сцен;
-- WCL-черновик создаётся отдельным Workspace-планом, исходный план не заменяется.
-
-## Данные и приватность
-
-- Workspace, история, назначения и replay хранятся локально в браузере;
-- Browser Replay JSON не требуется загружать на сторонний сервер;
-- RaidPlan Worker используется только как прокси получения RaidPlan JSON;
-- share URL основной стратегии не включает приватную вкладку RaidPlan автоматически;
-- перед публикацией тактики рекомендуется проверить экспортируемый JSON/share URL.
-
-## Источники
-
-- RaidPlan.io — планы и ресурсы планирования;
-- Warcraft Logs / RPGLogs — replay/mapID и проверка арен;
-- NSRT — Heroic BossTimeline и голосовые reminders;
-- игровые/community assets — маркеры, роли и encounter visuals.
-
-RaidRU не является официальным продуктом Blizzard Entertainment, RaidPlan или Warcraft Logs.
-
----
-
-## RaidRU 1.0 — Raid Ready
-
-Поверх Raid Workspace 0.9.5 подключён `raid-ready-100.js`. Он добавляет проверку готовности, режим «Рейд», сценарий сцены, «Мой план», персональный NSRT export и явные снимки с сравнением истории. Подробности: `RELEASE-1.0.md`.
+Do not merge to `main` until the alpha passes real RaidPlan/WCL fixtures and the production checklist.

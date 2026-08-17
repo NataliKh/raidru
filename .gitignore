@@ -1,26 +1,8 @@
-# Cloudflare / Wrangler local state
-.wrangler/
-
-# Dependencies
 node_modules/
-
-# Local backups / temporary patches
-*.bak
-*.pre*.bak
-*.patch
-APPLY-RAIDRU-FIX*.cmd
-APPLY-RAIDRU-FIX*.ps1
-
-# Local review/build archives
-RaidRU-*.zip
-*-review.zip
-
-# Temporary version notes; use README.md for the repository front page
-README-0.8.*.txt
-README-V*.txt
-
-# OS/editor noise
+dist/
+.vite/
+*.log
 .DS_Store
-Thumbs.db
-*.swp
-*.tmp
+.env
+.env.*
+!.env.example
