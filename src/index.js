@@ -156,7 +156,7 @@ async function wclToken(env) {
       'Authorization': `Basic ${basic}`,
       'Content-Type': 'application/x-www-form-urlencoded',
       'Accept': 'application/json',
-      'User-Agent': 'RaidRU/2.1.6 ReplaySegment Core'
+      'User-Agent': 'RaidRU/2.1.7 Replay Boss Resolver'
     },
     body: 'grant_type=client_credentials'
   });
@@ -183,7 +183,7 @@ async function wclGraphql(env, query, variables = {}) {
       'Authorization': `Bearer ${token}`,
       'Content-Type': 'application/json',
       'Accept': 'application/json',
-      'User-Agent': 'RaidRU/2.1.6 ReplaySegment Core'
+      'User-Agent': 'RaidRU/2.1.7 Replay Boss Resolver'
     },
     body: JSON.stringify({ query, variables })
   });
@@ -372,7 +372,7 @@ function publicReport(report, quota = null, cache = 'miss') {
   };
 }
 
-function reportCacheName(code) { return `wcl/report-v216/${code}`; }
+function reportCacheName(code) { return `wcl/report-v217/${code}`; }
 
 async function getReport(env, code, { forceQuota = false } = {}) {
   const cacheName = reportCacheName(code);
@@ -692,7 +692,7 @@ async function buildReplayOneShot(env, code, fightId, requestedMode = 'smart') {
   const finalHit = await cacheGet(finalName);
   if (finalHit) return { status: 200, body: { ...finalHit, cache: 'hit' } };
 
-  // 2.1.6 deliberately does not reuse older replay envelopes here. Previous
+  // 2.1.7 deliberately does not reuse older replay envelopes here. Previous
   // caches could contain report-wide actor tables (often capped at 500 entries),
   // which makes a fight look like 500 players and can discard every coordinate.
 
@@ -792,19 +792,42 @@ async function buildReplayOneShot(env, code, fightId, requestedMode = 'smart') {
 
 
 
-// 2.1.6 ReplaySegment Core ---------------------------------------------------
-// WCL's own Replay UI is fed by /reports/replaysegment/... payloads. Those
-// payloads carry the resourceActor discriminator used to say whose x/y snapshot
-// is attached to an event: 1 = sourceID, 2 = targetID. GraphQL includeResources
-// is useful for API analysis but is not a substitute for the Replay stream.
+// 2.1.7 Replay Boss Resolver -------------------------------------------------
+// WCL's own Replay UI is fed by /reports/replaysegment/<report>/<replayBossId>/...
+// The replayBossId is NOT the same namespace as ReportFight.encounterID. In the
+// current retail raid WCL's Replay id is encounterID + 50000 (for example 3420
+// -> 53420 and 3421 -> 53421). Some multi-actor fights can also expose 0/null in
+// encounterID even though Replay works, so known encounter names are a required
+// fallback instead of treating a missing GraphQL encounter id as fatal.
+const REPLAY_ENCOUNTER_BY_NAME = [
+  [/nek.?zali|soulcoiler/i, 3470],
+  [/entombed sentinels|blood of ula.?tek.*breath of ula.?tek|breath of ula.?tek.*blood of ula.?tek/i, 3445],
+  [/vashnik/i, 3455],
+  [/lost explorers/i, 3497],
+  [/sszorak/i, 3420],
+  [/twin fangs|vexhul.*ithraz|ithraz.*vexhul/i, 3421],
+  [/altar/i, 3429]
+];
+function replayBossIdForFight(fight) {
+  const explicit = safeInt(fight?.replayBossId || fight?.bossId);
+  if (explicit) return explicit >= 50000 ? explicit : explicit + 50000;
+  const encounter = safeInt(fight?.encounterID || fight?.originalEncounterID);
+  if (encounter) return encounter >= 50000 ? encounter : encounter + 50000;
+  const name = String(fight?.name || '');
+  const hit = REPLAY_ENCOUNTER_BY_NAME.find(([rx]) => rx.test(name));
+  return hit ? hit[1] + 50000 : 0;
+}
+
+// WCL's ReplaySegment payloads carry the resourceActor discriminator used to say
+// whose x/y snapshot is attached to an event: 1 = sourceID, 2 = targetID.
 function replaySegmentCacheName(code, fightId, start) {
-  return `wcl/replaysegment-v216/${code}/${fightId}/${Math.round(start)}`;
+  return `wcl/replaysegment-v217/${code}/${fightId}/${Math.round(start)}`;
 }
 function replaySegmentProgressName(code, fightId) {
-  return `wcl/replaysegment-v216-progress/${code}/${fightId}`;
+  return `wcl/replaysegment-v217-progress/${code}/${fightId}`;
 }
 function replaySegmentFinalName(code, fightId) {
-  return `wcl/replay-v216/replaysegment/${code}/${fightId}`;
+  return `wcl/replay-v217/replaysegment/${code}/${fightId}`;
 }
 function replaySegmentWindows(fight) {
   const out = [];
@@ -889,8 +912,8 @@ async function fetchReplaySegment(meta, fight, segment) {
   const cacheName = replaySegmentCacheName(meta.code, fight.id, segment.start);
   const cached = await cacheGet(cacheName);
   if (cached) return { compact:cached, cache:'hit' };
-  const bossId = safeInt(fight.encounterID || fight.originalEncounterID);
-  if (!bossId) { const e=new Error('WCL_REPLAY_BOSS_ID_MISSING'); e.code='wcl_replay_boss_missing'; throw e; }
+  const bossId = replayBossIdForFight(fight);
+  if (!bossId) { const e=new Error(`WCL_REPLAY_BOSS_ID_UNRESOLVED: ${fight?.name || 'unknown fight'}`); e.code='wcl_replay_boss_unresolved'; throw e; }
   const url = `${WCL_REPLAYSEGMENT_BASE}/${encodeURIComponent(meta.code)}/${bossId}/${Math.round(segment.start)}/${Math.round(segment.end)}/`;
   let res;
   try {
@@ -898,7 +921,7 @@ async function fetchReplaySegment(meta, fight, segment) {
       method:'GET', redirect:'follow',
       headers:{
         'Accept':'application/json,text/plain;q=0.9,*/*;q=0.1',
-        'User-Agent':'RaidRU/2.1.6 ReplaySegment Core',
+        'User-Agent':'RaidRU/2.1.7 Replay Boss Resolver',
         'Referer':`https://www.warcraftlogs.com/reports/${meta.code}?fight=${fight.id}&view=replay`
       },
       cf:{cacheTtl:0,cacheEverything:false}
@@ -924,16 +947,16 @@ function replayBodyFromSegments(meta, fight, progress, quota, cache='miss') {
   const covered=new Set(positions.map(p=>String(p.actorId))).size,coverage=actors.length?Math.min(1,covered/actors.length):0;
   return {
     format:'raidru-wcl-safe-replay',version:4,createdAt:new Date().toISOString(),cache,partial:false,quality:'full',resumeAfter:0,
-    source:{pageUrl:`https://www.warcraftlogs.com/reports/${meta.code}?fight=${fight.id}&view=replay`,reportCode:meta.code,fight:String(fight.id),bossId:fight.encounterID||fight.originalEncounterID||0,safeImport:true,fetchMode:'replaysegment',segments:progress?.segments||[]},
+    source:{pageUrl:`https://www.warcraftlogs.com/reports/${meta.code}?fight=${fight.id}&view=replay`,reportCode:meta.code,fight:String(fight.id),bossId:replayBossIdForFight(fight),encounterID:fight.encounterID||fight.originalEncounterID||0,safeImport:true,fetchMode:'replaysegment',segments:progress?.segments||[]},
     report:{code:meta.code,title:meta.title||''},
-    fight:{id:fight.id,name:fight.name,bossId:fight.encounterID||fight.originalEncounterID||0,startTime:fight.startTime,endTime:fight.endTime,duration:Math.max(1,fight.endTime-fight.startTime),difficulty:fight.difficulty,kill:fight.kill,inProgress:fight.inProgress,size:fight.size||null,friendlyPlayers:[...fightPlayerIds(meta,fight)].map(x=>safeInt(x)||x)},
+    fight:{id:fight.id,name:fight.name,bossId:replayBossIdForFight(fight),encounterID:fight.encounterID||fight.originalEncounterID||0,startTime:fight.startTime,endTime:fight.endTime,duration:Math.max(1,fight.endTime-fight.startTime),difficulty:fight.difficulty,kill:fight.kill,inProgress:fight.inProgress,size:fight.size||null,friendlyPlayers:[...fightPlayerIds(meta,fight)].map(x=>safeInt(x)||x)},
     actors,positions,events:timeline,duration:Math.max(1,fight.endTime-fight.startTime),mapIDs,
     stats:{rawEvents:Number(progress?.rawEvents)||0,positionEvents:Number(progress?.positionEvents)||0,nextPositionEvents:Number(progress?.nextPositionEvents)||0,compactPositionPoints:positions.length,timelineEvents:timeline.length,pages:Number(progress?.segments?.length)||0,fetchedPages:Number(progress?.fetchedPages)||0,cachedPages:Number(progress?.cachedPages)||0,fetchMode:'replaysegment',actorCoverage:coverage},
     quota:normalizeQuota(quota),message:'Replay собран из того же replaysegment-потока, который использует экран Replay Warcraft Logs. Координаты и механики сохранены в одном кэше.'
   };
 }
 async function buildReplaySegments(env, code, fightParam) {
-  const aliasFinal=`wcl/replay-v216/replaysegment/${code}/${fightParam}`;
+  const aliasFinal=`wcl/replay-v217/replaysegment/${code}/${fightParam}`;
   const aliasHit=await cacheGet(aliasFinal);if(aliasHit)return {status:200,body:{...aliasHit,cache:'hit'}};
   const meta=await getReport(env,code),fight=selectFight(meta,fightParam);
   if(!fight)return {status:404,body:{error:'fight_not_found',fights:meta.fights}};
@@ -974,7 +997,7 @@ async function buildReplay(env, code, fightParam, requestedMode = 'smart') {
   const cachedFinal = await cacheGet(finalName);
   if (cachedFinal) return { status: 200, body: { ...cachedFinal, cache: 'hit' } };
 
-  // Old replay caches are intentionally bypassed in 2.1.6 because the coordinate source changed to WCL replaysegment.
+  // Old replay caches are intentionally bypassed in 2.1.7 because the Replay boss-id resolver changed.
 
   const meta = await getReport(env, code);
   const fight = selectFight(meta, fightParam);
@@ -1319,11 +1342,11 @@ export default {
     if (origin && !ALLOWED_ORIGINS.has(origin)) return new Response(JSON.stringify({ error: 'origin_not_allowed', origin, allowed: [...ALLOWED_ORIGINS] }), { status: 403, headers: { 'Content-Type': 'application/json; charset=utf-8', ...cors(origin, { echo: true }), 'X-RaidRU-Origin': origin } });
 
     if (url.pathname === '/wcl/ping') {
-      return json({ ok: true, service: 'raidru-edge', version: '2.1.6-replaysegment-core', origin: origin || null, wclConfigured: wclConfigured(env) }, 200, origin, { 'X-RaidRU-WCL-Safe': '1' });
+      return json({ ok: true, service: 'raidru-edge', version: '2.1.7-replay-boss-resolver', origin: origin || null, wclConfigured: wclConfigured(env) }, 200, origin, { 'X-RaidRU-WCL-Safe': '1' });
     }
 
     if (url.pathname === '/health') {
-      return json({ ok: true, service: 'raidru-edge', version: '2.1.6-replaysegment-core', wclConfigured: wclConfigured(env), features: ['raidplan','wcl-report','wcl-replaysegment','wcl-browser-v2-envelope','wcl-mechanics-from-replay','fight-scoped-friendly-players','resourceActor-1-source-2-target','segment-cache','resume-cache','fast-graphql-diagnostic'] }, 200, origin);
+      return json({ ok: true, service: 'raidru-edge', version: '2.1.7-replay-boss-resolver', wclConfigured: wclConfigured(env), features: ['raidplan','wcl-report','wcl-replaysegment','wcl-replay-boss-resolver','wcl-browser-v2-envelope','wcl-mechanics-from-replay','fight-scoped-friendly-players','resourceActor-1-source-2-target','segment-cache','resume-cache','fast-graphql-diagnostic'] }, 200, origin);
     }
 
     if (url.pathname === '/raidplan' && request.method === 'GET') {

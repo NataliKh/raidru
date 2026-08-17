@@ -1,3 +1,7 @@
+# RaidRU 2.1.7 — WCL Replay Boss Resolver
+
+Исправлена ошибка `WCL_REPLAY_BOSS_ID_MISSING`: ReplaySegment использует отдельный Replay boss ID, а не сырой GraphQL `encounterID`. Для Entombed Sentinels при `encounterID=0/null` теперь работает fallback по имени и используется Replay ID `53445`. Обычные encounter ID автоматически переводятся в Replay namespace (`+50000`).
+
 # RaidRU
 
 Русскоязычный визуальный планировщик рейдов World of Warcraft: сцены, таймлайн, назначения, импорт RaidPlan и создание черновика тактики по реальным позициям Warcraft Logs.
