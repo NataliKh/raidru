@@ -35,14 +35,14 @@ type ContentJson = {
 const raw = legacyContent as unknown as ContentJson;
 
 const bossMapAssets: Record<BossId, string> = {
-  nekzali: './assets/maps/nekzali.webp',
-  sentinels: './assets/maps/sentinels.webp',
-  vashnik: './assets/maps/vashnik.webp',
-  explorers: './assets/maps/explorers.webp',
-  sszorak: './assets/maps/sszorak.webp',
-  fangs: './assets/maps/fangs.webp',
-  altar: './assets/maps/altar.webp',
-  ulatek: './assets/maps/ulatek.webp'
+  nekzali: 'assets/maps/nekzali.webp',
+  sentinels: 'assets/maps/sentinels.webp',
+  vashnik: 'assets/maps/vashnik.webp',
+  explorers: 'assets/maps/explorers.webp',
+  sszorak: 'assets/maps/sszorak.webp',
+  fangs: 'assets/maps/fangs.webp',
+  altar: 'assets/maps/altar.webp',
+  ulatek: 'assets/maps/ulatek.webp'
 };
 
 function normalizeToken(token: LegacyToken): SceneToken {
@@ -128,6 +128,6 @@ export const builtInTimelines = Object.fromEntries(
 export const bossById = Object.fromEntries(bosses.map(boss => [boss.id, boss])) as Record<BossId, BossDefinition>;
 
 export function mapAssetForScene(bossId: BossId, sceneName: string): string {
-  if (bossId === 'ulatek' && /фаза 3|p3|финаль/i.test(sceneName)) return './assets/maps/ulatek_p3.webp';
+  if (bossId === 'ulatek' && /фаза 3|p3|финаль/i.test(sceneName)) return 'assets/maps/ulatek_p3.webp';
   return bossMapAssets[bossId];
 }

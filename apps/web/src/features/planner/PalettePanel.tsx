@@ -1,5 +1,6 @@
 import { useMemo, useState, type DragEvent } from 'react';
 import { paletteCategories, paletteItems, type PaletteCategory } from './palette';
+import { publicAsset } from '../../shared/publicAsset';
 
 export function PalettePanel({ onAdd }: { onAdd: (itemId: string) => void }) {
   const [category, setCategory] = useState<PaletteCategory>('roles');
@@ -14,7 +15,7 @@ export function PalettePanel({ onAdd }: { onAdd: (itemId: string) => void }) {
     <div className="paletteTabs">{paletteCategories.map(item => <button key={item.id} className={category === item.id ? 'active' : ''} onClick={() => setCategory(item.id)}>{item.label}</button>)}</div>
     <input className="paletteSearch" value={query} onChange={event => setQuery(event.target.value)} placeholder="Найти объект..." />
     <div className="paletteGrid">{visible.map(item => <button key={item.id} draggable onDragStart={event => startDrag(event, item.id)} onClick={() => onAdd(item.id)} title="Перетащи на карту или нажми, чтобы добавить в центр">
-      {'asset' in item && item.asset ? <img src={item.asset} alt="" /> : <span className={`shapePreview ${item.kind === 'effect' ? item.effect.type : ''}`}>{item.kind === 'effect' && item.effect.type === 'arrow' ? '➜' : '◉'}</span>}
+      {'asset' in item && item.asset ? <img src={publicAsset(item.asset)} alt="" /> : <span className={`shapePreview ${item.kind === 'effect' ? item.effect.type : ''}`}>{item.kind === 'effect' && item.effect.type === 'arrow' ? '➜' : '◉'}</span>}
       <small>{item.label}</small>
     </button>)}</div>
   </section>;

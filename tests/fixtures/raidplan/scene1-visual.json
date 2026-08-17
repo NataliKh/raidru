@@ -1,0 +1,191 @@
+{
+  "source": "RaidPlan 9v3wssyjja56rttz scene 1",
+  "nodes": [
+    {
+      "type": "arena",
+      "attr": {
+        "raid": "wow.midnight.venomabyss",
+        "boss": "01.nakzali",
+        "map": "new"
+      },
+      "meta": {
+        "step": 0,
+        "size": {
+          "w": 1200,
+          "h": 675
+        },
+        "pos": {
+          "x": 600,
+          "y": 337.5
+        },
+        "scale": {
+          "x": 1,
+          "y": 1
+        }
+      }
+    },
+    {
+      "type": "itext",
+      "attr": {
+        "fontSize": 34,
+        "fill": "#ffffff",
+        "text": "1 Фаза - Адды. фаза до 50% здоровья босса",
+        "fontFamily": "Inter",
+        "fontWeight": 700,
+        "lineHeight": 1.16
+      },
+      "meta": {
+        "step": 0,
+        "pos": {
+          "x": 592.428,
+          "y": 38.887
+        },
+        "size": {
+          "w": 728.584,
+          "h": 51.915
+        },
+        "scale": {
+          "x": 1,
+          "y": 1
+        },
+        "origin": {
+          "x": "center",
+          "y": "center"
+        }
+      }
+    },
+    {
+      "type": "itext",
+      "attr": {
+        "fontSize": 21,
+        "fill": "#ffffff",
+        "text": "В каждом секторе находятся гробы. Чем больше трясется, тем больше аддов выйдет. Босса ведем туда где мобов больше.\nМобов без щита - агрим на себя, убиваться должно кучно.",
+        "fontFamily": "Inter",
+        "lineHeight": 1.16
+      },
+      "meta": {
+        "step": 0,
+        "pos": {
+          "x": 276.455,
+          "y": 351.786
+        },
+        "size": {
+          "w": 420.748,
+          "h": 289.673
+        },
+        "scale": {
+          "x": 1,
+          "y": 1
+        },
+        "origin": {
+          "x": "center",
+          "y": "center"
+        }
+      }
+    },
+    {
+      "type": "marker",
+      "attr": {
+        "markerStyle": "square",
+        "asset": "game/wow/role/tank.svg"
+      },
+      "meta": {
+        "step": 0,
+        "pos": {
+          "x": 278.434,
+          "y": 160.338
+        },
+        "size": {
+          "w": 100,
+          "h": 100
+        },
+        "scale": {
+          "x": 0.81,
+          "y": 0.81
+        },
+        "origin": {
+          "x": "center",
+          "y": "center"
+        }
+      }
+    },
+    {
+      "type": "marker",
+      "attr": {
+        "markerStyle": "square",
+        "asset": "game/wow/raid/star.png"
+      },
+      "meta": {
+        "step": 0,
+        "pos": {
+          "x": 449.858,
+          "y": 189.989
+        },
+        "size": {
+          "w": 128,
+          "h": 128
+        },
+        "scale": {
+          "x": 0.25,
+          "y": 0.25
+        },
+        "origin": {
+          "x": "center",
+          "y": "center"
+        }
+      }
+    },
+    {
+      "type": "itext",
+      "attr": {
+        "fontSize": 34,
+        "fill": "#ffffff",
+        "text": "1 Фаза - Адды. фаза до 50% здоровья босса",
+        "name": "duplicate-render-copy"
+      },
+      "meta": {
+        "step": 0,
+        "pos": {
+          "x": 592.5,
+          "y": 38.9
+        },
+        "size": {
+          "w": 728.584,
+          "h": 51.915
+        },
+        "scale": {
+          "x": 1,
+          "y": 1
+        },
+        "origin": {
+          "x": "center",
+          "y": "center"
+        }
+      }
+    },
+    {
+      "type": "itext",
+      "attr": {
+        "fontSize": 12,
+        "fill": "#ff0000",
+        "text": "helper duplicate",
+        "name": "guide-label"
+      },
+      "meta": {
+        "step": 0,
+        "pos": {
+          "x": 100,
+          "y": 100
+        },
+        "size": {
+          "w": 100,
+          "h": 20
+        },
+        "scale": {
+          "x": 1,
+          "y": 1
+        }
+      }
+    }
+  ]
+}

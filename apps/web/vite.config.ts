@@ -8,7 +8,8 @@ export default defineConfig({
   resolve: {
     alias: {
       '@raidru/shared-types': fileURLToPath(new URL('../../packages/shared-types/src/index.ts', import.meta.url)),
-      '@raidru/planner-core': fileURLToPath(new URL('../../packages/planner-core/src/index.ts', import.meta.url))
+      '@raidru/planner-core': fileURLToPath(new URL('../../packages/planner-core/src/index.ts', import.meta.url)),
+      '@raidru/raidplan-core': fileURLToPath(new URL('../../packages/raidplan-core/src/index.ts', import.meta.url))
     }
   },
   build: {

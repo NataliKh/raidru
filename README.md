@@ -1,31 +1,88 @@
 # RaidRU 3
 
-Russian World of Warcraft raid tactics and visual planning tool.
+**Текущая версия:** `3.0.0-alpha.3.3 — Planner UX Cleanup`
 
-**Current development build:** `3.0.0-alpha.2 — Planner Core`
+RaidRU 3 — чистая архитектурная ветка русскоязычного визуального планировщика рейдов World of Warcraft. Production `main` пока должен оставаться на стабильной 2.x-линии; разработка 3.x идёт отдельно в `raidru-3`.
 
-This branch is the clean rewrite of RaidRU. Production `main` should remain on the stable 2.x line until RaidRU 3 reaches feature parity and passes real import fixtures.
+## Что уже есть
 
-## What alpha.2 contains
+### Architecture Core
 
-Planner Core is now a real editor rather than a viewer with draggable tokens:
+- React + TypeScript + Vite;
+- единый `AppStore` и один render tree;
+- единая версия приложения;
+- IndexedDB persistence;
+- импорт старого локального состояния RaidRU;
+- 8 боссов, существующие карты, сцены и таймлайны.
 
-- independent Normal / Heroic / Mythic plans;
-- explicit difficulty-switch choices: open existing, copy current, or clear target map;
-- scene create / duplicate / delete / rename / duration / notes;
-- palette with roles, classes, raid markers, mechanic icons and geometric effects;
-- drag & drop from palette to arena and direct dragging on the map;
-- arrows, lines, danger/soak zones and editable size/rotation;
-- routes with click-to-add points and draggable route points;
-- selection inspector for scene/object/effect/route properties;
-- undo/redo with keyboard shortcuts (`Ctrl+Z`, `Ctrl+Y`);
-- schema v4 with automatic migration from the alpha.1 schema v3;
-- pure planner mutations extracted into `packages/planner-core`, so AppStore owns transactions/history while domain changes stay testable and UI-independent;
-- IndexedDB persistence and RaidRU 3 backup import/export.
+### Planner Core
 
-RaidPlan and WCL are still deliberately disconnected from the UI. They will be attached through typed adapters after Planner Core is stable.
+- независимые планы Normal / Heroic / Mythic;
+- создание, дублирование и удаление сцен;
+- palette ролей, классов, raid markers и механик;
+- drag/drop и прямое перемещение объектов;
+- зоны, линии, стрелки и маршруты;
+- inspector;
+- undo/redo;
+- pure domain mutations в `packages/planner-core`.
 
-## Run locally
+### RaidPlan Adapter — alpha.3
+
+RaidPlan впервые подключён к новой архитектуре через отдельную границу:
+
+```text
+RaidPlan URL / JSON
+   ↓
+RaidPlanClient
+   ↓
+packages/raidplan-core
+   ↓
+BossDifficultyPlanState
+   ↓
+AppStore.applyExternalPlan()
+   ↓
+Planner / Viewer
+```
+
+Importer не имеет доступа к React/DOM. Он реализует strict visible RaidPlan v2: `nodes + meta.step`, fixed canvas, фильтрацию hidden/opacity0/scale0/unknown nodes, map-backed arena suppression, role/raid marker assets, `itext`, freehand path и Fabric off-canvas lines.
+
+В Planner доступна кнопка **⇩ RaidPlan** с preview перед применением. Можно безопасно добавить импортированные сцены либо явно заменить план текущей сложности.
+
+### Visual Fidelity — alpha.3.1
+
+- palette assets больше не зависят от текущего URL страницы;
+- импортированный IText сохраняет размер, scale, line-height, font, origin и rotation;
+- role/raid markers предпочитают оригинальные RaidPlan CDN assets и имеют локальный fallback;
+- explicit z-order сохраняется; helper/guide и дубли текста фильтруются;
+- для импортированной сцены остаются ссылка на исходную сцену RaidPlan и диагностическая строка fidelity; отдельный режим **Оригинал / RaidRU** удалён как лишний.
+
+
+### Native Tokens — alpha.3.2
+
+После визуального сравнения с оригиналом найден renderer-баг: отсутствие `opacity` в RaidPlan token превращалось через `Number(null)` в CSS `opacity: 0`. Поэтому role markers, raid markers и mob portraits были импортированы, но полностью невидимы. Alpha.3.2 использует null-safe style metadata, сохраняет explicit opacity=0 и не рисует внутренний `mob.lname` как подпись без `attr.text`. Worker в этом релизе не менялся.
+
+## Структура
+
+```text
+apps/
+  web/                 React UI
+  wcl-bridge/          browser bridge, пока отдельно
+packages/
+  shared-types/
+  planner-core/
+  raidplan-core/
+  replay-core/
+  mechanics-core/
+workers/
+  wcl/                 Cloudflare Worker, включая /raidplan
+tests/
+  fixtures/raidplan/   реальные regression fixtures
+docs/
+  architecture/
+  releases/
+```
+
+## Локальный запуск
 
 ```bash
 npm install
@@ -34,42 +91,31 @@ npm test
 npm run dev
 ```
 
+Vite dev server использует порт `5173`; Worker alpha.3 разрешает этот origin для локального URL-import RaidPlan.
+
 Production build:
 
 ```bash
 npm run build
 ```
 
-The Vite base path is `/raidru/` for GitHub Pages.
-
-## Repository layout
-
-```text
-apps/web            React application
-apps/wcl-bridge     preserved browser bridge, not wired in alpha.2
-workers/wcl         preserved Worker, not wired in alpha.2
-packages/shared-types
-packages/planner-core
-packages/replay-core
-packages/mechanics-core
-packages/raidplan-core
-docs/architecture
-docs/migration
-docs/releases
-```
-
-Read `docs/architecture/ARCHITECTURE.md` before adding features. New code must not recreate the 2.x patch-chain pattern.
-
-## Git workflow
-
-Keep production `main` intact:
+## Проверка alpha.3
 
 ```bash
-git switch raidru-3
-# replace branch contents with this archive, preserving .git
-git add -A
-git commit -m "RaidRU 3 alpha.2 Planner Core"
-git push origin raidru-3
+npm test
 ```
 
-Do not merge to `main` until the alpha passes real RaidPlan/WCL fixtures and the production checklist.
+Regression база проверяет реальные проблемные случаи старого импортера:
+
+- Scene 3 — freehand arrows из нескольких `path.attr.points`;
+- Scene 4 — drawn Fabric lines частично за границами canvas;
+- strict-visible fixture — unknown/hidden nodes не превращаются в лишние зоны.
+
+Ручной checklist: `docs/QA-RAIDPLAN-ADAPTER.md`.
+Архитектура: `docs/architecture/RAIDPLAN-ADAPTER.md`.
+
+## Worker
+
+Изменения обычного web-приложения не требуют redeploy Worker. Worker нужен при изменении `workers/wcl/src/index.js` или transport `/raidplan`.
+
+Для alpha.3 Worker изменён: добавлены Vite dev/preview origins и новый version marker, поэтому перед проверкой URL-import его нужно один раз передеплоить привычным Wrangler workflow из `workers/wcl`.

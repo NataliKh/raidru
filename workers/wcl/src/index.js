@@ -5,7 +5,11 @@ const ALLOWED_ORIGINS = new Set([
   'http://localhost:8080',
   'http://127.0.0.1:8080',
   'http://localhost:5500',
-  'http://127.0.0.1:5500'
+  'http://127.0.0.1:5500',
+  'http://localhost:5173',
+  'http://127.0.0.1:5173',
+  'http://localhost:4173',
+  'http://127.0.0.1:4173'
 ]);
 
 const WCL_TOKEN_URL = 'https://www.warcraftlogs.com/oauth/token';
@@ -111,32 +115,50 @@ async function withInflight(key, fn) {
 }
 
 async function fetchPlanJson(code) {
-  const candidates = [
-    `https://userdata.raidplan.io/${encodeURIComponent(code)}.json`,
-    `https://userdata.raidplan.io/${encodeURIComponent(code)}.json?v=${Date.now()}`
-  ];
-  let lastStatus = 502;
+  // RaidPlan can revision its userdata URL. Prefer the exact URL referenced by
+  // the public plan page, then fall back to the stable code-based JSON path.
+  let exactUrl = '';
+  let pageStatus = 0;
+  try {
+    const page = await fetch(`https://raidplan.io/plan/${encodeURIComponent(code)}`, {
+      method: 'GET',
+      headers: { 'Accept': 'text/html,*/*;q=0.8', 'User-Agent': 'RaidRU/3.0.0-alpha.3.1 RaidPlan Visual Fidelity' },
+      redirect: 'follow',
+      cf: { cacheTtl: 0, cacheEverything: false }
+    });
+    pageStatus = page.status;
+    if (page.ok) {
+      const html = await page.text();
+      const escaped = code.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      const match = html.match(new RegExp(`https://userdata\\.raidplan\\.io/${escaped}\\.json(?:\\?v=\\d+)?`, 'i'));
+      if (match?.[0]) exactUrl = match[0].replaceAll('&amp;', '&');
+    }
+  } catch (_) {}
+  if (pageStatus === 404) { const e = new Error('NOT_FOUND'); e.status = 404; throw e; }
+
+  const candidates = [...new Set([
+    exactUrl,
+    `https://userdata.raidplan.io/${encodeURIComponent(code)}.json`
+  ].filter(Boolean))];
+  let lastStatus = pageStatus || 502;
   for (const url of candidates) {
     try {
       const res = await fetch(url, {
         method: 'GET',
-        headers: { 'Accept': 'application/json,text/plain;q=0.9,*/*;q=0.1', 'User-Agent': 'RaidRU/0.8.18 RaidPlan Import' },
+        headers: { 'Accept': 'application/json,text/plain;q=0.9,*/*;q=0.1', 'User-Agent': 'RaidRU/3.0.0-alpha.3.1 RaidPlan Visual Fidelity' },
         redirect: 'follow',
         cf: { cacheTtl: 0, cacheEverything: false }
       });
       lastStatus = res.status;
       if (!res.ok) continue;
-      const text = await res.text();
+      const contentType = res.headers.get('content-type') || '';
+      const body = await res.text();
       let data;
-      try { data = JSON.parse(text); } catch { continue; }
+      try { data = JSON.parse(body); } catch { continue; }
       if (data && typeof data === 'object') return data;
+      if (!contentType.includes('json')) continue;
     } catch (_) {}
   }
-  const page = await fetch(`https://raidplan.io/plan/${encodeURIComponent(code)}`, {
-    method: 'GET', headers: { 'Accept': 'text/html,*/*;q=0.8', 'User-Agent': 'RaidRU/0.8.18 RaidPlan Import' }, redirect: 'follow',
-    cf: { cacheTtl: 0, cacheEverything: false }
-  }).catch(() => null);
-  if (page?.status === 404) { const e = new Error('NOT_FOUND'); e.status = 404; throw e; }
   const e = new Error('UPSTREAM'); e.status = lastStatus === 404 ? 404 : 502; throw e;
 }
 
@@ -1383,11 +1405,11 @@ export default {
     if (origin && !ALLOWED_ORIGINS.has(origin)) return new Response(JSON.stringify({ error: 'origin_not_allowed', origin, allowed: [...ALLOWED_ORIGINS] }), { status: 403, headers: { 'Content-Type': 'application/json; charset=utf-8', ...cors(origin, { echo: true }), 'X-RaidRU-Origin': origin } });
 
     if (url.pathname === '/wcl/ping') {
-      return json({ ok: true, service: 'raidru-edge', version: '2.2.1-wcl-bridge-final-audit', origin: origin || null, wclConfigured: wclConfigured(env) }, 200, origin, { 'X-RaidRU-WCL-Safe': '1' });
+      return json({ ok: true, service: 'raidru-edge', version: '3.0.0-alpha.3.1-raidplan-visual-fidelity', origin: origin || null, wclConfigured: wclConfigured(env) }, 200, origin, { 'X-RaidRU-WCL-Safe': '1' });
     }
 
     if (url.pathname === '/health') {
-      return json({ ok: true, service: 'raidru-edge', version: '2.2.1-wcl-bridge-final-audit', wclConfigured: wclConfigured(env), features: ['raidplan','wcl-report','wcl-mechanics-independent','wcl-browser-bridge-meta','fight-scoped-friendly-players','replay-boss-id','graphql-no-coordinate-contract'] }, 200, origin);
+      return json({ ok: true, service: 'raidru-edge', version: '3.0.0-alpha.3.1-raidplan-visual-fidelity', wclConfigured: wclConfigured(env), features: ['raidplan','raidplan-v2-strict','wcl-report','wcl-mechanics-independent','wcl-browser-bridge-meta','fight-scoped-friendly-players','replay-boss-id','graphql-no-coordinate-contract'] }, 200, origin);
     }
 
     if (url.pathname === '/raidplan' && request.method === 'GET') {

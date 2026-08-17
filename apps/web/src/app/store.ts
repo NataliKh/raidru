@@ -287,6 +287,40 @@ class AppStore {
     return { ...state, bosses: { ...state.bosses, [bossId]: { ...boss, difficultyPlans: { ...boss.difficultyPlans, [difficulty]: nextPlan } } } };
   }
 
+  private rekeyExternalPlan(plan: BossDifficultyPlanState, bossId: BossId): BossDifficultyPlanState {
+    const scenes = plan.scenes.map((scene, sceneIndex) => normalizeScene({
+      ...structuredClone(scene),
+      id: uid('scene'),
+      tokens: (scene.tokens || []).map(token => ({ ...structuredClone(token), id: uid('token'), meta: { ...(token.meta || {}), sourceId: token.id } })),
+      effects: (scene.effects || []).map(effect => ({ ...structuredClone(effect), id: uid('effect'), meta: { ...(effect.meta || {}), sourceId: effect.id } })),
+      routes: (scene.routes || []).map(route => ({ ...structuredClone(route), id: uid('route') }))
+    }, bossId, sceneIndex));
+    return { scenes, timeline: structuredClone(plan.timeline || []) };
+  }
+
+  applyExternalPlan(bossId: BossId, difficulty: Difficulty, importedPlan: BossDifficultyPlanState, mode: 'append' | 'replace') {
+    this.pushHistory();
+    const incoming = this.rekeyExternalPlan(importedPlan, bossId);
+    const current = difficultyPlan(this.state, bossId, difficulty);
+    const firstImportedIndex = mode === 'append' ? current.scenes.length : 0;
+    const nextPlan: BossDifficultyPlanState = mode === 'append'
+      ? { scenes: [...structuredClone(current.scenes), ...incoming.scenes], timeline: structuredClone(current.timeline) }
+      : incoming;
+    const next = this.applyPlan(this.state, bossId, difficulty, normalizeDifficultyPlan(nextPlan, bossId));
+    this.state = {
+      ...next,
+      selectedBossId: bossId,
+      difficulty,
+      activePage: 'planner',
+      selectedSceneByBoss: {
+        ...next.selectedSceneByBoss,
+        [bossId]: { ...(next.selectedSceneByBoss[bossId] || {}), [difficulty]: Math.min(firstImportedIndex, Math.max(0, nextPlan.scenes.length - 1)) }
+      }
+    };
+    this.gestureActive = false;
+    this.emit();
+  }
+
   updateScene(bossId: BossId, difficulty: Difficulty, sceneIndex: number, patch: Partial<Pick<Scene, 'name' | 'note' | 'duration' | 'map'>>) {
     this.plannerCommit(state => this.applyPlan(state, bossId, difficulty, coreUpdateScene(difficultyPlan(state, bossId, difficulty), sceneIndex, patch)));
   }

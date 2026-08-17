@@ -26,12 +26,16 @@
       ],
       "@raidru/planner-core": [
         "../../packages/planner-core/src/index.ts"
+      ],
+      "@raidru/raidplan-core": [
+        "../../packages/raidplan-core/src/index.ts"
       ]
     }
   },
   "include": [
     "src",
     "../../packages/shared-types/src",
-    "../../packages/planner-core/src"
+    "../../packages/planner-core/src",
+    "../../packages/raidplan-core/src"
   ]
 }

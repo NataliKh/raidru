@@ -34,6 +34,17 @@ export interface SceneToken {
   meta?: TokenMeta;
 }
 
+export interface SceneEffectStyle {
+  stroke?: string;
+  fill?: string;
+  strokeWidth?: number;
+  opacity?: number;
+  fillOpacity?: number;
+  strokeOpacity?: number;
+  lineCap?: string;
+  lineJoin?: string;
+}
+
 export interface SceneEffect {
   id: string;
   type: string;
@@ -43,6 +54,10 @@ export interface SceneEffect {
   h: number;
   rot?: number;
   label?: string;
+  points?: Point[];
+  shape?: 'circle' | 'ellipse' | 'rect' | 'polygon' | 'cone' | string;
+  style?: SceneEffectStyle;
+  meta?: Record<string, unknown>;
 }
 
 export interface SceneRoute {
@@ -56,7 +71,7 @@ export interface Scene {
   name: string;
   note: string;
   duration: number;
-  map: { zoom: number; x: number; y: number; dark: number };
+  map: { zoom: number; x: number; y: number; dark: number; backgroundUrl?: string; sourceWidth?: number; sourceHeight?: number; source?: 'builtin' | 'raidplan' | string; raidPlan?: { sourceCode?: string; sourceUrl?: string; revision?: number | null; sceneIndex?: number } };
   tokens: SceneToken[];
   effects: SceneEffect[];
   routes: SceneRoute[];

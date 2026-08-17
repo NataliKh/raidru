@@ -1,7 +1,7 @@
 {
   "name": "@raidru/web",
   "private": true,
-  "version": "3.0.0-alpha.2",
+  "version": "3.0.0-alpha.3.3",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -12,7 +12,8 @@
   "dependencies": {
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
-    "@raidru/planner-core": "*"
+    "@raidru/planner-core": "*",
+    "@raidru/raidplan-core": "*"
   },
   "devDependencies": {
     "@types/react": "^19.0.0",

@@ -16,5 +16,5 @@ export function App() {
   const state = useAppState();
   useEffect(() => { void appStore.hydrate(); }, []);
   const page = state.activePage;
-  return <div className="appShell"><Sidebar /><main className="main"><TopNav /><LegacyImportBanner />{page !== 'overview' && <BossHero />}{page === 'overview' && <OverviewPage />}{page === 'tactics' && <TacticsPage />}{page === 'raid' && <RaidPage />}{page === 'planner' && <PlannerWorkspace editable />}{page === 'timeline' && <TimelinePage />}{page === 'roster' && <RosterPage />}{page === 'notes' && <NotesPage />}<footer className="siteFooter">RaidRU 3 Planner Core · независимые сложности, единый Store, undo/redo и редактор сцен без legacy-патчей.</footer></main></div>;
+  return <div className="appShell"><Sidebar /><main className="main"><TopNav /><LegacyImportBanner />{page !== 'overview' && <BossHero />}{page === 'overview' && <OverviewPage />}{page === 'tactics' && <TacticsPage />}{page === 'raid' && <RaidPage />}{page === 'planner' && <PlannerWorkspace editable />}{page === 'timeline' && <TimelinePage />}{page === 'roster' && <RosterPage />}{page === 'notes' && <NotesPage />}<footer className="siteFooter">RaidRU 3 · RaidPlan Visual Fidelity · native RaidPlan geometry, единые assets и чистый TypeScript adapter.</footer></main></div>;
 }

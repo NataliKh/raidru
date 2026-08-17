@@ -1,7 +1,7 @@
 {
   "name": "@raidru/shared-types",
   "private": true,
-  "version": "3.0.0-alpha.2",
+  "version": "3.0.0-alpha.3.1",
   "type": "module",
   "exports": "./src/index.ts"
 }
