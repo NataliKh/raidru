@@ -1,0 +1,37 @@
+{
+  "manifest_version": 3,
+  "name": "RaidRU WCL Bridge",
+  "version": "2.2.0",
+  "description": "Локальный мост RaidRU к Replay Warcraft Logs. Получает только координаты выбранного боя в браузере пользователя.",
+  "permissions": ["tabs"],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "content_scripts": [
+    {
+      "matches": ["https://*.warcraftlogs.com/reports/*"],
+      "js": ["wcl-page-probe.js"],
+      "run_at": "document_start",
+      "world": "MAIN"
+    },
+    {
+      "matches": ["https://*.warcraftlogs.com/reports/*"],
+      "js": ["wcl-content.js"],
+      "run_at": "document_start",
+      "world": "ISOLATED"
+    },
+    {
+      "matches": [
+        "https://natalikh.github.io/raidru/*",
+        "http://localhost/*",
+        "http://127.0.0.1/*"
+      ],
+      "js": ["raidru-content.js"],
+      "run_at": "document_start",
+      "world": "ISOLATED"
+    }
+  ],
+  "action": {
+    "default_title": "RaidRU WCL Bridge"
+  }
+}
